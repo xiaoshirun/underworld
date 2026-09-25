@@ -1,0 +1,12 @@
+/node_modules
+/oh_modules
+/.preview
+/build
+/.cxx
+/.clangd
+/.hvigor
+/local.properties
+*.har
+.hvigor/
+oh_modules/
+build/

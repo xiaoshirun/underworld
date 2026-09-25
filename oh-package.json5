@@ -1,0 +1,8 @@
+{
+  "modelVersion": "5.0.0",
+  "description": "地下世界探索像素游戏",
+  "dependencies": {},
+  "devDependencies": {
+    "@ohos/hypium": "1.0.18"
+  }
+}
