@@ -76,6 +76,7 @@ import { TrapSystem } from './systems/TrapSystem';
 import { MechanismSystem, MechanismBridge } from './systems/MechanismSystem';
 import { ChunkLoadSystem } from './systems/ChunkLoadSystem';
 import { DamageSystem, DamageBridge } from './systems/DamageSystem';
+import { XpLevelSystem } from './systems/XpLevelSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
@@ -90,6 +91,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   private mechanismSystem: MechanismSystem | null = null;
   private chunkLoadSystem: ChunkLoadSystem | null = null;
   private damageSystem: DamageSystem | null = null;
+  private xpLevelSystem: XpLevelSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -177,6 +179,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.mechanismSystem = new MechanismSystem(this, this);
     this.chunkLoadSystem = new ChunkLoadSystem(this);
     this.damageSystem = new DamageSystem(this, this);
+    this.xpLevelSystem = new XpLevelSystem(this);
     this.startLoop();
   }
 
@@ -616,55 +619,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   }
 
   private updateXpOrbs(dt: number): void {
-    if (this.player === null) return;
-    const p: PlayerState = this.player;
-
-    for (let i: number = 0; i < this.xpOrbs.length; i++) {
-      const orb: XpOrb = this.xpOrbs[i];
-      if (!orb.active) continue;
-
-      orb.bobPhase += 0.08;
-
-      const dx: number = p.x - orb.x;
-      const dy: number = p.y - orb.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < XP_MAGNET_RANGE && dist > 1) {
-        const pullSpeed: number = 3.0 * (1.0 - dist / XP_MAGNET_RANGE);
-        orb.x += (dx / dist) * pullSpeed;
-        orb.y += (dy / dist) * pullSpeed;
-      }
-
-      if (dist < XP_COLLECT_RANGE) {
-        orb.active = false;
-        p.xp += orb.value;
-        // Transform energy recovery from XP orb
-        if (p.isTransformed) {
-          p.transformEnergy += TRANSFORM_ENERGY_XP_ORB;
-          if (p.transformEnergy > p.transformMaxEnergy) {
-            p.transformEnergy = p.transformMaxEnergy;
-          }
-        }
-        this.audio.playXpCollect();
-        if (p.xp >= LEVEL_UP_XP) {
-          p.xp -= LEVEL_UP_XP;
-          p.level++;
-          if (p.hp < PLAYER_MAX_HP) p.hp++;
-          this.audio.playLevelUp();
-          if (this.settings.effectsEnabled) {
-            this.particleMgr.magic(p.x, p.y, COLOR_XP_ORB);
-          }
-        }
-      }
-    }
-
-    if (this.xpOrbs.length > 200) {
-      const active: XpOrb[] = [];
-      for (let i: number = 0; i < this.xpOrbs.length; i++) {
-        if (this.xpOrbs[i].active) active.push(this.xpOrbs[i]);
-      }
-      this.xpOrbs = active;
-    }
+    this.xpLevelSystem!.update(dt);
   }
 
   private updateTraps(dt: number): void {
