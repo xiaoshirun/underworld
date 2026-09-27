@@ -1,16 +1,42 @@
 {
   "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:/Users/QiuQiu/.ohos/config/default_Game_EnU8LAeYckYUEw0D0EvEUPQtTF_i83J33Zc7AbZ3Jik=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B67C3F79793DF2F7FCBEAF6EBCEFD1F68E388CF142B58217DA437C4C86921472D37ADB1B82B359A",
+          "profile": "C:/Users/QiuQiu/.ohos/config/default_Game_EnU8LAeYckYUEw0D0EvEUPQtTF_i83J33Zc7AbZ3Jik=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:/Users/QiuQiu/.ohos/config/default_Game_EnU8LAeYckYUEw0D0EvEUPQtTF_i83J33Zc7AbZ3Jik=.p12",
+          "storePassword": "0000001BCE88207DC67DB9BDA20386AD49E292C6BCC48A036440682B0ED09B17834FEEC525C3DC75910086"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",
+        "signingConfig": "default",
         "compatibleSdkVersion": "5.0.0(12)",
         "runtimeOS": "HarmonyOS",
         "targetSdkVersion": "26.0.0"
       }
     ],
     "buildModeSet": [
-      { "name": "debug" },
-      { "name": "release" }
+      {
+        "name": "debug"
+      },
+      {
+        "name": "xsr"
+      }
+    ],
+    "capabilities": [
+      {
+        "bundleName": "com.xsr.underworld",
+        "config": []
+      }
     ]
   },
   "modules": [
@@ -20,7 +46,9 @@
       "targets": [
         {
           "name": "default",
-          "applyToProducts": ["default"]
+          "applyToProducts": [
+            "default"
+          ]
         }
       ]
     }
