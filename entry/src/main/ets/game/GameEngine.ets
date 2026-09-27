@@ -870,6 +870,13 @@ export class GameEngine {
 
   private onEnemyDeath(s: SlimeState): void {
     s.active = false;
+    // Transform energy recovery on kill
+    if (this.player !== null && this.player.isTransformed) {
+      this.player.transformEnergy += TRANSFORM_ENERGY_KILL_SLIME;
+      if (this.player.transformEnergy > this.player.transformMaxEnergy) {
+        this.player.transformEnergy = this.player.transformMaxEnergy;
+      }
+    }
     this.audio.playEnemyDeath();
     if (this.settings.effectsEnabled) {
       for (let k: number = 0; k < 10; k++) {
@@ -1105,6 +1112,13 @@ export class GameEngine {
       if (dist < XP_COLLECT_RANGE) {
         orb.active = false;
         p.xp += orb.value;
+        // Transform energy recovery from XP orb
+        if (p.isTransformed) {
+          p.transformEnergy += TRANSFORM_ENERGY_XP_ORB;
+          if (p.transformEnergy > p.transformMaxEnergy) {
+            p.transformEnergy = p.transformMaxEnergy;
+          }
+        }
         this.audio.playXpCollect();
         if (p.xp >= LEVEL_UP_XP) {
           p.xp -= LEVEL_UP_XP;
@@ -1502,6 +1516,13 @@ export class GameEngine {
       // Boss death
       if (boss.hp <= 0) {
         boss.defeated = true;
+        // Transform energy recovery on boss kill
+        if (this.player !== null && this.player.isTransformed) {
+          this.player.transformEnergy += TRANSFORM_ENERGY_KILL_BOSS;
+          if (this.player.transformEnergy > this.player.transformMaxEnergy) {
+            this.player.transformEnergy = this.player.transformMaxEnergy;
+          }
+        }
         boss.active = false;
 
         // Handle boss room
