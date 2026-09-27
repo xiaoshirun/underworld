@@ -762,6 +762,11 @@ export class GameEngine {
   }
 
   private checkPlayerCollision(x: number, y: number): boolean {
+    // Ghost form phases through walls
+    if (this.player !== null && this.player.isTransformed &&
+        this.player.transformForm === TransformForm.GHOST) {
+      return false;
+    }
     const halfSize: number = PLAYER_SIZE / 2;
     const cornersX: number[] = [x - halfSize, x + halfSize];
     const cornersY: number[] = [y - halfSize, y + halfSize];
