@@ -184,6 +184,14 @@ export enum ChestType {
   BOSS = 2
 }
 
+export enum TransformForm {
+  NONE = -1,
+  SLIME = 0,
+  GHOST = 1,
+  ARMOR = 2,
+  IRON_MAN = 3
+}
+
 export enum BossType {
   CRYSTAL_GUARDIAN = 0,
   MUSHROOM_KING = 1,
@@ -264,6 +272,15 @@ export interface PlayerState {
   isUsingTool: boolean;
   toolCooldown: number;
   inventory: Inventory;
+  isTransformed: boolean;
+  transformForm: TransformForm;
+  transformEnergy: number;
+  transformMaxEnergy: number;
+  transformCooldown: number;
+  unlockedTransforms: number[];
+  savedWeaponForm: WeaponForm;
+  transformAnimTimer: number;
+  transformFormAttackCooldown: number;
 }
 
 export interface SlimeState {
@@ -420,6 +437,10 @@ export interface Inventory {
   formCore: number;
   hpPotions: number;
   gold: number;
+  transformCoreSlime: number;
+  transformCoreArmor: number;
+  transformCoreIronMan: number;
+  transformCoreGhost: number;
 }
 
 export interface MaterialDrop {
@@ -578,6 +599,48 @@ export const COLOR_TOOL_BTN: string = '#f59e0b';
 export const COLOR_EVO_PANEL_BG: string = '#0f172a';
 export const COLOR_EVO_PANEL_BORDER: string = '#334155';
 export const COLOR_TRAP_WARNING: string = '#fbbf24';
+
+// Transform system constants
+export const TRANSFORM_MAX_ENERGY: number = 100;
+export const TRANSFORM_COOLDOWN: number = 10000;
+export const TRANSFORM_PASSIVE_REGEN: number = 1.0;
+export const TRANSFORM_ACTIVATE_ANIM: number = 800;
+export const TRANSFORM_REVERT_ANIM: number = 500;
+
+// Energy drain per second by form (index = TransformForm value)
+export const TRANSFORM_DRAIN_RATES: number[] = [2.0, 3.0, 2.5, 3.5];
+
+// Form movement speeds
+export const TRANSFORM_SPEEDS: number[] = [3.5, 2.8, 2.5, 4.0];
+
+// Form attack energy costs
+export const TRANSFORM_ATTACK_COSTS: number[] = [3, 5, 8, 2];
+
+// Form attack cooldowns (ms)
+export const TRANSFORM_ATTACK_COOLDOWNS: number[] = [600, 800, 1000, 350];
+
+// Form damage reduction (percentage)
+export const TRANSFORM_DAMAGE_REDUCTION: number[] = [0.3, 0.0, 0.5, 0.0];
+
+// Energy recovery from kills
+export const TRANSFORM_ENERGY_KILL_SLIME: number = 5;
+export const TRANSFORM_ENERGY_KILL_ELITE: number = 10;
+export const TRANSFORM_ENERGY_KILL_BOSS: number = 50;
+export const TRANSFORM_ENERGY_XP_ORB: number = 1;
+
+// Transform form colors
+export const COLOR_TRANSFORM_SLIME: string = '#4ade80';
+export const COLOR_TRANSFORM_SLIME_DARK: string = '#22c55e';
+export const COLOR_TRANSFORM_GHOST: string = '#a78bfa';
+export const COLOR_TRANSFORM_GHOST_DARK: string = '#7c3aed';
+export const COLOR_TRANSFORM_ARMOR: string = '#94a3b8';
+export const COLOR_TRANSFORM_ARMOR_ACCENT: string = '#ef4444';
+export const COLOR_TRANSFORM_IRON_RED: string = '#dc2626';
+export const COLOR_TRANSFORM_IRON_GOLD: string = '#fbbf24';
+export const COLOR_TRANSFORM_ENERGY_BG: string = '#1f2937';
+export const COLOR_TRANSFORM_BTN_LOCKED: string = '#4b5563';
+export const COLOR_TRANSFORM_BTN_READY: string = '#22d3ee';
+export const COLOR_TRANSFORM_FLASH: string = '#ffffff';
 
 // Female character colors
 export const COLOR_PLAYER_FEMALE_BODY: string = '#8b5cf6';
