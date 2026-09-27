@@ -6,7 +6,10 @@ import {
   COLOR_JOY_BASE, COLOR_JOY_KNOB,
   COLOR_BTN_JUMP, COLOR_BTN_ATTACK, COLOR_BTN_DASH, COLOR_TOOL_BTN,
   COLOR_XP_ORB, DASH_COOLDOWN, GenderType, WeaponForm,
-  EvolutionBranch, FORM_UNLOCK_COST, Inventory
+  EvolutionBranch, FORM_UNLOCK_COST, Inventory,
+  TransformForm, TRANSFORM_MAX_ENERGY, TRANSFORM_COOLDOWN,
+  COLOR_TRANSFORM_BTN_LOCKED, COLOR_TRANSFORM_BTN_READY, COLOR_TRANSFORM_ENERGY_BG,
+  COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_IRON_GOLD
 } from '../game/GameConstants';
 
 @Entry
@@ -52,6 +55,17 @@ struct Index {
   @State invNormal: number = 0;
   @State invRare: number = 0;
   @State invFormCore: number = 0;
+  @State isTransformed: boolean = false;
+  @State transformEnergy: number = TRANSFORM_MAX_ENERGY;
+  @State transformMaxEnergy: number = TRANSFORM_MAX_ENERGY;
+  @State transformForm: TransformForm = TransformForm.NONE;
+  @State transformCooldown: number = 0;
+  @State unlockedTransforms: number[] = [];
+  @State showTransformPanel: boolean = false;
+  @State showFormSelect: boolean = false;
+  @State transformUnlockForm: TransformForm = TransformForm.NONE;
+  @State transformUnlockActive: boolean = false;
+  private selectedTransformForm: TransformForm = TransformForm.SLIME;
   private branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
 
   aboutToAppear(): void {
@@ -112,6 +126,11 @@ struct Index {
       if (this.showEvolution) {
         this.EvolutionOverlay()
       }
+
+      this.TransformButtonView()
+      this.TransformEnergyBarView()
+      this.FormSelectPanel()
+      this.TransformUnlockNotification()
     }
     .width('100%')
     .height('100%')
@@ -948,6 +967,187 @@ struct Index {
       if (inv.formCore !== this.invFormCore) {
         this.invFormCore = inv.formCore;
       }
+      // Transform state
+      const isT: boolean = this.gameEngine.getIsTransformed();
+      if (isT !== this.isTransformed) { this.isTransformed = isT; }
+      if (isT) {
+        const e: number = this.gameEngine.getTransformEnergy();
+        if (e !== this.transformEnergy) { this.transformEnergy = e; }
+        const f: TransformForm = this.gameEngine.getTransformForm();
+        if (f !== this.transformForm) { this.transformForm = f; }
+      }
+      const cd: number = this.gameEngine.getTransformCooldown();
+      if (cd !== this.transformCooldown) { this.transformCooldown = cd; }
+      const ut: number[] = this.gameEngine.getUnlockedTransforms();
+      if (ut.length !== this.unlockedTransforms.length) { this.unlockedTransforms = ut; }
+      // Unlock notification
+      const notify = this.gameEngine.getTransformUnlockNotify();
+      if (notify.active && !this.transformUnlockActive) {
+        this.transformUnlockActive = true;
+        this.transformUnlockForm = notify.form;
+        setTimeout(() => { this.transformUnlockActive = false; }, 3000);
+      }
     }, 100);
+  }
+
+  @Builder
+  TransformButtonView() {
+    Stack() {
+      // Button background
+      Circle()
+        .width(40)
+        .height(40)
+        .fill(this.isTransformed ? this.getFormColor(this.transformForm) :
+          (this.unlockedTransforms.length > 0 && this.transformCooldown <= 0 ? COLOR_TRANSFORM_BTN_READY : COLOR_TRANSFORM_BTN_LOCKED))
+
+      // Icon
+      Text(this.getTransformIcon())
+        .fontSize(18)
+        .fontColor('#ffffff')
+
+      // Cooldown overlay
+      if (this.transformCooldown > 0 && !this.isTransformed) {
+        Text(Math.ceil(this.transformCooldown / 1000).toString())
+          .fontSize(12)
+          .fontColor('#ffffffa0')
+          .position({ x: 14, y: 26 })
+      }
+    }
+    .position({ x: this.screenW - 55, y: this.screenH - 200 })
+    .onClick(() => {
+      if (this.isTransformed) {
+        this.gameEngine.deactivateTransform();
+      } else if (this.unlockedTransforms.length === 1) {
+        this.gameEngine.activateTransform(this.unlockedTransforms[0] as TransformForm);
+      } else if (this.unlockedTransforms.length > 1) {
+        this.showFormSelect = true;
+      }
+    })
+  }
+
+  @Builder
+  TransformEnergyBarView() {
+    if (this.isTransformed) {
+      Column() {
+        Stack({ alignContent: Alignment.Start }) {
+          // Background
+          Row().width(120).height(8).backgroundColor(COLOR_TRANSFORM_ENERGY_BG).borderRadius(4)
+          // Fill
+          Row()
+            .width(120 * (this.transformEnergy / this.transformMaxEnergy))
+            .height(8)
+            .backgroundColor(this.getFormColor(this.transformForm))
+            .borderRadius(4)
+        }
+        Text(Math.floor(this.transformEnergy).toString())
+          .fontSize(9)
+          .fontColor('#ffffffa0')
+          .margin({ top: 2 })
+      }
+      .position({ x: this.screenW - 135, y: this.screenH - 155 })
+    }
+  }
+
+  @Builder
+  FormSelectPanel() {
+    if (this.showFormSelect) {
+      Column() {
+        Text('Select Form')
+          .fontSize(14)
+          .fontColor('#ffffff')
+          .margin({ bottom: 12 })
+
+        Row({ space: 12 }) {
+          ForEach(this.unlockedTransforms, (formId: number) => {
+            Column() {
+              Text(this.getFormIconForId(formId))
+                .fontSize(24)
+                .fontColor('#ffffff')
+              Text(this.getFormNameForId(formId))
+                .fontSize(10)
+                .fontColor('#ffffffc0')
+                .margin({ top: 4 })
+            }
+            .width(56)
+            .height(64)
+            .backgroundColor('#1e293be0')
+            .borderRadius(8)
+            .border({ width: 1, color: this.getFormColor(formId as TransformForm) })
+            .justifyContent(FlexAlign.Center)
+            .onClick(() => {
+              this.showFormSelect = false;
+              this.gameEngine.activateTransform(formId as TransformForm);
+            })
+          })
+        }
+
+        Text('Cancel')
+          .fontSize(12)
+          .fontColor('#ffffff80')
+          .margin({ top: 8 })
+          .onClick(() => { this.showFormSelect = false; })
+      }
+      .width(280)
+      .padding(16)
+      .backgroundColor('#0f172af0')
+      .borderRadius(12)
+      .position({ x: (this.screenW - 280) / 2, y: (this.screenH - 140) / 2 })
+    }
+  }
+
+  @Builder
+  TransformUnlockNotification() {
+    if (this.transformUnlockActive) {
+      Column() {
+        Text('NEW FORM UNLOCKED!')
+          .fontSize(14)
+          .fontColor('#fbbf24')
+          .fontWeight(FontWeight.Bold)
+        Text(this.getFormIconForId(this.transformUnlockForm as number))
+          .fontSize(32)
+          .margin({ top: 8 })
+        Text(this.getFormNameForId(this.transformUnlockForm as number))
+          .fontSize(16)
+          .fontColor('#ffffff')
+          .margin({ top: 4 })
+      }
+      .width(200)
+      .padding(16)
+      .backgroundColor('#0f172af0')
+      .borderRadius(12)
+      .border({ width: 2, color: '#fbbf24' })
+      .position({ x: (this.screenW - 200) / 2, y: (this.screenH - 120) / 2 })
+    }
+  }
+
+  private getTransformIcon(): string {
+    if (this.isTransformed) {
+      return this.getFormIconForId(this.transformForm as number);
+    }
+    return '⚡';
+  }
+
+  private getFormIconForId(formId: number): string {
+    if (formId === TransformForm.SLIME) return '🟢';
+    if (formId === TransformForm.GHOST) return '👻';
+    if (formId === TransformForm.ARMOR) return '🛡';
+    if (formId === TransformForm.IRON_MAN) return '🔴';
+    return '?';
+  }
+
+  private getFormNameForId(formId: number): string {
+    if (formId === TransformForm.SLIME) return 'Slime';
+    if (formId === TransformForm.GHOST) return 'Ghost';
+    if (formId === TransformForm.ARMOR) return 'Armor';
+    if (formId === TransformForm.IRON_MAN) return 'Iron Man';
+    return 'Unknown';
+  }
+
+  private getFormColor(form: TransformForm): string {
+    if (form === TransformForm.SLIME) return COLOR_TRANSFORM_SLIME;
+    if (form === TransformForm.GHOST) return COLOR_TRANSFORM_GHOST;
+    if (form === TransformForm.ARMOR) return COLOR_TRANSFORM_ARMOR;
+    if (form === TransformForm.IRON_MAN) return COLOR_TRANSFORM_IRON_GOLD;
+    return COLOR_TRANSFORM_BTN_READY;
   }
 }
