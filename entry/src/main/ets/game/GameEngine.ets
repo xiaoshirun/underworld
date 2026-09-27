@@ -79,6 +79,7 @@ import { DamageSystem, DamageBridge } from './systems/DamageSystem';
 import { XpLevelSystem } from './systems/XpLevelSystem';
 import { ChestSystem, ChestBridge } from './systems/ChestSystem';
 import { MaterialDropSystem } from './systems/MaterialDropSystem';
+import { EvolutionSystem } from './systems/EvolutionSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
@@ -96,6 +97,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   private xpLevelSystem: XpLevelSystem | null = null;
   private chestSystem: ChestSystem | null = null;
   private materialDropSystem: MaterialDropSystem | null = null;
+  private evolutionSystem: EvolutionSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -186,6 +188,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.xpLevelSystem = new XpLevelSystem(this);
     this.chestSystem = new ChestSystem(this, this);
     this.materialDropSystem = new MaterialDropSystem(this);
+    this.evolutionSystem = new EvolutionSystem(this);
     this.startLoop();
   }
 
@@ -4244,129 +4247,33 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
 
   // ==================== Evolution System ====================
 
-  private getBranchOreType(branch: EvolutionBranch): MaterialType {
-    if (branch === EvolutionBranch.CRYSTAL) return MaterialType.CRYSTAL_ORE;
-    if (branch === EvolutionBranch.FLAME) return MaterialType.FLAME_ORE;
-    if (branch === EvolutionBranch.SHADOW) return MaterialType.VOID_ORE;
-    if (branch === EvolutionBranch.TOXIN) return MaterialType.MUSHROOM_ORE;
-    if (branch === EvolutionBranch.TIDE) return MaterialType.ABYSS_ORE;
-    return MaterialType.CRYSTAL_ORE;
-  }
-
-  private getOreCount(inventory: Inventory, branch: EvolutionBranch): number {
-    const oreType: MaterialType = this.getBranchOreType(branch);
-    if (oreType === MaterialType.CRYSTAL_ORE) return inventory.crystalOre;
-    if (oreType === MaterialType.FLAME_ORE) return inventory.flameOre;
-    if (oreType === MaterialType.VOID_ORE) return inventory.voidOre;
-    if (oreType === MaterialType.MUSHROOM_ORE) return inventory.mushroomOre;
-    if (oreType === MaterialType.ABYSS_ORE) return inventory.abyssOre;
-    return 0;
-  }
-
-  private deductOre(inventory: Inventory, branch: EvolutionBranch, count: number): void {
-    const oreType: MaterialType = this.getBranchOreType(branch);
-    if (oreType === MaterialType.CRYSTAL_ORE) inventory.crystalOre -= count;
-    else if (oreType === MaterialType.FLAME_ORE) inventory.flameOre -= count;
-    else if (oreType === MaterialType.VOID_ORE) inventory.voidOre -= count;
-    else if (oreType === MaterialType.MUSHROOM_ORE) inventory.mushroomOre -= count;
-    else if (oreType === MaterialType.ABYSS_ORE) inventory.abyssOre -= count;
-  }
-
   canEvolve(): boolean {
-    if (this.player === null) return false;
-    const p: PlayerState = this.player;
-    const level: number = p.evolutionLevel;
-    if (level >= EvolutionLevel.LEVEL_3) return false;
-    const nextLevel: number = level + 1;
-    const branch: EvolutionBranch = p.evolutionBranch;
-    const oreNeeded: number = EVOLUTION_COST_ORE[nextLevel];
-    const normalNeeded: number = EVOLUTION_COST_NORMAL[nextLevel];
-    const rareNeeded: number = EVOLUTION_COST_RARE[nextLevel];
-    if (this.getOreCount(p.inventory, branch) < oreNeeded) return false;
-    if (p.inventory.coreNormal < normalNeeded) return false;
-    if (p.inventory.coreRare < rareNeeded) return false;
-    return true;
+    return this.evolutionSystem!.canEvolve();
   }
 
   tryEvolveWeapon(): boolean {
-    if (!this.canEvolve()) return false;
-    const p: PlayerState = this.player!;
-    const nextLevel: number = p.evolutionLevel + 1;
-    const branch: EvolutionBranch = p.evolutionBranch;
-    const oreNeeded: number = EVOLUTION_COST_ORE[nextLevel];
-    const normalNeeded: number = EVOLUTION_COST_NORMAL[nextLevel];
-    const rareNeeded: number = EVOLUTION_COST_RARE[nextLevel];
-
-    this.deductOre(p.inventory, branch, oreNeeded);
-    p.inventory.coreNormal -= normalNeeded;
-    p.inventory.coreRare -= rareNeeded;
-    p.evolutionLevel = nextLevel as EvolutionLevel;
-
-    // Evolution particle effect
-    if (this.settings.effectsEnabled) {
-      this.particleMgr.explosion(p.x, p.y, this.getBranchColor(branch), 20);
-      this.particleMgr.magic(p.x, p.y, '#ffffff');
-    }
-    this.shakeTimer = 300;
-    return true;
+    return this.evolutionSystem!.tryEvolveWeapon();
   }
 
   unlockWeaponForm(form: WeaponForm): boolean {
-    if (this.player === null) return false;
-    const p: PlayerState = this.player;
-    if (p.unlockedForms.indexOf(form) >= 0) return false;
-    if (p.inventory.formCore < FORM_UNLOCK_COST) return false;
-    p.inventory.formCore -= FORM_UNLOCK_COST;
-    p.unlockedForms.push(form);
-    return true;
-  }
-
-  private getBranchColor(branch: EvolutionBranch): string {
-    if (branch === EvolutionBranch.CRYSTAL) return '#00ced1';
-    if (branch === EvolutionBranch.FLAME) return '#ff4500';
-    if (branch === EvolutionBranch.SHADOW) return '#6b21a8';
-    if (branch === EvolutionBranch.TOXIN) return '#32cd32';
-    if (branch === EvolutionBranch.TIDE) return '#4169e1';
-    return '#ffffff';
+    return this.evolutionSystem!.unlockWeaponForm(form);
   }
 
   getEvolutionInfo(): string[] {
-    if (this.player === null) return ['No player'];
-    const p: PlayerState = this.player;
-    const branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
-    const branch: string = branchNames[p.evolutionBranch] || 'Unknown';
-    const level: number = p.evolutionLevel;
-    const info: string[] = [];
-    info.push('Branch: ' + branch);
-    info.push('Level: ' + level + '/3');
-    if (level < 3) {
-      const next: number = level + 1;
-      const oreNeeded: number = EVOLUTION_COST_ORE[next];
-      const normalNeeded: number = EVOLUTION_COST_NORMAL[next];
-      const rareNeeded: number = EVOLUTION_COST_RARE[next];
-      const oreHave: number = this.getOreCount(p.inventory, p.evolutionBranch);
-      info.push('Ore: ' + oreHave + '/' + oreNeeded);
-      info.push('Core: ' + p.inventory.coreNormal + '/' + normalNeeded);
-      info.push('Rare: ' + p.inventory.coreRare + '/' + rareNeeded);
-    } else {
-      info.push('MAX LEVEL');
-    }
-    return info;
+    return this.evolutionSystem!.getEvolutionInfo();
   }
 
   getEvoBranch(): number {
-    if (this.player === null) return 0;
-    return this.player.evolutionBranch as number;
+    return this.evolutionSystem!.getEvoBranch();
   }
 
   getEvoLevel(): number {
-    if (this.player === null) return 0;
-    return this.player.evolutionLevel as number;
+    return this.evolutionSystem!.getEvoLevel();
   }
 
   getEvoOreHave(): number {
-    if (this.player === null) return 0;
-    return this.getOreCount(this.player.inventory, this.player.evolutionBranch);
+    return this.evolutionSystem!.getEvoOreHave();
+  }
   }
 
   getEvoOreNeed(): number {
