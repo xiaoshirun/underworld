@@ -109,6 +109,11 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   private bossRenderer: BossRenderer | null = null;
   private effectRenderer: EffectRenderer | null = null;
   private uiRenderer: UIRenderer | null = null;
+  private externalLoop: boolean = false;
+
+  setExternalLoop(enabled: boolean): void {
+    this.externalLoop = enabled;
+  }
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -211,6 +216,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   }
 
   private startLoop(): void {
+    if (this.externalLoop) return;
     this.gameLoopId = setInterval(() => {
       this.update(FRAME_INTERVAL);
       this.render();
@@ -325,7 +331,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   }
 
 
-  private update(dt: number): void {
+  update(dt: number): void {
     if (this.player === null) return;
     if (this.state !== GameState.PLAYING) return;
     const p: PlayerState = this.player;
@@ -492,7 +498,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     }
   }
 
-  private render(): void {
+  render(): void {
     if (this.ctx === null || this.player === null) return;
     const c: CanvasRenderingContext2D = this.ctx;
     const p: PlayerState = this.player;

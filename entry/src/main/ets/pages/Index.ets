@@ -2,6 +2,10 @@ import { display, router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { GameEngine } from '../game/GameEngine';
 import { SaveManager } from '../game/SaveManager';
+import { Engine } from '../engine/core/Engine';
+import { GameScene } from '../game/GameScene';
+import { MainMenuScene } from '../game/MainMenuScene';
+import { Scene } from '../engine/scene/Scene';
 import {
   PLAYER_MAX_HP, JOYSTICK_RADIUS, MINIMAP_SIZE,
   COLOR_HP_FULL, COLOR_HP_EMPTY,
@@ -19,6 +23,8 @@ import {
 @Component
 struct Index {
   private gameEngine: GameEngine = new GameEngine();
+  private engine: Engine | null = null;
+  private gameScene: GameScene | null = null;
   private gameCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private minimapCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private cacheCtx0: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
@@ -112,6 +118,9 @@ struct Index {
   }
 
   aboutToDisappear(): void {
+    if (this.engine) {
+      this.engine.stop();
+    }
     this.gameEngine.destroy();
   }
 
@@ -1097,6 +1106,7 @@ struct Index {
   private tryInitEngine(): void {
     if (this.gameCanvasReady && this.minimapCanvasReady && this.cacheCanvasesReady >= 6) {
       const ctx = getContext(this) as common.UIAbilityContext;
+      this.gameEngine.setExternalLoop(true);
       this.gameEngine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH,
         [this.cacheCtx0, this.cacheCtx1, this.cacheCtx2, this.cacheCtx3, this.cacheCtx4, this.cacheCtx5], ctx);
       this.gameEngine.setGender(this.playerGender);
@@ -1122,6 +1132,23 @@ struct Index {
           this.showSaveIndicator = false;
         }, 1500);
       });
+
+      const ge = this.gameEngine;
+      Engine.init({
+        canvas: this.gameCtx,
+        screenWidth: this.screenW,
+        screenHeight: this.screenH,
+        scenes: [
+          { name: 'main-menu', factory: (): Scene => new MainMenuScene() },
+          { name: 'game', factory: (): Scene => { this.gameScene = new GameScene(ge); return this.gameScene; } },
+        ],
+        entryScene: 'game',
+        appContext: ctx,
+      }).then((engine: Engine) => {
+        this.engine = engine;
+        engine.start();
+      });
+
       this.startStatusMonitor();
     }
   }
