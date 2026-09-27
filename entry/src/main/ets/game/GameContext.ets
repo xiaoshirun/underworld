@@ -3,9 +3,10 @@ import {
   TileType, BiomeType,
   ChunkData, PlayerState, SlimeState, XpOrb, Particle,
   InputState, GameSettings, AmbientParticle,
-  GenderType, BossState, BossRoom, MaterialDrop, ChestState,
+  GenderType, BossState, BossRoom, MaterialDrop, ChestState, BossType,
   TrapInstance, MechanismInstance, SecretRoom, TransformCoreDrop,
   TransformForm, GameState,
+  COLOR_BOSS_CRYSTAL, COLOR_BOSS_MUSHROOM, COLOR_BOSS_LAVA, COLOR_BOSS_ABYSS, COLOR_BOSS_VOID,
 } from './GameConstants';
 import { WorldGenerator } from './WorldGenerator';
 import { AudioManager } from './AudioManager';
@@ -197,5 +198,13 @@ export class GameContext {
         this.particles.splice(i, 1);
       }
     }
+  }
+
+  getBossColor(bossType: BossType): string {
+    if (bossType === BossType.CRYSTAL_GUARDIAN) return COLOR_BOSS_CRYSTAL;
+    if (bossType === BossType.MUSHROOM_KING) return COLOR_BOSS_MUSHROOM;
+    if (bossType === BossType.LAVA_BEAST) return COLOR_BOSS_LAVA;
+    if (bossType === BossType.ABYSS_SIREN) return COLOR_BOSS_ABYSS;
+    return COLOR_BOSS_VOID;
   }
 }
