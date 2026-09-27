@@ -74,6 +74,7 @@ import { EnemyAISystem } from './systems/EnemyAISystem';
 import { BossSystem, BossBridge } from './systems/BossSystem';
 import { TrapSystem } from './systems/TrapSystem';
 import { MechanismSystem, MechanismBridge } from './systems/MechanismSystem';
+import { ChunkLoadSystem } from './systems/ChunkLoadSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
@@ -86,6 +87,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   private bossSystem: BossSystem | null = null;
   private trapSystem: TrapSystem | null = null;
   private mechanismSystem: MechanismSystem | null = null;
+  private chunkLoadSystem: ChunkLoadSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -171,6 +173,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.bossSystem = new BossSystem(this, this);
     this.trapSystem = new TrapSystem(this);
     this.mechanismSystem = new MechanismSystem(this, this);
+    this.chunkLoadSystem = new ChunkLoadSystem(this);
     this.startLoop();
   }
 
@@ -539,9 +542,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     if (this.state !== GameState.PLAYING) return;
     const p: PlayerState = this.player;
 
-    const ptx: number = Math.floor(p.x / TILE_SIZE);
-    const pty: number = Math.floor(p.y / TILE_SIZE);
-    this.loadChunksAround(ptx, pty);
+    this.chunkLoadSystem!.update();
 
     this.movementSystem!.update(dt);
     // === Transform System Update ===
