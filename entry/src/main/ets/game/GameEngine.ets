@@ -73,17 +73,19 @@ import { TransformSystem, TransformBridge } from './systems/TransformSystem';
 import { EnemyAISystem } from './systems/EnemyAISystem';
 import { BossSystem, BossBridge } from './systems/BossSystem';
 import { TrapSystem } from './systems/TrapSystem';
+import { MechanismSystem, MechanismBridge } from './systems/MechanismSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
 
-export class GameEngine extends GameContext implements MovementBridge, TransformBridge, BossBridge {
+export class GameEngine extends GameContext implements MovementBridge, TransformBridge, BossBridge, MechanismBridge {
   private movementSystem: PlayerMovementSystem | null = null;
   private combatSystem: PlayerCombatSystem | null = null;
   private transformSystem: TransformSystem | null = null;
   private enemyAISystem: EnemyAISystem | null = null;
   private bossSystem: BossSystem | null = null;
   private trapSystem: TrapSystem | null = null;
+  private mechanismSystem: MechanismSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -168,6 +170,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.enemyAISystem = new EnemyAISystem(this);
     this.bossSystem = new BossSystem(this, this);
     this.trapSystem = new TrapSystem(this);
+    this.mechanismSystem = new MechanismSystem(this, this);
     this.startLoop();
   }
 
@@ -673,104 +676,11 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   }
 
   private updateMechanisms(dt: number): void {
-    if (this.player === null) return;
-    const p: PlayerState = this.player;
-
-    if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
-
-    for (let i: number = 0; i < this.mechanisms.length; i++) {
-      const mech: MechanismInstance = this.mechanisms[i];
-      const dx: number = p.x - mech.x;
-      const dy: number = p.y - mech.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
-
-      switch (mech.mechanismType) {
-        case MechanismType.PRESSURE_PLATE:
-          const wasActive: boolean = mech.active;
-          mech.active = dist < PRESSURE_PLATE_RANGE;
-          if (mech.active !== wasActive) {
-            this.checkMechanismLinks(mech);
-          }
-          break;
-
-        case MechanismType.PUSH_BLOCK:
-          if (mech.pushable && dist < PLAYER_SIZE + 12) {
-            const pushDirX: number = p.vx;
-            const pushDirY: number = p.vy;
-            const pushLen: number = Math.sqrt(pushDirX * pushDirX + pushDirY * pushDirY);
-            if (pushLen > 0.5) {
-              const newX: number = mech.posX + (pushDirX / pushLen) * PUSH_BLOCK_SPEED;
-              const newY: number = mech.posY + (pushDirY / pushLen) * PUSH_BLOCK_SPEED;
-              const tileAtNew: number = this.getTile(newX, newY);
-              if (tileAtNew === TileType.FLOOR || tileAtNew === TileType.BROKEN_WALL) {
-                mech.posX = newX;
-                mech.posY = newY;
-                mech.x = newX;
-                mech.y = newY;
-                if (this.settings.effectsEnabled && this.frameCount % 3 === 0) {
-                  this.spawnParticle(mech.x, mech.y + 8, (Math.random() - 0.5) * 0.5, -0.3, 300, COLOR_DRILL_PARTICLE, 2);
-                }
-              }
-            }
-          }
-          break;
-
-        case MechanismType.TELEPORT_RUNE:
-          if (dist < MECH_INTERACT_RANGE && this.teleportCooldown <= 0) {
-            const pairIndex: number = mech.linkedIndex;
-            if (pairIndex >= 0 && pairIndex < this.mechanisms.length) {
-              const paired: MechanismInstance = this.mechanisms[pairIndex];
-              if (paired.mechanismType === MechanismType.TELEPORT_RUNE) {
-                p.x = paired.x;
-                p.y = paired.y;
-                this.teleportCooldown = TELEPORT_COOLDOWN;
-                this.audio.playDash();
-                if (this.settings.effectsEnabled) {
-                  for (let k: number = 0; k < 10; k++) {
-                    const angle: number = Math.random() * Math.PI * 2;
-                    const speed: number = 1.5 + Math.random() * 2;
-                    this.spawnParticle(paired.x, paired.y,
-                      Math.cos(angle) * speed, Math.sin(angle) * speed, 500, COLOR_TELEPORT_RUNE, 3);
-                  }
-                }
-              }
-            }
-          }
-          break;
-
-        case MechanismType.LEVER:
-          if (dist < MECH_INTERACT_RANGE && this.input.toolPressed) {
-            this.input.toolPressed = false;
-            mech.active = !mech.active;
-            mech.rotation = mech.active ? 45 : -45;
-            this.audio.playDrillHit();
-            this.checkMechanismLinks(mech);
-          }
-          break;
-
-        case MechanismType.CRYSTAL_REFLECTOR:
-          if (dist < MECH_INTERACT_RANGE && this.input.toolPressed) {
-            this.input.toolPressed = false;
-            mech.rotation = (mech.rotation + 60) % 360;
-            this.audio.playDrillHit();
-          }
-          break;
-      }
-    }
-
-    this.movementSystem!.checkBreakableWalls(p);
+    this.mechanismSystem!.update(dt);
   }
 
-  private checkMechanismLinks(mech: MechanismInstance): void {
-    for (let i: number = 0; i < this.mechanisms.length; i++) {
-      const other: MechanismInstance = this.mechanisms[i];
-      if (other.linkedIndex >= 0 && other !== mech) {
-        const linkedMech: MechanismInstance = this.mechanisms[other.linkedIndex];
-        if (linkedMech === mech) {
-          other.active = mech.active;
-        }
-      }
-    }
+  checkBreakableWalls(p: PlayerState): void {
+    this.movementSystem!.checkBreakableWalls(p);
   }
 
   // ==================== Boss System ====================
