@@ -5,7 +5,8 @@ import {
   COLOR_HP_FULL, COLOR_HP_EMPTY,
   COLOR_JOY_BASE, COLOR_JOY_KNOB,
   COLOR_BTN_JUMP, COLOR_BTN_ATTACK, COLOR_BTN_DASH, COLOR_TOOL_BTN,
-  COLOR_XP_ORB, DASH_COOLDOWN, GenderType, WeaponForm
+  COLOR_XP_ORB, DASH_COOLDOWN, GenderType, WeaponForm,
+  EvolutionBranch, FORM_UNLOCK_COST
 } from '../game/GameConstants';
 
 @Entry
@@ -35,6 +36,19 @@ struct Index {
   @State playerGender: GenderType = GenderType.MALE;
   @State currentWeaponForm: WeaponForm = WeaponForm.BLADE;
   @State toolReady: boolean = true;
+  @State showEvolution: boolean = false;
+  @State evoBranch: number = 0;
+  @State evoLevel: number = 0;
+  @State evoOreHave: number = 0;
+  @State evoOreNeed: number = 0;
+  @State evoNormalHave: number = 0;
+  @State evoNormalNeed: number = 0;
+  @State evoRareHave: number = 0;
+  @State evoRareNeed: number = 0;
+  @State evoFormCore: number = 0;
+  @State evoMaxLevel: boolean = false;
+  @State lockedForms: number[] = [1, 2, 3, 4, 5];
+  private branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
 
   aboutToAppear(): void {
     try {
@@ -87,6 +101,10 @@ struct Index {
 
       if (this.showSettings) {
         this.SettingsOverlay()
+      }
+
+      if (this.showEvolution) {
+        this.EvolutionOverlay()
       }
     }
     .width('100%')
@@ -210,6 +228,27 @@ struct Index {
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
         this.showSettings = true;
+      }
+    })
+
+    Stack() {
+      Circle()
+        .width(32)
+        .height(32)
+        .fill('#1e293b')
+        .opacity(0.8)
+
+      Text('✦')
+        .fontSize(16)
+        .fontColor('#a78bfa')
+    }
+    .width(32)
+    .height(32)
+    .position({ x: this.screenW - 82, y: 12 })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.refreshEvoState();
+        this.showEvolution = true;
       }
     })
   }
@@ -519,6 +558,266 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor('#000000b0')
+  }
+
+  @Builder
+  EvolutionOverlay() {
+    Stack() {
+      Column() {
+        // Header
+        Row() {
+          Text('武器进化')
+            .fontSize(19)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#e2e8f0')
+
+          Blank()
+
+          Stack() {
+            Circle()
+              .width(28)
+              .height(28)
+              .fill('#1e293b')
+
+            Text('✕')
+              .fontSize(14)
+              .fontColor('#94a3b8')
+          }
+          .width(28)
+          .height(28)
+          .onTouch((event: TouchEvent) => {
+            if (event.type === TouchType.Down) {
+              this.showEvolution = false;
+            }
+          })
+        }
+        .width('100%')
+        .margin({ bottom: 12 })
+
+        // Current weapon form
+        Row() {
+          Text('形态: ')
+            .fontSize(13)
+            .fontColor('#94a3b8')
+          Text(this.gameEngine.getWeaponFormName(this.currentWeaponForm))
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#fbbf24')
+        }
+        .width('100%')
+        .margin({ bottom: 10 })
+
+        // Branch tabs
+        Row() {
+          ForEach(this.branchNames, (name: string, index: number) => {
+            Stack() {
+              Text(name)
+                .fontSize(11)
+                .fontWeight(this.evoBranch === index ? FontWeight.Bold : FontWeight.Normal)
+                .fontColor(this.evoBranch === index ? this.getBranchColor(index) : '#64748b')
+            }
+            .padding({ left: 8, right: 8, top: 5, bottom: 5 })
+            .backgroundColor(this.evoBranch === index ? '#1e293b' : '#0f172a')
+            .borderRadius(6)
+            .border({ width: 1, color: this.evoBranch === index ? this.getBranchColor(index) : '#1e293b' })
+            .margin({ left: index > 0 ? 4 : 0 })
+            .onTouch((event: TouchEvent) => {
+              if (event.type === TouchType.Down) {
+                this.evoBranch = index;
+              }
+            })
+          })
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
+        .margin({ bottom: 14 })
+
+        // Evolution level display
+        Row() {
+          Text('进化等级')
+            .fontSize(13)
+            .fontColor('#94a3b8')
+          Blank()
+          Text(this.evoLevel + ' / 3')
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.getBranchColor(this.evoBranch))
+        }
+        .width('100%')
+        .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+        .backgroundColor('#1e293b40')
+        .borderRadius(8)
+
+        // Material costs
+        if (!this.evoMaxLevel) {
+          Column() {
+            Row() {
+              Text('矿石')
+                .fontSize(12)
+                .fontColor('#94a3b8')
+              Blank()
+              Text(this.evoOreHave + ' / ' + this.evoOreNeed)
+                .fontSize(12)
+                .fontColor(this.evoOreHave >= this.evoOreNeed ? '#22c55e' : '#ef4444')
+            }
+            .width('100%')
+            .padding({ top: 6, bottom: 6 })
+
+            Divider().color('#1e293b')
+
+            Row() {
+              Text('普通核心')
+                .fontSize(12)
+                .fontColor('#94a3b8')
+              Blank()
+              Text(this.evoNormalHave + ' / ' + this.evoNormalNeed)
+                .fontSize(12)
+                .fontColor(this.evoNormalHave >= this.evoNormalNeed ? '#22c55e' : '#ef4444')
+            }
+            .width('100%')
+            .padding({ top: 6, bottom: 6 })
+
+            Divider().color('#1e293b')
+
+            Row() {
+              Text('稀有核心')
+                .fontSize(12)
+                .fontColor('#94a3b8')
+              Blank()
+              Text(this.evoRareHave + ' / ' + this.evoRareNeed)
+                .fontSize(12)
+                .fontColor(this.evoRareHave >= this.evoRareNeed ? '#22c55e' : '#ef4444')
+            }
+            .width('100%')
+            .padding({ top: 6, bottom: 6 })
+          }
+          .padding({ left: 14, right: 14, top: 4, bottom: 4 })
+          .backgroundColor('#1e293b40')
+          .borderRadius(8)
+          .margin({ top: 10 })
+
+          // Evolve button
+          Button('进化')
+            .width('100%')
+            .height(40)
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#ffffff')
+            .backgroundColor(this.canEvolveNow() ? '#7c3aed' : '#374151')
+            .borderRadius(10)
+            .margin({ top: 12 })
+            .enabled(this.canEvolveNow())
+            .shadow({ radius: this.canEvolveNow() ? 10 : 0, color: '#7c3aed60', offsetX: 0, offsetY: 2 })
+            .onClick(() => {
+              if (this.gameEngine.tryEvolveWeapon()) {
+                this.refreshEvoState();
+              }
+            })
+        } else {
+          Row() {
+            Text('已达最高等级')
+              .fontSize(13)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#fbbf24')
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+          .padding({ top: 12, bottom: 12 })
+          .backgroundColor('#1e293b40')
+          .borderRadius(8)
+          .margin({ top: 10 })
+        }
+
+        // Form unlock section
+        Column() {
+          Row() {
+            Text('解锁形态')
+              .fontSize(13)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#e2e8f0')
+            Blank()
+            Text('形态核心: ' + this.evoFormCore)
+              .fontSize(11)
+              .fontColor('#a78bfa')
+          }
+          .width('100%')
+          .margin({ bottom: 8 })
+
+          ForEach(this.lockedForms, (formIndex: number) => {
+            Row() {
+              Text(this.gameEngine.getWeaponFormName(formIndex as WeaponForm))
+                .fontSize(12)
+                .fontColor('#94a3b8')
+              Blank()
+              Stack() {
+                Text('解锁 (1核心)')
+                  .fontSize(11)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(this.evoFormCore >= FORM_UNLOCK_COST ? '#ffffff' : '#64748b')
+              }
+              .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+              .backgroundColor(this.evoFormCore >= FORM_UNLOCK_COST ? '#4f46e5' : '#1e293b')
+              .borderRadius(6)
+              .onTouch((event: TouchEvent) => {
+                if (event.type === TouchType.Down && this.evoFormCore >= FORM_UNLOCK_COST) {
+                  this.gameEngine.unlockWeaponForm(formIndex as WeaponForm);
+                  this.refreshEvoState();
+                }
+              })
+            }
+            .width('100%')
+            .padding({ top: 5, bottom: 5 })
+          })
+        }
+        .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+        .backgroundColor('#1e293b40')
+        .borderRadius(8)
+        .margin({ top: 10 })
+
+        Blank()
+      }
+      .width('88%')
+      .padding(18)
+      .backgroundColor('#0f172af5')
+      .borderRadius(18)
+      .border({ width: 1, color: '#1e293b' })
+      .shadow({ radius: 24, color: '#000000a0', offsetX: 0, offsetY: 8 })
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#000000b0')
+  }
+
+  private getBranchColor(branch: number): string {
+    if (branch === EvolutionBranch.CRYSTAL) return '#00ced1';
+    if (branch === EvolutionBranch.FLAME) return '#ff4500';
+    if (branch === EvolutionBranch.SHADOW) return '#6b21a8';
+    if (branch === EvolutionBranch.TOXIN) return '#32cd32';
+    if (branch === EvolutionBranch.TIDE) return '#4169e1';
+    return '#ffffff';
+  }
+
+  private canEvolveNow(): boolean {
+    if (this.evoMaxLevel) return false;
+    return this.evoOreHave >= this.evoOreNeed &&
+      this.evoNormalHave >= this.evoNormalNeed &&
+      this.evoRareHave >= this.evoRareNeed;
+  }
+
+  private refreshEvoState(): void {
+    this.evoBranch = this.gameEngine.getEvoBranch();
+    this.evoLevel = this.gameEngine.getEvoLevel();
+    this.evoOreHave = this.gameEngine.getEvoOreHave();
+    this.evoOreNeed = this.gameEngine.getEvoOreNeed();
+    this.evoNormalHave = this.gameEngine.getEvoNormalHave();
+    this.evoNormalNeed = this.gameEngine.getEvoNormalNeed();
+    this.evoRareHave = this.gameEngine.getEvoRareHave();
+    this.evoRareNeed = this.gameEngine.getEvoRareNeed();
+    this.evoFormCore = this.gameEngine.getEvoFormCore();
+    this.evoMaxLevel = this.evoLevel >= 3;
+    const unlocked: number[] = this.gameEngine.getUnlockedForms();
+    const allForms: number[] = [0, 1, 2, 3, 4, 5];
+    this.lockedForms = allForms.filter((f: number) => unlocked.indexOf(f) < 0);
   }
 
   private tryInitEngine(): void {
