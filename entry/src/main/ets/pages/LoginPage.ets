@@ -23,15 +23,26 @@ struct LoginPage {
   @State errorMsg: string = '';
   @State isLoading: boolean = false;
   @State loginBtnScale: number = 1.0;
+  @State isLandscape: boolean = false;
 
   aboutToAppear(): void {
     try {
       const displayInfo = display.getDefaultDisplaySync();
-      this.screenW = px2vp(displayInfo.width);
-      this.screenH = px2vp(displayInfo.height);
+      const rawW: number = px2vp(displayInfo.width);
+      const rawH: number = px2vp(displayInfo.height);
+      if (rawW > rawH) {
+        this.screenW = rawW;
+        this.screenH = rawH;
+        this.isLandscape = true;
+      } else {
+        this.screenW = rawH;
+        this.screenH = rawW;
+        this.isLandscape = false;
+      }
     } catch (e) {
-      this.screenW = 360;
-      this.screenH = 780;
+      this.screenW = 780;
+      this.screenH = 360;
+      this.isLandscape = true;
     }
   }
 
@@ -39,6 +50,167 @@ struct LoginPage {
     if (this.bgAnimId !== -1) {
       clearInterval(this.bgAnimId);
     }
+  }
+
+  @Builder
+  LogoView() {
+    Stack() {
+      Circle()
+        .width(this.isLandscape ? 60 : 80)
+        .height(this.isLandscape ? 60 : 80)
+        .fill('#0f172a')
+        .opacity(0.6)
+
+      Column() {
+        Text('⛏')
+          .fontSize(this.isLandscape ? 24 : 32)
+          .fontColor('#fbbf24')
+
+        Text('◆')
+          .fontSize(10)
+          .fontColor('#22d3ee')
+          .margin({ top: -2 })
+      }
+    }
+  }
+
+  @Builder
+  TitleView() {
+    Column() {
+      Text('地下世界探索')
+        .fontSize(this.isLandscape ? 20 : 26)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#e2e8f0')
+        .textShadow({ radius: 12, color: '#3b82f680', offsetX: 0, offsetY: 0 })
+        .margin({ bottom: 4 })
+
+      Text('Underworld Explorer')
+        .fontSize(this.isLandscape ? 11 : 13)
+        .fontColor('#64748b')
+        .letterSpacing(2)
+    }
+  }
+
+  @Builder
+  FormCardView() {
+    Column() {
+      Text('账号登录')
+        .fontSize(17)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#cbd5e1')
+        .margin({ bottom: this.isLandscape ? 12 : 20 })
+
+      Column() {
+        Text('用户名')
+          .fontSize(12)
+          .fontColor('#94a3b8')
+          .margin({ bottom: 6 })
+
+        TextInput({ text: this.username, placeholder: '请输入用户名' })
+          .height(44)
+          .fontSize(15)
+          .fontColor('#e2e8f0')
+          .placeholderColor('#475569')
+          .backgroundColor('#1e293b')
+          .borderRadius(10)
+          .padding({ left: 14, right: 14 })
+          .onChange((value: string) => {
+            this.username = value;
+          })
+      }
+      .margin({ bottom: this.isLandscape ? 10 : 14 })
+
+      Column() {
+        Text('密码')
+          .fontSize(12)
+          .fontColor('#94a3b8')
+          .margin({ bottom: 6 })
+
+        TextInput({ text: this.password, placeholder: '请输入密码' })
+          .type(InputType.Password)
+          .height(44)
+          .fontSize(15)
+          .fontColor('#e2e8f0')
+          .placeholderColor('#475569')
+          .backgroundColor('#1e293b')
+          .borderRadius(10)
+          .padding({ left: 14, right: 14 })
+          .onChange((value: string) => {
+            this.password = value;
+          })
+      }
+      .margin({ bottom: 6 })
+
+      if (this.errorMsg.length > 0) {
+        Text(this.errorMsg)
+          .fontSize(12)
+          .fontColor('#f87171')
+          .margin({ top: 4, bottom: 4 })
+          .textShadow({ radius: 6, color: '#ef444440', offsetX: 0, offsetY: 0 })
+      }
+
+      Button(this.isLoading ? '登录中...' : '登 录')
+        .width('100%')
+        .height(46)
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#ffffff')
+        .backgroundColor('#3b82f6')
+        .borderRadius(10)
+        .margin({ top: this.isLandscape ? 12 : 18 })
+        .scale({ x: this.loginBtnScale, y: this.loginBtnScale })
+        .shadow({ radius: 12, color: '#3b82f640', offsetX: 0, offsetY: 4 })
+        .onTouch((event: TouchEvent) => {
+          if (event.type === TouchType.Down) {
+            this.loginBtnScale = 0.96;
+          } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+            this.loginBtnScale = 1.0;
+          }
+        })
+        .onClick(() => {
+          this.handleLogin();
+        })
+
+      Row() {
+        Divider().layoutWeight(1).color('#334155')
+        Text('测试账号')
+          .fontSize(11)
+          .fontColor('#475569')
+          .margin({ left: 10, right: 10 })
+        Divider().layoutWeight(1).color('#334155')
+      }
+      .width('100%')
+      .margin({ top: this.isLandscape ? 12 : 18 })
+
+      Row() {
+        Text('test')
+          .fontSize(13)
+          .fontColor('#22d3ee')
+          .fontWeight(FontWeight.Medium)
+        Text(' / ')
+          .fontSize(13)
+          .fontColor('#475569')
+        Text('test')
+          .fontSize(13)
+          .fontColor('#22d3ee')
+          .fontWeight(FontWeight.Medium)
+      }
+      .margin({ top: 10 })
+      .padding({ left: 16, right: 16, top: 6, bottom: 6 })
+      .backgroundColor('#1e293b')
+      .borderRadius(8)
+    }
+    .width(this.isLandscape ? '90%' : '85%')
+    .padding({
+      left: this.isLandscape ? 18 : 22,
+      right: this.isLandscape ? 18 : 22,
+      top: this.isLandscape ? 14 : 22,
+      bottom: this.isLandscape ? 14 : 22
+    })
+    .backgroundColor('#0f172af0')
+    .borderRadius(18)
+    .border({ width: 1, color: '#1e293b' })
+    .shadow({ radius: 20, color: '#00000060', offsetX: 0, offsetY: 8 })
   }
 
   build() {
@@ -52,173 +224,63 @@ struct LoginPage {
           this.startBgAnimation();
         })
 
-      Column() {
-        Column() {
-          Stack() {
-            Circle()
-              .width(80)
-              .height(80)
-              .fill('#0f172a')
-              .opacity(0.6)
+      if (this.isLandscape) {
+        Row() {
+          Column() {
+            this.LogoView()
+            this.TitleView()
+          }
+          .width('40%')
+          .alignItems(HorizontalAlign.Center)
 
+          Column() {
+            this.FormCardView()
+            Blank()
             Column() {
-              Text('⛏')
-                .fontSize(32)
-                .fontColor('#fbbf24')
-
-              Text('◆')
+              Text('ICP备案号: 示例ICP备xxxxxxxx号')
+                .fontSize(11)
+                .fontColor('#374151')
+              Text('v1.0.0')
                 .fontSize(10)
-                .fontColor('#22d3ee')
-                .margin({ top: -2 })
+                .fontColor('#1e293b')
+                .margin({ top: 2 })
             }
-          }
-          .margin({ bottom: 16 })
-
-          Text('地下世界探索')
-            .fontSize(26)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#e2e8f0')
-            .textShadow({ radius: 12, color: '#3b82f680', offsetX: 0, offsetY: 0 })
-            .margin({ bottom: 4 })
-
-          Text('Underworld Explorer')
-            .fontSize(13)
-            .fontColor('#64748b')
-            .letterSpacing(2)
-            .margin({ bottom: 36 })
-        }
-        .margin({ top: 60 })
-
-        Column() {
-          Text('账号登录')
-            .fontSize(17)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#cbd5e1')
             .margin({ bottom: 20 })
-
-          Column() {
-            Text('用户名')
-              .fontSize(12)
-              .fontColor('#94a3b8')
-              .margin({ bottom: 6 })
-
-            TextInput({ text: this.username, placeholder: '请输入用户名' })
-              .height(44)
-              .fontSize(15)
-              .fontColor('#e2e8f0')
-              .placeholderColor('#475569')
-              .backgroundColor('#1e293b')
-              .borderRadius(10)
-              .padding({ left: 14, right: 14 })
-              .onChange((value: string) => {
-                this.username = value;
-              })
+            .alignItems(HorizontalAlign.Center)
           }
-          .margin({ bottom: 14 })
-
-          Column() {
-            Text('密码')
-              .fontSize(12)
-              .fontColor('#94a3b8')
-              .margin({ bottom: 6 })
-
-            TextInput({ text: this.password, placeholder: '请输入密码' })
-              .type(InputType.Password)
-              .height(44)
-              .fontSize(15)
-              .fontColor('#e2e8f0')
-              .placeholderColor('#475569')
-              .backgroundColor('#1e293b')
-              .borderRadius(10)
-              .padding({ left: 14, right: 14 })
-              .onChange((value: string) => {
-                this.password = value;
-              })
-          }
-          .margin({ bottom: 6 })
-
-          if (this.errorMsg.length > 0) {
-            Text(this.errorMsg)
-              .fontSize(12)
-              .fontColor('#f87171')
-              .margin({ top: 4, bottom: 4 })
-              .textShadow({ radius: 6, color: '#ef444440', offsetX: 0, offsetY: 0 })
-          }
-
-          Button(this.isLoading ? '登录中...' : '登 录')
-            .width('100%')
-            .height(46)
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#ffffff')
-            .backgroundColor('#3b82f6')
-            .borderRadius(10)
-            .margin({ top: 18 })
-            .scale({ x: this.loginBtnScale, y: this.loginBtnScale })
-            .shadow({ radius: 12, color: '#3b82f640', offsetX: 0, offsetY: 4 })
-            .onTouch((event: TouchEvent) => {
-              if (event.type === TouchType.Down) {
-                this.loginBtnScale = 0.96;
-              } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-                this.loginBtnScale = 1.0;
-              }
-            })
-            .onClick(() => {
-              this.handleLogin();
-            })
-
-          Row() {
-            Divider().layoutWeight(1).color('#334155')
-            Text('测试账号')
-              .fontSize(11)
-              .fontColor('#475569')
-              .margin({ left: 10, right: 10 })
-            Divider().layoutWeight(1).color('#334155')
-          }
-          .width('100%')
-          .margin({ top: 18 })
-
-          Row() {
-            Text('test')
-              .fontSize(13)
-              .fontColor('#22d3ee')
-              .fontWeight(FontWeight.Medium)
-            Text(' / ')
-              .fontSize(13)
-              .fontColor('#475569')
-            Text('test')
-              .fontSize(13)
-              .fontColor('#22d3ee')
-              .fontWeight(FontWeight.Medium)
-          }
-          .margin({ top: 10 })
-          .padding({ left: 16, right: 16, top: 6, bottom: 6 })
-          .backgroundColor('#1e293b')
-          .borderRadius(8)
+          .width('60%')
+          .height('100%')
         }
-        .width('85%')
-        .padding({ left: 22, right: 22, top: 22, bottom: 22 })
-        .backgroundColor('#0f172af0')
-        .borderRadius(18)
-        .border({ width: 1, color: '#1e293b' })
-        .shadow({ radius: 20, color: '#00000060', offsetX: 0, offsetY: 8 })
-
-        Blank()
-
+        .width('100%')
+        .height('100%')
+        .padding({ left: 40, right: 40 })
+      } else {
         Column() {
-          Text('ICP备案号: 示例ICP备xxxxxxxx号')
-            .fontSize(11)
-            .fontColor('#374151')
-          Text('v1.0.0')
-            .fontSize(10)
-            .fontColor('#1e293b')
-            .margin({ top: 2 })
+          Column() {
+            this.LogoView()
+            this.TitleView()
+          }
+          .margin({ top: 60 })
+
+          this.FormCardView()
+
+          Blank()
+
+          Column() {
+            Text('ICP备案号: 示例ICP备xxxxxxxx号')
+              .fontSize(11)
+              .fontColor('#374151')
+            Text('v1.0.0')
+              .fontSize(10)
+              .fontColor('#1e293b')
+              .margin({ top: 2 })
+          }
+          .margin({ bottom: 20 })
+          .alignItems(HorizontalAlign.Center)
         }
-        .margin({ bottom: 20 })
-        .alignItems(HorizontalAlign.Center)
+        .width('100%')
+        .height('100%')
       }
-      .width('100%')
-      .height('100%')
     }
     .width('100%')
     .height('100%')
