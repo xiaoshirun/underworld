@@ -72,6 +72,7 @@ import { PlayerCombatSystem } from './systems/PlayerCombatSystem';
 import { TransformSystem, TransformBridge } from './systems/TransformSystem';
 import { EnemyAISystem } from './systems/EnemyAISystem';
 import { BossSystem, BossBridge } from './systems/BossSystem';
+import { TrapSystem } from './systems/TrapSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
@@ -82,6 +83,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   private transformSystem: TransformSystem | null = null;
   private enemyAISystem: EnemyAISystem | null = null;
   private bossSystem: BossSystem | null = null;
+  private trapSystem: TrapSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -165,6 +167,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.transformSystem = new TransformSystem(this, this);
     this.enemyAISystem = new EnemyAISystem(this);
     this.bossSystem = new BossSystem(this, this);
+    this.trapSystem = new TrapSystem(this);
     this.startLoop();
   }
 
@@ -666,73 +669,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   }
 
   private updateTraps(dt: number): void {
-    if (this.player === null) return;
-    const p: PlayerState = this.player;
-
-    for (let i: number = 0; i < this.traps.length; i++) {
-      const trap: TrapInstance = this.traps[i];
-      const dx: number = p.x - trap.x;
-      const dy: number = p.y - trap.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
-
-      switch (trap.state) {
-        case TrapState.IDLE:
-          if (dist < trap.triggerRadius) {
-            trap.state = TrapState.TELEGRAPH;
-            trap.timer = TRAP_TELEGRAPH_TIME;
-          }
-          break;
-
-        case TrapState.TELEGRAPH:
-          trap.timer -= dt;
-          if (trap.timer <= 0) {
-            trap.state = TrapState.ACTIVE;
-            trap.timer = TRAP_ACTIVE_TIME;
-            this.audio.playPlayerDamage();
-          }
-          break;
-
-        case TrapState.ACTIVE:
-          trap.timer -= dt;
-          if (trap.trapType === TrapType.VOID_CRACK && dist < trap.triggerRadius * 1.5) {
-            const pullStrength: number = 0.8 * (1.0 - dist / (trap.triggerRadius * 1.5));
-            p.vx -= (dx / dist) * pullStrength;
-            p.vy -= (dy / dist) * pullStrength;
-          }
-          if (dist < trap.size) {
-            if (p.invincibleTimer <= 0) {
-              // Iron Man hovers — immune to ground traps and terrain
-              if (p.isTransformed && p.transformForm === TransformForm.IRON_MAN) {
-                // Skip trap damage for Iron Man
-              } else {
-              p.hp -= trap.damage;
-              p.invincibleTimer = INVINCIBLE_DURATION;
-              this.shakeTimer = 150;
-              this.damageFlashTimer = 200;
-              if (this.settings.effectsEnabled) {
-                this.particleMgr.sparks(p.x, p.y, COLOR_DAMAGE_PARTICLE, 6);
-              }
-              if (trap.trapType === TrapType.WATER_VORTEX) {
-                p.x += (Math.random() - 0.5) * 120;
-                p.y += (Math.random() - 0.5) * 120;
-              }
-              } // end else (non-Iron-Man)
-            }
-          }
-          if (trap.timer <= 0) {
-            trap.state = TrapState.COOLDOWN;
-            trap.timer = TRAP_COOLDOWN_TIME;
-          }
-          break;
-
-        case TrapState.COOLDOWN:
-          trap.timer -= dt;
-          if (trap.timer <= 0) {
-            trap.state = TrapState.IDLE;
-          }
-          break;
-      }
-    }
+    this.trapSystem!.update(dt);
   }
 
   private updateMechanisms(dt: number): void {
