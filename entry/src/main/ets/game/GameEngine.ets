@@ -78,6 +78,7 @@ import { ChunkLoadSystem } from './systems/ChunkLoadSystem';
 import { DamageSystem, DamageBridge } from './systems/DamageSystem';
 import { XpLevelSystem } from './systems/XpLevelSystem';
 import { ChestSystem, ChestBridge } from './systems/ChestSystem';
+import { MaterialDropSystem } from './systems/MaterialDropSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
@@ -94,6 +95,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   private damageSystem: DamageSystem | null = null;
   private xpLevelSystem: XpLevelSystem | null = null;
   private chestSystem: ChestSystem | null = null;
+  private materialDropSystem: MaterialDropSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -183,6 +185,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.damageSystem = new DamageSystem(this, this);
     this.xpLevelSystem = new XpLevelSystem(this);
     this.chestSystem = new ChestSystem(this, this);
+    this.materialDropSystem = new MaterialDropSystem(this);
     this.startLoop();
   }
 
@@ -691,56 +694,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   }
 
   private collectMaterialDrops(p: PlayerState): void {
-    const collectRange: number = 30;
-    for (let i: number = this.materialDrops.length - 1; i >= 0; i--) {
-      const drop: MaterialDrop = this.materialDrops[i];
-      if (!drop.active) continue;
-
-      const dx: number = p.x - drop.x;
-      const dy: number = p.y - drop.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < collectRange) {
-        drop.active = false;
-        // Add to inventory
-        if (drop.type === MaterialType.CRYSTAL_ORE) p.inventory.crystalOre += drop.count;
-        else if (drop.type === MaterialType.MUSHROOM_ORE) p.inventory.mushroomOre += drop.count;
-        else if (drop.type === MaterialType.FLAME_ORE) p.inventory.flameOre += drop.count;
-        else if (drop.type === MaterialType.ABYSS_ORE) p.inventory.abyssOre += drop.count;
-        else if (drop.type === MaterialType.VOID_ORE) p.inventory.voidOre += drop.count;
-        else if (drop.type === MaterialType.CORE_NORMAL) p.inventory.coreNormal += drop.count;
-        else if (drop.type === MaterialType.CORE_RARE) p.inventory.coreRare += drop.count;
-        else if (drop.type === MaterialType.FORM_CORE) p.inventory.formCore += drop.count;
-
-        // Check if this is a transform core drop
-        for (let t: number = 0; t < this.transformCoreDrops.length; t++) {
-          if (this.transformCoreDrops[t].dropIndex === i) {
-            const form: TransformForm = this.transformCoreDrops[t].form;
-            if (p.unlockedTransforms.indexOf(form) === -1) {
-              p.unlockedTransforms.push(form);
-              this.transformUnlockNotifyTimer = 3000;
-              this.transformUnlockNotifyForm = form;
-            }
-            this.transformCoreDrops.splice(t, 1);
-            break;
-          }
-        }
-
-        this.audio.playXpCollect();
-        if (this.settings.effectsEnabled) {
-          this.particleMgr.sparks(drop.x, drop.y, '#ffd700', 6);
-        }
-      }
-    }
-
-    // Clean up inactive drops
-    if (this.materialDrops.length > 50) {
-      const active: MaterialDrop[] = [];
-      for (let i: number = 0; i < this.materialDrops.length; i++) {
-        if (this.materialDrops[i].active) active.push(this.materialDrops[i]);
-      }
-      this.materialDrops = active;
-    }
+    this.materialDropSystem!.update(p);
   }
 
   private updateCamera(p: PlayerState): void {
