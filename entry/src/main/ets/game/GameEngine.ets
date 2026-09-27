@@ -1937,6 +1937,25 @@ export class GameEngine {
       return;
     }
 
+    // Transform rendering override
+    if (p.isTransformed) {
+      const bobY: number = p.isJumping ? -p.jumpHeight : Math.sin(this.frameCount * 0.08) * 1.5;
+      if (p.transformForm === TransformForm.SLIME) {
+        this.renderSlimeForm(c, screenX, screenY, p, bobY);
+      } else if (p.transformForm === TransformForm.GHOST) {
+        this.renderGhostForm(c, screenX, screenY, p, bobY);
+      } else if (p.transformForm === TransformForm.ARMOR) {
+        this.renderArmorForm(c, screenX, screenY, p, bobY);
+      } else if (p.transformForm === TransformForm.IRON_MAN) {
+        this.renderIronManForm(c, screenX, screenY, p, bobY);
+      }
+      // Transform animation overlay
+      if (p.transformAnimTimer > 0) {
+        this.renderTransformAnim(c, screenX, screenY, p);
+      }
+      return;
+    }
+
     if (p.isJumping) {
       c.globalAlpha = 0.3;
       c.fillStyle = '#000000';
@@ -4126,5 +4145,201 @@ export class GameEngine {
         s.hitFlash = 200;
       }
     }
+  }
+
+  private renderSlimeForm(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
+    const size: number = 18; // Larger than normal slimes
+    const squash: number = p.isJumping ? 0.8 : 1.0 + Math.sin(this.frameCount * 0.1) * 0.05;
+    const stretch: number = p.isJumping ? 1.3 : 1.0 - Math.sin(this.frameCount * 0.1) * 0.05;
+
+    c.save();
+    c.translate(sx + PLAYER_SIZE / 2, sy + PLAYER_SIZE / 2 + bobY);
+    c.scale(squash, stretch);
+
+    // Body
+    c.fillStyle = COLOR_TRANSFORM_SLIME;
+    c.beginPath();
+    c.ellipse(0, 2, size / 2, size / 2.2, 0, 0, Math.PI * 2);
+    c.fill();
+
+    // Highlight
+    c.fillStyle = COLOR_TRANSFORM_SLIME_DARK;
+    c.beginPath();
+    c.ellipse(0, 4, size / 2.5, size / 3, 0, 0, Math.PI * 2);
+    c.fill();
+
+    // Eyes
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.ellipse(-4, -2, 3, 4, 0, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.ellipse(4, -2, 3, 4, 0, 0, Math.PI * 2);
+    c.fill();
+
+    // Pupils (face facing direction)
+    const pupilOffX: number = Math.cos(p.facing) * 1.5;
+    const pupilOffY: number = Math.sin(p.facing) * 1.5;
+    c.fillStyle = '#1a1a2e';
+    c.beginPath();
+    c.arc(-4 + pupilOffX, -2 + pupilOffY, 1.5, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(4 + pupilOffX, -2 + pupilOffY, 1.5, 0, Math.PI * 2);
+    c.fill();
+
+    c.restore();
+  }
+
+  private renderGhostForm(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
+    c.save();
+    c.globalAlpha = 0.5 + Math.sin(this.frameCount * 0.06) * 0.15;
+    c.translate(sx + PLAYER_SIZE / 2, sy + PLAYER_SIZE / 2 + bobY - 3);
+
+    // Ghost body (flowing shape)
+    c.fillStyle = COLOR_TRANSFORM_GHOST;
+    c.beginPath();
+    c.arc(0, -4, 8, Math.PI, 0);
+    c.lineTo(8, 6);
+    // Wavy bottom
+    for (let i: number = 0; i < 4; i++) {
+      const wx: number = 8 - i * 4;
+      const wy: number = 6 + (i % 2 === 0 ? 4 : 0);
+      c.lineTo(wx, wy);
+    }
+    c.closePath();
+    c.fill();
+
+    // Dark overlay
+    c.fillStyle = COLOR_TRANSFORM_GHOST_DARK;
+    c.beginPath();
+    c.arc(0, -2, 5, 0, Math.PI * 2);
+    c.fill();
+
+    // Eyes (glowing)
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.ellipse(-3, -4, 2, 3, 0, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.ellipse(3, -4, 2, 3, 0, 0, Math.PI * 2);
+    c.fill();
+
+    c.restore();
+  }
+
+  private renderArmorForm(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
+    const scale: number = 1.3;
+    c.save();
+    c.translate(sx + PLAYER_SIZE / 2, sy + PLAYER_SIZE / 2 + bobY);
+    c.scale(scale, scale);
+
+    // Body (metallic)
+    c.fillStyle = COLOR_TRANSFORM_ARMOR;
+    c.fillRect(-6, -4, 12, 14);
+
+    // Chest accent
+    c.fillStyle = COLOR_TRANSFORM_ARMOR_ACCENT;
+    c.fillRect(-4, -2, 8, 3);
+
+    // Helmet
+    c.fillStyle = '#64748b';
+    c.fillRect(-5, -9, 10, 6);
+
+    // Visor
+    c.fillStyle = COLOR_TRANSFORM_ARMOR_ACCENT;
+    const visorGlow: number = 0.6 + Math.sin(this.frameCount * 0.08) * 0.3;
+    c.globalAlpha = visorGlow;
+    c.fillRect(-4, -7, 8, 2);
+    c.globalAlpha = 1.0;
+
+    // Fists
+    c.fillStyle = COLOR_TRANSFORM_ARMOR;
+    c.fillRect(-8, 2, 3, 4);
+    c.fillRect(5, 2, 3, 4);
+
+    // Legs
+    c.fillStyle = '#475569';
+    c.fillRect(-4, 10, 3, 4);
+    c.fillRect(1, 10, 3, 4);
+
+    c.restore();
+  }
+
+  private renderIronManForm(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
+    c.save();
+    c.translate(sx + PLAYER_SIZE / 2, sy + PLAYER_SIZE / 2 + bobY - 2);
+
+    // Body (red-gold armor)
+    c.fillStyle = COLOR_TRANSFORM_IRON_RED;
+    c.fillRect(-6, -4, 12, 14);
+
+    // Gold accents
+    c.fillStyle = COLOR_TRANSFORM_IRON_GOLD;
+    c.fillRect(-5, 0, 10, 3);
+
+    // Head/faceplate
+    c.fillStyle = COLOR_TRANSFORM_IRON_RED;
+    c.fillRect(-5, -9, 10, 6);
+    c.fillStyle = COLOR_TRANSFORM_IRON_GOLD;
+    c.fillRect(-4, -7, 8, 3);
+
+    // Eyes (glowing white)
+    c.fillStyle = '#ffffff';
+    c.fillRect(-3, -7, 2, 1);
+    c.fillRect(1, -7, 2, 1);
+
+    // Arc reactor (chest)
+    const reactorGlow: number = 0.7 + Math.sin(this.frameCount * 0.1) * 0.3;
+    c.fillStyle = '#67e8f9';
+    c.globalAlpha = reactorGlow;
+    c.beginPath();
+    c.arc(0, 2, 2.5, 0, Math.PI * 2);
+    c.fill();
+    c.globalAlpha = 1.0;
+
+    // Repulsor hands (glow when attacking)
+    if (p.isAttacking) {
+      c.fillStyle = COLOR_TRANSFORM_IRON_GOLD;
+      c.globalAlpha = 0.9;
+      c.beginPath();
+      c.arc(-8, 3, 3, 0, Math.PI * 2);
+      c.fill();
+      c.beginPath();
+      c.arc(8, 3, 3, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 1.0;
+    }
+
+    // Boots
+    c.fillStyle = COLOR_TRANSFORM_IRON_RED;
+    c.fillRect(-5, 10, 4, 4);
+    c.fillRect(1, 10, 4, 4);
+
+    c.restore();
+  }
+
+  private renderTransformAnim(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState): void {
+    const progress: number = 1 - (p.transformAnimTimer / TRANSFORM_ACTIVATE_ANIM);
+    const cx: number = sx + PLAYER_SIZE / 2;
+    const cy: number = sy + PLAYER_SIZE / 2;
+
+    // Expanding flash ring
+    c.save();
+    c.globalAlpha = 1 - progress;
+    c.strokeStyle = COLOR_TRANSFORM_FLASH;
+    c.lineWidth = 3 - progress * 2;
+    c.beginPath();
+    c.arc(cx, cy, progress * 30, 0, Math.PI * 2);
+    c.stroke();
+
+    // Scale effect
+    const scale: number = 0.5 + progress * 0.7;
+    c.globalAlpha = Math.min(1, progress * 2);
+    c.fillStyle = this.getTransformColor(p.transformForm);
+    c.beginPath();
+    c.arc(cx, cy, 8 * scale, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
   }
 }
