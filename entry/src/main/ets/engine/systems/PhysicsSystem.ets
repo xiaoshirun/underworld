@@ -1,6 +1,6 @@
 // entry/src/main/ets/engine/systems/PhysicsSystem.ets
 
-import { Entity, getIndex } from '../core/Entity';
+import { Entity } from '../core/Entity';
 import { System } from '../core/System';
 import { World } from '../core/World';
 import { Transform } from '../components/Transform';
