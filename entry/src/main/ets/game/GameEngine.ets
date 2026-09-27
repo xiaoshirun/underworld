@@ -15,6 +15,10 @@ import {
   BossState, ChestState, BossRoom, MaterialDrop, TrapInstance, MechanismInstance,
   Inventory, TrapType, TrapState,
   MechanismType, SecretRoom,
+  BossType, BossRole, BossPhase, MaterialType,
+  BOSS_HP, BOSS_SIZE, BOSS_ATTACK_INTERVAL, BOSS_PHASE2_THRESHOLD,
+  BOSS_RESPAWN_TIME, BOSS_ROOM_SIZE,
+  PASSAGE_GUARDIAN_AGGRO, OPTIONAL_CHALLENGE_AGGRO,
   WEAPON_FORM_STATS,
   TRAP_TELEGRAPH_TIME, TRAP_ACTIVE_TIME, TRAP_COOLDOWN_TIME, TRAP_TRIGGER_RADIUS, TRAP_DAMAGE, TRAP_SIZE,
   MECH_INTERACT_RANGE, PUSH_BLOCK_SPEED, TELEPORT_COOLDOWN,
@@ -38,7 +42,9 @@ import {
   COLOR_TRAP_WARNING,
   COLOR_PRESSURE_PLATE, COLOR_PLATE_ACTIVE, COLOR_LEVER, COLOR_LEVER_HANDLE,
   COLOR_PUSH_BLOCK, COLOR_REFLECTOR, COLOR_BEAM, COLOR_BREAKABLE_WALL,
-  COLOR_TELEPORT_RUNE, COLOR_TELEPORT_ENTRY, COLOR_TELEPORT_EXIT
+  COLOR_TELEPORT_RUNE, COLOR_TELEPORT_ENTRY, COLOR_TELEPORT_EXIT,
+  COLOR_BOSS_CRYSTAL, COLOR_BOSS_MUSHROOM, COLOR_BOSS_LAVA, COLOR_BOSS_ABYSS, COLOR_BOSS_VOID,
+  COLOR_BOSS_HP_BAR, COLOR_BOSS_HP_BG
 } from './GameConstants';
 import { WorldGenerator } from './WorldGenerator';
 import { AudioManager } from './AudioManager';
@@ -247,7 +253,30 @@ export class GameEngine {
           for (let i: number = 0; i < chunk.secretRooms.length; i++) {
             this.secretRooms.push(chunk.secretRooms[i]);
           }
+          // Extract boss data
+          for (let i: number = 0; i < chunk.bosses.length; i++) {
+            this.bosses.push(chunk.bosses[i]);
+          }
         }
+      }
+    }
+    // Sync boss rooms from WorldGenerator
+    const wgRooms: BossRoom[] = this.worldGen.getBossRooms();
+    for (let i: number = 0; i < wgRooms.length; i++) {
+      const wgRoom: BossRoom = wgRooms[i];
+      let found: boolean = false;
+      for (let j: number = 0; j < this.bossRooms.length; j++) {
+        if (this.bossRooms[j].chunkX === wgRoom.chunkX && this.bossRooms[j].chunkY === wgRoom.chunkY) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        this.bossRooms.push({
+          chunkX: wgRoom.chunkX, chunkY: wgRoom.chunkY,
+          bossType: wgRoom.bossType,
+          entered: false, defeated: false, chestSpawned: false
+        });
       }
     }
   }
@@ -292,6 +321,9 @@ export class GameEngine {
 
     this.updatePlayer(p, dt);
     this.updateEnemies(dt);
+    this.updateBosses(dt);
+    this.checkBossRoomEntry(p);
+    this.collectMaterialDrops(p);
     this.updateTraps(dt);
     this.updateMechanisms(dt);
     this.updateXpOrbs(dt);
@@ -560,6 +592,29 @@ export class GameEngine {
         }
         if (s.hp <= 0) {
           this.onEnemyDeath(s);
+        }
+      }
+    }
+
+    // Check boss hits
+    for (let i: number = 0; i < this.bosses.length; i++) {
+      const boss: BossState = this.bosses[i];
+      if (!boss.active || boss.defeated) continue;
+      const dx: number = boss.x - attackX;
+      const dy: number = boss.y - attackY;
+      const dist: number = Math.sqrt(dx * dx + dy * dy);
+      if (dist < formWidth + boss.size * 0.6) {
+        boss.hp--;
+        boss.hitFlash = 200;
+        this.shakeTimer = 120;
+        this.audio.playEnemyHit();
+        if (this.settings.effectsEnabled) {
+          for (let k: number = 0; k < 8; k++) {
+            const angle: number = Math.random() * Math.PI * 2;
+            const speed: number = 1 + Math.random() * 3;
+            this.spawnParticle(boss.x, boss.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed, 400, this.getBossColor(boss.bossType), 4);
+          }
         }
       }
     }
@@ -1035,6 +1090,310 @@ export class GameEngine {
     }
   }
 
+  // ==================== Boss System ====================
+
+  private getEntranceDir(cx: number, cy: number): number {
+    let h: number = (cx * 13 + 7000) * 374761393 + (cy * 13 + 8000) * 668265263;
+    h = ((h ^ (h >> 13)) * 1274126177) | 0;
+    return ((h ^ (h >> 16)) >>> 0) % 4;
+  }
+
+  private getBossRoomEntranceTiles(chunkX: number, chunkY: number): number[][] {
+    const center: number = Math.floor(CHUNK_SIZE / 2);
+    const roomRadius: number = Math.floor(BOSS_ROOM_SIZE / 2);
+    const dir: number = this.getEntranceDir(chunkX, chunkY);
+    const tiles: number[][] = [];
+
+    if (dir === 0) {
+      tiles.push([chunkX * CHUNK_SIZE + center - 1, chunkY * CHUNK_SIZE + center - roomRadius]);
+      tiles.push([chunkX * CHUNK_SIZE + center, chunkY * CHUNK_SIZE + center - roomRadius]);
+      tiles.push([chunkX * CHUNK_SIZE + center + 1, chunkY * CHUNK_SIZE + center - roomRadius]);
+    } else if (dir === 1) {
+      tiles.push([chunkX * CHUNK_SIZE + center - 1, chunkY * CHUNK_SIZE + center + roomRadius]);
+      tiles.push([chunkX * CHUNK_SIZE + center, chunkY * CHUNK_SIZE + center + roomRadius]);
+      tiles.push([chunkX * CHUNK_SIZE + center + 1, chunkY * CHUNK_SIZE + center + roomRadius]);
+    } else if (dir === 2) {
+      tiles.push([chunkX * CHUNK_SIZE + center - roomRadius, chunkY * CHUNK_SIZE + center - 1]);
+      tiles.push([chunkX * CHUNK_SIZE + center - roomRadius, chunkY * CHUNK_SIZE + center]);
+      tiles.push([chunkX * CHUNK_SIZE + center - roomRadius, chunkY * CHUNK_SIZE + center + 1]);
+    } else {
+      tiles.push([chunkX * CHUNK_SIZE + center + roomRadius, chunkY * CHUNK_SIZE + center - 1]);
+      tiles.push([chunkX * CHUNK_SIZE + center + roomRadius, chunkY * CHUNK_SIZE + center]);
+      tiles.push([chunkX * CHUNK_SIZE + center + roomRadius, chunkY * CHUNK_SIZE + center + 1]);
+    }
+    return tiles;
+  }
+
+  private checkBossRoomEntry(p: PlayerState): void {
+    const pcx: number = Math.floor(p.x / (CHUNK_SIZE * TILE_SIZE));
+    const pcy: number = Math.floor(p.y / (CHUNK_SIZE * TILE_SIZE));
+
+    for (let i: number = 0; i < this.bossRooms.length; i++) {
+      const room: BossRoom = this.bossRooms[i];
+      if (room.entered || room.defeated) continue;
+      if (room.chunkX !== pcx || room.chunkY !== pcy) continue;
+
+      // Check if this chunk is actually a boss room
+      const key: string = this.chunkKey(room.chunkX, room.chunkY);
+      const chunk: ChunkData | undefined = this.chunks.get(key);
+      if (chunk === undefined || !chunk.isBossRoom) continue;
+
+      // Player entered the boss room - seal and spawn
+      room.entered = true;
+      this.bossRoomLocked = true;
+
+      // Seal entrance tiles
+      const entranceTiles: number[][] = this.getBossRoomEntranceTiles(room.chunkX, room.chunkY);
+      for (let j: number = 0; j < entranceTiles.length; j++) {
+        this.setTile(
+          entranceTiles[j][0] * TILE_SIZE + TILE_SIZE / 2,
+          entranceTiles[j][1] * TILE_SIZE + TILE_SIZE / 2,
+          TileType.WALL
+        );
+      }
+
+      // Activate the boss
+      for (let j: number = 0; j < this.bosses.length; j++) {
+        const boss: BossState = this.bosses[j];
+        if (!boss.active && !boss.defeated && boss.bossType === room.bossType) {
+          boss.active = true;
+          this.activeBoss = boss;
+        }
+      }
+
+      this.audio.playWallBreak();
+      this.shakeTimer = 300;
+      break;
+    }
+  }
+
+  private updateBosses(dt: number): void {
+    if (this.player === null) return;
+    const p: PlayerState = this.player;
+
+    for (let i: number = this.bosses.length - 1; i >= 0; i--) {
+      const boss: BossState = this.bosses[i];
+      if (!boss.active || boss.defeated) continue;
+
+      const dx: number = p.x - boss.x;
+      const dy: number = p.y - boss.y;
+      const dist: number = Math.sqrt(dx * dx + dy * dy);
+
+      // Movement AI
+      if (boss.bossRole === BossRole.PASSAGE_GUARDIAN) {
+        // Always chase player in sealed room
+        if (dist > 1) {
+          const speed: number = 1.5;
+          boss.vx = (dx / dist) * speed;
+          boss.vy = (dy / dist) * speed;
+        }
+      } else {
+        // Optional Challenge - only chase within aggro radius
+        if (dist < boss.aggroRadius) {
+          if (dist > 1) {
+            const speed: number = 1.8;
+            boss.vx = (dx / dist) * speed;
+            boss.vy = (dy / dist) * speed;
+          }
+        } else {
+          // Wander randomly
+          boss.attackTimer -= dt;
+          if (boss.attackTimer <= 0) {
+            const angle: number = Math.random() * Math.PI * 2;
+            boss.vx = Math.cos(angle) * 0.5;
+            boss.vy = Math.sin(angle) * 0.5;
+            boss.attackTimer = 2000 + Math.random() * 3000;
+          }
+        }
+      }
+
+      boss.x += boss.vx;
+      boss.y += boss.vy;
+
+      // Attack timer
+      boss.attackTimer -= dt;
+      if (boss.attackTimer <= 0 && dist < boss.size + PLAYER_SIZE + 20) {
+        // Melee attack
+        boss.attackTimer = BOSS_ATTACK_INTERVAL;
+        if (p.invincibleTimer <= 0) {
+          p.hp -= 2;
+          p.invincibleTimer = INVINCIBLE_DURATION;
+          this.audio.playPlayerDamage();
+          this.shakeTimer = 200;
+          // Knockback
+          if (dist > 1) {
+            p.vx = -(dx / dist) * 6;
+            p.vy = -(dy / dist) * 6;
+          }
+          if (this.settings.effectsEnabled) {
+            for (let k: number = 0; k < 8; k++) {
+              const angle: number = Math.random() * Math.PI * 2;
+              const speed: number = 1 + Math.random() * 2;
+              this.spawnParticle(p.x, p.y,
+                Math.cos(angle) * speed, Math.sin(angle) * speed, 400, COLOR_DAMAGE_PARTICLE, 3);
+            }
+          }
+        }
+      }
+
+      // Phase transition
+      if (boss.phase === BossPhase.PHASE_1 && boss.hp <= boss.maxHp * BOSS_PHASE2_THRESHOLD) {
+        boss.phase = BossPhase.PHASE_2;
+        boss.hitFlash = 500;
+        this.shakeTimer = 400;
+        if (this.settings.effectsEnabled) {
+          for (let k: number = 0; k < 20; k++) {
+            const angle: number = Math.random() * Math.PI * 2;
+            const speed: number = 2 + Math.random() * 4;
+            this.spawnParticle(boss.x, boss.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed, 800, this.getBossColor(boss.bossType), 5);
+          }
+        }
+      }
+
+      // Boss death
+      if (boss.hp <= 0) {
+        boss.defeated = true;
+        boss.active = false;
+
+        // Handle boss room
+        if (boss.bossRole === BossRole.PASSAGE_GUARDIAN) {
+          this.bossRoomLocked = false;
+          this.activeBoss = null;
+          // Open entrance
+          for (let j: number = 0; j < this.bossRooms.length; j++) {
+            const room: BossRoom = this.bossRooms[j];
+            if (room.chunkX === Math.floor(boss.x / (CHUNK_SIZE * TILE_SIZE)) &&
+                room.chunkY === Math.floor(boss.y / (CHUNK_SIZE * TILE_SIZE))) {
+              room.defeated = true;
+              const entranceTiles: number[][] = this.getBossRoomEntranceTiles(room.chunkX, room.chunkY);
+              for (let e: number = 0; e < entranceTiles.length; e++) {
+                this.setTile(
+                  entranceTiles[e][0] * TILE_SIZE + TILE_SIZE / 2,
+                  entranceTiles[e][1] * TILE_SIZE + TILE_SIZE / 2,
+                  TileType.FLOOR
+                );
+              }
+              break;
+            }
+          }
+        } else {
+          // Optional Challenge - mark defeated for respawn timer
+          const bcx: number = Math.floor(boss.x / (CHUNK_SIZE * TILE_SIZE));
+          const bcy: number = Math.floor(boss.y / (CHUNK_SIZE * TILE_SIZE));
+          this.worldGen.markOptionalBossDefeated(bcx, bcy);
+          if (this.activeBoss === boss) this.activeBoss = null;
+        }
+
+        // Death particles
+        if (this.settings.effectsEnabled) {
+          for (let k: number = 0; k < 30; k++) {
+            const angle: number = Math.random() * Math.PI * 2;
+            const speed: number = 1 + Math.random() * 5;
+            this.spawnParticle(boss.x, boss.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed, 1000, this.getBossColor(boss.bossType), 4 + Math.random() * 4);
+          }
+        }
+
+        // Drop materials
+        this.spawnBossDrops(boss);
+        this.shakeTimer = 500;
+        this.audio.playEnemyDeath();
+      }
+
+      // Hit flash decay
+      if (boss.hitFlash > 0) {
+        boss.hitFlash -= dt;
+      }
+    }
+  }
+
+  private getBossColor(bossType: BossType): string {
+    if (bossType === BossType.CRYSTAL_GUARDIAN) return COLOR_BOSS_CRYSTAL;
+    if (bossType === BossType.MUSHROOM_KING) return COLOR_BOSS_MUSHROOM;
+    if (bossType === BossType.LAVA_BEAST) return COLOR_BOSS_LAVA;
+    if (bossType === BossType.ABYSS_SIREN) return COLOR_BOSS_ABYSS;
+    return COLOR_BOSS_VOID;
+  }
+
+  private spawnBossDrops(boss: BossState): void {
+    // Drop 2-3 boss-specific ore materials
+    const dropCount: number = 2 + Math.floor(Math.random() * 2);
+    for (let i: number = 0; i < dropCount; i++) {
+      const angle: number = Math.random() * Math.PI * 2;
+      const dist: number = 20 + Math.random() * 30;
+      const dropX: number = boss.x + Math.cos(angle) * dist;
+      const dropY: number = boss.y + Math.sin(angle) * dist;
+
+      let matType: MaterialType = MaterialType.CORE_NORMAL;
+      if (boss.bossType === BossType.CRYSTAL_GUARDIAN) matType = MaterialType.CRYSTAL_ORE;
+      else if (boss.bossType === BossType.MUSHROOM_KING) matType = MaterialType.MUSHROOM_ORE;
+      else if (boss.bossType === BossType.LAVA_BEAST) matType = MaterialType.FLAME_ORE;
+      else if (boss.bossType === BossType.ABYSS_SIREN) matType = MaterialType.ABYSS_ORE;
+      else if (boss.bossType === BossType.VOID_RIFT) matType = MaterialType.VOID_ORE;
+
+      this.materialDrops.push({
+        x: dropX, y: dropY,
+        type: matType, count: 1,
+        bobPhase: Math.random() * Math.PI * 2,
+        active: true
+      });
+    }
+
+    // Always drop a rare core
+    this.materialDrops.push({
+      x: boss.x + (Math.random() - 0.5) * 40,
+      y: boss.y + (Math.random() - 0.5) * 40,
+      type: MaterialType.CORE_RARE, count: 1,
+      bobPhase: Math.random() * Math.PI * 2,
+      active: true
+    });
+  }
+
+  private collectMaterialDrops(p: PlayerState): void {
+    const collectRange: number = 30;
+    for (let i: number = this.materialDrops.length - 1; i >= 0; i--) {
+      const drop: MaterialDrop = this.materialDrops[i];
+      if (!drop.active) continue;
+
+      const dx: number = p.x - drop.x;
+      const dy: number = p.y - drop.y;
+      const dist: number = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < collectRange) {
+        drop.active = false;
+        // Add to inventory
+        if (drop.type === MaterialType.CRYSTAL_ORE) p.inventory.crystalOre += drop.count;
+        else if (drop.type === MaterialType.MUSHROOM_ORE) p.inventory.mushroomOre += drop.count;
+        else if (drop.type === MaterialType.FLAME_ORE) p.inventory.flameOre += drop.count;
+        else if (drop.type === MaterialType.ABYSS_ORE) p.inventory.abyssOre += drop.count;
+        else if (drop.type === MaterialType.VOID_ORE) p.inventory.voidOre += drop.count;
+        else if (drop.type === MaterialType.CORE_NORMAL) p.inventory.coreNormal += drop.count;
+        else if (drop.type === MaterialType.CORE_RARE) p.inventory.coreRare += drop.count;
+        else if (drop.type === MaterialType.FORM_CORE) p.inventory.formCore += drop.count;
+
+        this.audio.playXpCollect();
+        if (this.settings.effectsEnabled) {
+          for (let k: number = 0; k < 6; k++) {
+            const angle: number = Math.random() * Math.PI * 2;
+            const speed: number = 1 + Math.random() * 2;
+            this.spawnParticle(drop.x, drop.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed, 400, '#ffd700', 3);
+          }
+        }
+      }
+    }
+
+    // Clean up inactive drops
+    if (this.materialDrops.length > 50) {
+      const active: MaterialDrop[] = [];
+      for (let i: number = 0; i < this.materialDrops.length; i++) {
+        if (this.materialDrops[i].active) active.push(this.materialDrops[i]);
+      }
+      this.materialDrops = active;
+    }
+  }
+
   private spawnParticle(x: number, y: number, vx: number, vy: number, life: number, color: string, size: number): void {
     this.particles.push({ x: x, y: y, vx: vx, vy: vy, life: life, maxLife: life, color: color, size: size });
   }
@@ -1090,10 +1449,13 @@ export class GameEngine {
     this.renderTraps(c, offX, offY);
     this.renderMechanisms(c, offX, offY);
     this.renderEnemies(c, offX, offY);
+    this.renderBosses(c, offX, offY);
+    this.renderMaterialDrops(c, offX, offY);
     this.renderPlayer(c, offX, offY, p);
     this.renderParticles(c, offX, offY);
     this.renderAmbientParticles(c);
     this.renderVignette(c);
+    this.renderBossHPBar(c);
 
     if (this.frameCount % MINIMAP_UPDATE_INTERVAL === 0) {
       this.renderMinimap();
@@ -2391,11 +2753,288 @@ export class GameEngine {
       mc.fillRect(sx - 1, sy - 1, 3, 3);
     }
 
+    // Boss dots (larger, distinct color)
+    for (let i: number = 0; i < this.bosses.length; i++) {
+      const boss: BossState = this.bosses[i];
+      if (!boss.active || boss.defeated) continue;
+      const bdx: number = (boss.x / TILE_SIZE) - playerTX;
+      const bdy: number = (boss.y / TILE_SIZE) - playerTY;
+      if (Math.abs(bdx) > viewRange || Math.abs(bdy) > viewRange) continue;
+      const bsx: number = (bdx + viewRange) * scale;
+      const bsy: number = (bdy + viewRange) * scale;
+      mc.fillStyle = '#ff0000';
+      mc.fillRect(bsx - 3, bsy - 3, 6, 6);
+    }
+
     mc.fillStyle = COLOR_MINIMAP_PLAYER;
     mc.fillRect(size / 2 - 2, size / 2 - 2, 5, 5);
 
     mc.strokeStyle = '#4a5568';
     mc.lineWidth = 1;
     mc.strokeRect(0, 0, size, size);
+  }
+
+  // ==================== Boss Rendering ====================
+
+  private renderBosses(c: CanvasRenderingContext2D, offX: number, offY: number): void {
+    for (let i: number = 0; i < this.bosses.length; i++) {
+      const boss: BossState = this.bosses[i];
+      if (!boss.active || boss.defeated) continue;
+
+      const screenX: number = boss.x + offX;
+      const screenY: number = boss.y + offY;
+
+      if (screenX < -60 || screenX > this.screenW + 60 || screenY < -60 || screenY > this.screenH + 60) {
+        continue;
+      }
+
+      const bossColor: string = this.getBossColor(boss.bossType);
+      const halfSize: number = boss.size / 2;
+      const pulse: number = Math.sin(this.frameCount * 0.05) * 2;
+
+      // Hit flash
+      if (boss.hitFlash > 0) {
+        c.globalAlpha = 0.5 + 0.5 * Math.sin(boss.hitFlash * 0.05);
+        c.fillStyle = '#ffffff';
+        c.fillRect(screenX - halfSize - 2, screenY - halfSize - 2, boss.size + 4, boss.size + 4);
+      }
+
+      c.globalAlpha = 1.0;
+
+      // Boss body based on type
+      if (boss.bossType === BossType.CRYSTAL_GUARDIAN) {
+        // Crystal shape - diamond
+        c.fillStyle = bossColor;
+        c.beginPath();
+        c.moveTo(screenX, screenY - halfSize - pulse);
+        c.lineTo(screenX + halfSize + pulse, screenY);
+        c.lineTo(screenX, screenY + halfSize + pulse);
+        c.lineTo(screenX - halfSize - pulse, screenY);
+        c.closePath();
+        c.fill();
+        // Inner glow
+        c.fillStyle = '#67e8f9';
+        c.globalAlpha = 0.5 + 0.3 * Math.sin(this.frameCount * 0.08);
+        c.beginPath();
+        c.arc(screenX, screenY, halfSize * 0.4, 0, Math.PI * 2);
+        c.fill();
+        c.globalAlpha = 1.0;
+        // Eyes
+        c.fillStyle = '#ffffff';
+        c.fillRect(screenX - 6, screenY - 4, 4, 6);
+        c.fillRect(screenX + 3, screenY - 4, 4, 6);
+      } else if (boss.bossType === BossType.MUSHROOM_KING) {
+        // Mushroom cap (dome) + stem
+        c.fillStyle = bossColor;
+        c.beginPath();
+        c.arc(screenX, screenY - 4, halfSize + pulse, Math.PI, 0);
+        c.closePath();
+        c.fill();
+        // Spots on cap
+        c.fillStyle = '#ff9ec4';
+        c.beginPath();
+        c.arc(screenX - 8, screenY - 12, 4, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(screenX + 6, screenY - 16, 3, 0, Math.PI * 2);
+        c.fill();
+        // Stem
+        c.fillStyle = COLOR_MUSHROOM_STEM;
+        c.fillRect(screenX - 8, screenY - 4, 16, halfSize);
+        // Eyes
+        c.fillStyle = '#ffffff';
+        c.fillRect(screenX - 5, screenY + 2, 4, 5);
+        c.fillRect(screenX + 2, screenY + 2, 4, 5);
+      } else if (boss.bossType === BossType.LAVA_BEAST) {
+        // Rough rocky body
+        c.fillStyle = bossColor;
+        c.fillRect(screenX - halfSize, screenY - halfSize, boss.size, boss.size);
+        // Lava cracks
+        c.strokeStyle = '#ffd700';
+        c.lineWidth = 2;
+        c.globalAlpha = 0.6 + 0.4 * Math.sin(this.frameCount * 0.1);
+        c.beginPath();
+        c.moveTo(screenX - 10, screenY - 12);
+        c.lineTo(screenX - 2, screenY + 4);
+        c.lineTo(screenX + 8, screenY - 6);
+        c.moveTo(screenX + 4, screenY + 2);
+        c.lineTo(screenX - 6, screenY + 14);
+        c.stroke();
+        c.globalAlpha = 1.0;
+        c.lineWidth = 1;
+        // Eyes
+        c.fillStyle = '#ffd700';
+        c.fillRect(screenX - 7, screenY - 6, 5, 5);
+        c.fillRect(screenX + 3, screenY - 6, 5, 5);
+      } else if (boss.bossType === BossType.ABYSS_SIREN) {
+        // Flowing water form
+        c.fillStyle = bossColor;
+        c.beginPath();
+        c.arc(screenX, screenY, halfSize + pulse, 0, Math.PI * 2);
+        c.fill();
+        // Water tendrils
+        c.strokeStyle = COLOR_WATER_LIGHT;
+        c.lineWidth = 3;
+        c.globalAlpha = 0.6;
+        for (let t: number = 0; t < 4; t++) {
+          const angle: number = (t / 4) * Math.PI * 2 + this.frameCount * 0.03;
+          const ex: number = screenX + Math.cos(angle) * (halfSize + 10);
+          const ey: number = screenY + Math.sin(angle) * (halfSize + 10);
+          c.beginPath();
+          c.moveTo(screenX + Math.cos(angle) * halfSize * 0.5, screenY + Math.sin(angle) * halfSize * 0.5);
+          c.quadraticCurveTo(
+            screenX + Math.cos(angle + 0.5) * halfSize,
+            screenY + Math.sin(angle + 0.5) * halfSize,
+            ex, ey
+          );
+          c.stroke();
+        }
+        c.globalAlpha = 1.0;
+        c.lineWidth = 1;
+        // Eyes
+        c.fillStyle = '#ffffff';
+        c.beginPath();
+        c.arc(screenX - 6, screenY - 3, 4, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(screenX + 6, screenY - 3, 4, 0, Math.PI * 2);
+        c.fill();
+      } else if (boss.bossType === BossType.VOID_RIFT) {
+        // Void portal - swirling dark mass
+        c.fillStyle = bossColor;
+        c.globalAlpha = 0.8;
+        c.beginPath();
+        c.arc(screenX, screenY, halfSize + pulse + 4, 0, Math.PI * 2);
+        c.fill();
+        // Inner void
+        c.fillStyle = '#0d0d1a';
+        c.beginPath();
+        c.arc(screenX, screenY, halfSize * 0.5, 0, Math.PI * 2);
+        c.fill();
+        // Swirl effect
+        c.strokeStyle = '#a855f7';
+        c.lineWidth = 2;
+        c.globalAlpha = 0.5;
+        const spin: number = this.frameCount * 0.04;
+        c.beginPath();
+        c.arc(screenX, screenY, halfSize * 0.7, spin, spin + Math.PI * 1.2);
+        c.stroke();
+        c.beginPath();
+        c.arc(screenX, screenY, halfSize * 0.9, spin + Math.PI, spin + Math.PI * 2.2);
+        c.stroke();
+        c.globalAlpha = 1.0;
+        c.lineWidth = 1;
+      }
+
+      // Phase 2 indicator - pulsing aura
+      if (boss.phase === BossPhase.PHASE_2) {
+        c.strokeStyle = bossColor;
+        c.lineWidth = 2;
+        c.globalAlpha = 0.3 + 0.2 * Math.sin(this.frameCount * 0.1);
+        c.beginPath();
+        c.arc(screenX, screenY, halfSize + 8 + pulse, 0, Math.PI * 2);
+        c.stroke();
+        c.globalAlpha = 1.0;
+        c.lineWidth = 1;
+      }
+    }
+    c.globalAlpha = 1.0;
+  }
+
+  private renderMaterialDrops(c: CanvasRenderingContext2D, offX: number, offY: number): void {
+    for (let i: number = 0; i < this.materialDrops.length; i++) {
+      const drop: MaterialDrop = this.materialDrops[i];
+      if (!drop.active) continue;
+
+      const screenX: number = drop.x + offX;
+      const screenY: number = drop.y + offY;
+
+      if (screenX < -20 || screenX > this.screenW + 20 || screenY < -20 || screenY > this.screenH + 20) {
+        continue;
+      }
+
+      const bob: number = Math.sin(this.frameCount * 0.06 + drop.bobPhase) * 3;
+      const drawY: number = screenY + bob;
+
+      let color: string = '#ffffff';
+      if (drop.type === MaterialType.CRYSTAL_ORE) color = COLOR_CRYSTAL;
+      else if (drop.type === MaterialType.MUSHROOM_ORE) color = COLOR_MUSHROOM_CAP;
+      else if (drop.type === MaterialType.FLAME_ORE) color = COLOR_LAVA_LIGHT;
+      else if (drop.type === MaterialType.ABYSS_ORE) color = COLOR_BOSS_ABYSS;
+      else if (drop.type === MaterialType.VOID_ORE) color = COLOR_BOSS_VOID;
+      else if (drop.type === MaterialType.CORE_NORMAL) color = '#c0c0c0';
+      else if (drop.type === MaterialType.CORE_RARE) color = '#ffd700';
+      else if (drop.type === MaterialType.FORM_CORE) color = '#e879f9';
+
+      // Glow
+      c.globalAlpha = 0.3;
+      c.fillStyle = color;
+      c.beginPath();
+      c.arc(screenX, drawY, 8, 0, Math.PI * 2);
+      c.fill();
+
+      // Item
+      c.globalAlpha = 1.0;
+      c.fillStyle = color;
+      c.fillRect(screenX - 4, drawY - 4, 8, 8);
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 1;
+      c.strokeRect(screenX - 4, drawY - 4, 8, 8);
+    }
+    c.globalAlpha = 1.0;
+  }
+
+  private renderBossHPBar(c: CanvasRenderingContext2D): void {
+    // Show HP bar for active boss
+    const boss: BossState | null = this.activeBoss;
+    if (boss === null || boss.defeated) {
+      // Also check for any active optional boss
+      for (let i: number = 0; i < this.bosses.length; i++) {
+        if (this.bosses[i].active && !this.bosses[i].defeated) {
+          this.drawBossHPBar(c, this.bosses[i]);
+          return;
+        }
+      }
+      return;
+    }
+    this.drawBossHPBar(c, boss);
+  }
+
+  private drawBossHPBar(c: CanvasRenderingContext2D, boss: BossState): void {
+    const barW: number = 200;
+    const barH: number = 12;
+    const barX: number = (this.screenW - barW) / 2;
+    const barY: number = 20;
+    const hpRatio: number = Math.max(0, boss.hp / boss.maxHp);
+
+    // Background
+    c.fillStyle = COLOR_BOSS_HP_BG;
+    c.globalAlpha = 0.8;
+    c.fillRect(barX - 2, barY - 2, barW + 4, barH + 4);
+
+    // HP bar
+    c.fillStyle = COLOR_BOSS_HP_BAR;
+    c.globalAlpha = 1.0;
+    c.fillRect(barX, barY, barW * hpRatio, barH);
+
+    // Border
+    c.strokeStyle = '#ffffff';
+    c.lineWidth = 1;
+    c.globalAlpha = 0.5;
+    c.strokeRect(barX - 2, barY - 2, barW + 4, barH + 4);
+
+    // Boss name
+    c.globalAlpha = 1.0;
+    c.fillStyle = '#ffffff';
+    c.font = '10px sans-serif';
+    c.textAlign = 'center';
+    let name: string = 'Boss';
+    if (boss.bossType === BossType.CRYSTAL_GUARDIAN) name = 'Crystal Guardian';
+    else if (boss.bossType === BossType.MUSHROOM_KING) name = 'Mushroom King';
+    else if (boss.bossType === BossType.LAVA_BEAST) name = 'Lava Beast';
+    else if (boss.bossType === BossType.ABYSS_SIREN) name = 'Abyss Siren';
+    else if (boss.bossType === BossType.VOID_RIFT) name = 'Void Rift';
+    if (boss.phase === BossPhase.PHASE_2) name += ' [Enraged]';
+    c.fillText(name, this.screenW / 2, barY - 6);
   }
 }

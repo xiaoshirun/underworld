@@ -6,7 +6,10 @@ import {
   TRAP_TELEGRAPH_TIME, TRAP_ACTIVE_TIME, TRAP_COOLDOWN_TIME,
   TRAP_TRIGGER_RADIUS, TRAP_DAMAGE, TRAP_SIZE,
   MechanismType, MechanismInstance, SecretRoom, ChestType,
-  MECH_INTERACT_RANGE, PRESSURE_PLATE_RANGE
+  MECH_INTERACT_RANGE, PRESSURE_PLATE_RANGE,
+  BossType, BossRole, BossRoom, BossState, BossPhase,
+  BOSS_ROOM_SIZE, BOSS_HP, BOSS_SIZE,
+  PASSAGE_GUARDIAN_AGGRO, OPTIONAL_CHALLENGE_AGGRO
 } from './GameConstants';
 
 function chunkHash(cx: number, cy: number): number {
@@ -62,6 +65,10 @@ function fbm(x: number, y: number, octaves: number): number {
 }
 
 export class WorldGenerator {
+  private bossRooms: BossRoom[] = [];
+  private placedBossBiomes: number[] = []; // biome values that have a Passage Guardian placed
+  private defeatedOptionalBosses: string[] = []; // "cx,cy" keys
+
   getBiome(worldX: number, worldY: number): BiomeType {
     const temp: number = valueNoise2D(worldX * BIOME_SCALE, worldY * BIOME_SCALE);
     const moist: number = valueNoise2D((worldX + 500) * BIOME_SCALE, (worldY + 500) * BIOME_SCALE);
@@ -72,6 +79,17 @@ export class WorldGenerator {
     if (moist > 0.65) return BiomeType.MUSHROOM;
     if (temp > 0.55 && moist > 0.4) return BiomeType.CRYSTAL;
     return BiomeType.NORMAL;
+  }
+
+  getBossRooms(): BossRoom[] {
+    return this.bossRooms;
+  }
+
+  markOptionalBossDefeated(cx: number, cy: number): void {
+    const key: string = cx + ',' + cy;
+    if (this.defeatedOptionalBosses.indexOf(key) < 0) {
+      this.defeatedOptionalBosses.push(key);
+    }
   }
 
   generateChunk(cx: number, cy: number): ChunkData {
@@ -114,15 +132,60 @@ export class WorldGenerator {
       }
     }
 
+    // Check for boss room placement before normal decoration
+    const chunkBiome: BiomeType = this.getBiome(biomeOriginX + size / 2, biomeOriginY + size / 2);
+    const distFromOrigin: number = Math.sqrt(cx * cx + cy * cy);
+    const passageRoom: BossRoom | null = this.tryPlacePassageGuardian(cx, cy, chunkBiome, distFromOrigin);
+    let optionalBoss: BossState | null = null;
+    if (passageRoom === null) {
+      optionalBoss = this.tryPlaceOptionalBoss(cx, cy, chunkBiome, distFromOrigin);
+    }
+    const isBossRoom: boolean = passageRoom !== null;
+
+    if (isBossRoom) {
+      // Generate clean boss arena tiles (overrides normal terrain)
+      this.generateBossRoomTiles(tiles, cx, cy, chunkBiome);
+      const bosses: BossState[] = [];
+      if (passageRoom !== null) {
+        const bossX: number = (cx * size + Math.floor(size / 2)) * TILE_SIZE + TILE_SIZE / 2;
+        const bossY: number = (cy * size + Math.floor(size / 2)) * TILE_SIZE + TILE_SIZE / 2;
+        bosses.push({
+          x: bossX, y: bossY, vx: 0, vy: 0,
+          hp: BOSS_HP, maxHp: BOSS_HP,
+          bossType: passageRoom.bossType,
+          bossRole: BossRole.PASSAGE_GUARDIAN,
+          phase: BossPhase.PHASE_1,
+          active: false, defeated: false,
+          attackTimer: 0, specialTimer: 0,
+          hitFlash: 0, size: BOSS_SIZE,
+          aggroRadius: PASSAGE_GUARDIAN_AGGRO,
+          extraData: []
+        });
+      }
+      return {
+        tiles: tiles, enemies: [], generated: true,
+        bosses: bosses, chests: [], traps: [], mechanisms: [], secretRooms: [],
+        isBossRoom: true
+      };
+    }
+
+    // Normal chunk generation
     this.decorateChunk(tiles, cx, cy, size, biomeOriginX, biomeOriginY);
     const enemies: SlimeState[] = this.generateChunkEnemies(cx, cy, tiles, size, biomeOriginX, biomeOriginY);
-    const distFromOrigin: number = Math.sqrt(cx * cx + cy * cy);
-    const biome: BiomeType = this.getBiome(biomeOriginX + size / 2, biomeOriginY + size / 2);
-    const traps: TrapInstance[] = this.generateTraps(cx, cy, tiles, biome, distFromOrigin);
-    const mechanisms: MechanismInstance[] = this.generateMechanisms(cx, cy, tiles, biome, distFromOrigin);
-    const secretRooms: SecretRoom[] = this.generateSecretRooms(cx, cy, tiles, biome, distFromOrigin);
+    const traps: TrapInstance[] = this.generateTraps(cx, cy, tiles, chunkBiome, distFromOrigin);
+    const mechanisms: MechanismInstance[] = this.generateMechanisms(cx, cy, tiles, chunkBiome, distFromOrigin);
+    const secretRooms: SecretRoom[] = this.generateSecretRooms(cx, cy, tiles, chunkBiome, distFromOrigin);
 
-    return { tiles: tiles, enemies: enemies, generated: true, bosses: [], chests: [], traps: traps, mechanisms: mechanisms, secretRooms: secretRooms, isBossRoom: false };
+    const chunkBoss: BossState[] = [];
+    if (optionalBoss !== null) {
+      chunkBoss.push(optionalBoss);
+    }
+
+    return {
+      tiles: tiles, enemies: enemies, generated: true,
+      bosses: chunkBoss, chests: [], traps: traps, mechanisms: mechanisms,
+      secretRooms: secretRooms, isBossRoom: false
+    };
   }
 
   private decorateChunk(tiles: number[][], cx: number, cy: number, size: number, bx: number, by: number): void {
@@ -350,5 +413,222 @@ export class WorldGenerator {
       }
     }
     return rooms;
+  }
+
+  // ==================== Boss Room Generation ====================
+
+  private getBossTypeForBiome(biome: BiomeType): BossType | -1 {
+    if (biome === BiomeType.CRYSTAL) return BossType.CRYSTAL_GUARDIAN;
+    if (biome === BiomeType.WATER) return BossType.ABYSS_SIREN;
+    if (biome === BiomeType.SHADOW) return BossType.VOID_RIFT;
+    if (biome === BiomeType.MUSHROOM) return BossType.MUSHROOM_KING;
+    if (biome === BiomeType.LAVA) return BossType.LAVA_BEAST;
+    return -1;
+  }
+
+  private isPassageGuardianBiome(biome: BiomeType): boolean {
+    return biome === BiomeType.CRYSTAL || biome === BiomeType.WATER || biome === BiomeType.SHADOW;
+  }
+
+  private isOptionalBossBiome(biome: BiomeType): boolean {
+    return biome === BiomeType.MUSHROOM || biome === BiomeType.LAVA;
+  }
+
+  private tryPlacePassageGuardian(cx: number, cy: number, biome: BiomeType, distFromOrigin: number): BossRoom | null {
+    if (!this.isPassageGuardianBiome(biome)) return null;
+    if (distFromOrigin < 10) return null;
+
+    // Check if this biome already has a boss room within 20 chunks
+    const bossType: BossType = this.getBossTypeForBiome(biome) as BossType;
+    for (let i: number = 0; i < this.bossRooms.length; i++) {
+      const existing: BossRoom = this.bossRooms[i];
+      if (existing.bossType === bossType) {
+        const dx: number = cx - existing.chunkX;
+        const dy: number = cy - existing.chunkY;
+        if (Math.sqrt(dx * dx + dy * dy) < 20) return null;
+      }
+    }
+
+    // Deterministic placement based on chunk hash
+    const h: number = chunkHash(cx * 7 + 3000, cy * 7 + 4000);
+    const r: number = hashToFloat(h);
+    const chance: number = Math.min(0.03 + (distFromOrigin - 10) * 0.005, 0.12);
+    if (r > chance) return null;
+
+    const room: BossRoom = {
+      chunkX: cx, chunkY: cy,
+      bossType: bossType,
+      entered: false,
+      defeated: false,
+      chestSpawned: false
+    };
+    this.bossRooms.push(room);
+    return room;
+  }
+
+  private tryPlaceOptionalBoss(cx: number, cy: number, biome: BiomeType, distFromOrigin: number): BossState | null {
+    if (!this.isOptionalBossBiome(biome)) return null;
+    if (distFromOrigin < 15) return null;
+
+    // Check if already defeated
+    const key: string = cx + ',' + cy;
+    if (this.defeatedOptionalBosses.indexOf(key) >= 0) return null;
+
+    // Very rare spawn - deterministic per chunk
+    const h: number = chunkHash(cx * 11 + 5000, cy * 11 + 6000);
+    const r: number = hashToFloat(h);
+    if (r > 0.015) return null;
+
+    // Find a floor tile near center for placement
+    const size: number = CHUNK_SIZE;
+    const center: number = Math.floor(size / 2);
+    let spawnLX: number = center;
+    let spawnLY: number = center;
+    let found: boolean = false;
+
+    for (let radius: number = 1; radius <= 8 && !found; radius++) {
+      for (let dy: number = -radius; dy <= radius && !found; dy++) {
+        for (let dx: number = -radius; dx <= radius && !found; dx++) {
+          const tx: number = center + dx;
+          const ty: number = center + dy;
+          if (tx >= 0 && tx < size && ty >= 0 && ty < size) {
+            // Note: tiles may still have walls here since we haven't decorated yet
+            // We'll use the center regardless - the boss is large and powerful
+            spawnLX = tx;
+            spawnLY = ty;
+            found = true;
+          }
+        }
+      }
+    }
+
+    const bossType: BossType = this.getBossTypeForBiome(biome) as BossType;
+    const worldX: number = (cx * size + spawnLX) * TILE_SIZE + TILE_SIZE / 2;
+    const worldY: number = (cy * size + spawnLY) * TILE_SIZE + TILE_SIZE / 2;
+
+    return {
+      x: worldX, y: worldY, vx: 0, vy: 0,
+      hp: BOSS_HP, maxHp: BOSS_HP,
+      bossType: bossType,
+      bossRole: BossRole.OPTIONAL_CHALLENGE,
+      phase: BossPhase.PHASE_1,
+      active: true, defeated: false,
+      attackTimer: 0, specialTimer: 0,
+      hitFlash: 0, size: BOSS_SIZE,
+      aggroRadius: OPTIONAL_CHALLENGE_AGGRO,
+      extraData: []
+    };
+  }
+
+  private generateBossRoomTiles(tiles: number[][], cx: number, cy: number, biome: BiomeType): void {
+    const size: number = CHUNK_SIZE;
+    const center: number = Math.floor(size / 2);
+    const roomRadius: number = Math.floor(BOSS_ROOM_SIZE / 2); // 7
+
+    // Step 1: Clear entire room area to FLOOR (15x15)
+    for (let ly: number = 0; ly < size; ly++) {
+      for (let lx: number = 0; lx < size; lx++) {
+        const dx: number = lx - center;
+        const dy: number = ly - center;
+        if (Math.abs(dx) <= roomRadius && Math.abs(dy) <= roomRadius) {
+          tiles[ly][lx] = TileType.FLOOR;
+        }
+      }
+    }
+
+    // Step 2: Clear approach corridors outside the room (2 tiles beyond each edge)
+    const outerStart: number = roomRadius + 1;
+    const outerEnd: number = roomRadius + 3;
+    for (let d: number = -2; d <= 2; d++) {
+      // Top corridor
+      for (let ext: number = outerStart; ext <= outerEnd; ext++) {
+        const ty: number = center - ext;
+        const tx: number = center + d;
+        if (ty >= 0 && ty < size && tx >= 0 && tx < size) tiles[ty][tx] = TileType.FLOOR;
+      }
+      // Bottom corridor
+      for (let ext: number = outerStart; ext <= outerEnd; ext++) {
+        const ty: number = center + ext;
+        const tx: number = center + d;
+        if (ty >= 0 && ty < size && tx >= 0 && tx < size) tiles[ty][tx] = TileType.FLOOR;
+      }
+      // Left corridor
+      for (let ext: number = outerStart; ext <= outerEnd; ext++) {
+        const tx: number = center - ext;
+        const ty: number = center + d;
+        if (tx >= 0 && tx < size && ty >= 0 && ty < size) tiles[ty][tx] = TileType.FLOOR;
+      }
+      // Right corridor
+      for (let ext: number = outerStart; ext <= outerEnd; ext++) {
+        const tx: number = center + ext;
+        const ty: number = center + d;
+        if (tx >= 0 && tx < size && ty >= 0 && ty < size) tiles[ty][tx] = TileType.FLOOR;
+      }
+    }
+
+    // Step 3: Set WALL border ring around the room
+    for (let ly: number = 0; ly < size; ly++) {
+      for (let lx: number = 0; lx < size; lx++) {
+        const dx: number = lx - center;
+        const dy: number = ly - center;
+        const maxD: number = Math.max(Math.abs(dx), Math.abs(dy));
+        if (maxD === roomRadius + 1) {
+          tiles[ly][lx] = TileType.WALL;
+        }
+      }
+    }
+
+    // Step 4: Create entrance gap (3 tiles wide, deterministic direction)
+    const entranceHash: number = chunkHash(cx * 13 + 7000, cy * 13 + 8000);
+    const dir: number = entranceHash % 4; // 0=top, 1=bottom, 2=left, 3=right
+
+    if (dir === 0) {
+      // Entrance on top side
+      for (let d: number = -1; d <= 1; d++) {
+        tiles[center - roomRadius][center + d] = TileType.FLOOR;
+        tiles[center - roomRadius - 1][center + d] = TileType.FLOOR;
+      }
+    } else if (dir === 1) {
+      // Entrance on bottom side
+      for (let d: number = -1; d <= 1; d++) {
+        tiles[center + roomRadius][center + d] = TileType.FLOOR;
+        tiles[center + roomRadius + 1][center + d] = TileType.FLOOR;
+      }
+    } else if (dir === 2) {
+      // Entrance on left side
+      for (let d: number = -1; d <= 1; d++) {
+        tiles[center + d][center - roomRadius] = TileType.FLOOR;
+        tiles[center + d][center - roomRadius - 1] = TileType.FLOOR;
+      }
+    } else {
+      // Entrance on right side
+      for (let d: number = -1; d <= 1; d++) {
+        tiles[center + d][center + roomRadius] = TileType.FLOOR;
+        tiles[center + d][center + roomRadius + 1] = TileType.FLOOR;
+      }
+    }
+
+    // Step 5: Biome-themed border decoration
+    for (let ly: number = 0; ly < size; ly++) {
+      for (let lx: number = 0; lx < size; lx++) {
+        if (tiles[ly][lx] !== TileType.FLOOR) continue;
+        const dx: number = lx - center;
+        const dy: number = ly - center;
+        const maxD: number = Math.max(Math.abs(dx), Math.abs(dy));
+        if (maxD < roomRadius - 1) continue; // Only decorate border area
+
+        const th: number = tileHash(lx + cx * size + 30000, ly + cy * size + 31000);
+        const tr: number = hashToFloat(th);
+
+        if (biome === BiomeType.CRYSTAL) {
+          if (tr < 0.15) tiles[ly][lx] = TileType.CRYSTAL;
+          else if (tr < 0.25) tiles[ly][lx] = TileType.GLOW_STONE;
+        } else if (biome === BiomeType.WATER) {
+          if (tr < 0.12) tiles[ly][lx] = TileType.PLANT;
+        } else if (biome === BiomeType.SHADOW) {
+          if (tr < 0.10) tiles[ly][lx] = TileType.GLOW_STONE;
+        }
+      }
+    }
   }
 }
