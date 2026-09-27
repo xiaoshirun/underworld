@@ -1708,6 +1708,8 @@ export class GameEngine {
     c.fillRect(screenX + 1, screenY + 8 + bobY, 3, 4);
 
     this.renderDrill(c, screenX, screenY, p, bobY);
+    this.renderWeaponOnPlayer(c, screenX, screenY, p, bobY);
+    this.renderEvolutionEffects(c, screenX, screenY, p, bobY);
   }
 
   private renderDrill(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
@@ -1829,6 +1831,168 @@ export class GameEngine {
     }
 
     c.globalAlpha = 1.0;
+  }
+
+  private renderWeaponOnPlayer(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
+    const form: WeaponForm = p.currentWeaponForm;
+    const handX: number = sx + 5;
+    const handY: number = sy + 2 + bobY;
+    const fAng: number = p.facing;
+    const cosF: number = Math.cos(fAng);
+    const sinF: number = Math.sin(fAng);
+
+    c.globalAlpha = 0.85;
+
+    if (form === WeaponForm.BLADE) {
+      const len: number = 10;
+      c.strokeStyle = '#93c5fd';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(handX, handY);
+      c.lineTo(handX + cosF * len, handY + sinF * len);
+      c.stroke();
+      c.strokeStyle = '#bfdbfe';
+      c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(handX + cosF * 2, handY + sinF * 2);
+      c.lineTo(handX + cosF * len, handY + sinF * len);
+      c.stroke();
+    } else if (form === WeaponForm.WHIP) {
+      const len: number = 12;
+      const perpX: number = -sinF;
+      const perpY: number = cosF;
+      c.strokeStyle = '#c4b5fd';
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.moveTo(handX, handY);
+      const cpX: number = handX + cosF * len * 0.5 + perpX * 4;
+      const cpY: number = handY + sinF * len * 0.5 + perpY * 4;
+      const endX: number = handX + cosF * len;
+      const endY: number = handY + sinF * len;
+      c.quadraticCurveTo(cpX, cpY, endX, endY);
+      c.stroke();
+    } else if (form === WeaponForm.HAMMER) {
+      const len: number = 7;
+      c.strokeStyle = '#a3a3a3';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(handX, handY);
+      c.lineTo(handX + cosF * len, handY + sinF * len);
+      c.stroke();
+      c.fillStyle = '#78716c';
+      const hx: number = handX + cosF * len;
+      const hy: number = handY + sinF * len;
+      c.fillRect(hx - 3, hy - 3, 6, 6);
+    } else if (form === WeaponForm.STAFF) {
+      const len: number = 14;
+      c.strokeStyle = '#a78bfa';
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.moveTo(handX, handY);
+      c.lineTo(handX + cosF * len, handY + sinF * len);
+      c.stroke();
+      const orbX: number = handX + cosF * len;
+      const orbY: number = handY + sinF * len;
+      c.fillStyle = '#38bdf8';
+      c.beginPath();
+      c.arc(orbX, orbY, 2.5, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 0.3;
+      c.fillStyle = '#7dd3fc';
+      c.beginPath();
+      c.arc(orbX, orbY, 4, 0, Math.PI * 2);
+      c.fill();
+    } else if (form === WeaponForm.DUAL_BLADES) {
+      const len: number = 8;
+      c.strokeStyle = '#fdba74';
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.moveTo(handX, handY);
+      c.lineTo(handX + cosF * len, handY + sinF * len);
+      c.stroke();
+      const handX2: number = sx - 5;
+      c.beginPath();
+      c.moveTo(handX2, handY);
+      c.lineTo(handX2 + cosF * len, handY + sinF * len);
+      c.stroke();
+    } else if (form === WeaponForm.GREAT_AXE) {
+      const len: number = 9;
+      c.strokeStyle = '#a3a3a3';
+      c.lineWidth = 2.5;
+      c.beginPath();
+      c.moveTo(handX, handY);
+      c.lineTo(handX + cosF * len, handY + sinF * len);
+      c.stroke();
+      const axX: number = handX + cosF * len;
+      const axY: number = handY + sinF * len;
+      const perpX: number = -sinF;
+      const perpY: number = cosF;
+      c.fillStyle = '#ef4444';
+      c.beginPath();
+      c.moveTo(axX + perpX * 4, axY + perpY * 4);
+      c.lineTo(axX - perpX * 4, axY - perpY * 4);
+      c.lineTo(axX + cosF * 5, axY + sinF * 5);
+      c.closePath();
+      c.fill();
+    }
+
+    c.globalAlpha = 1.0;
+  }
+
+  private renderEvolutionEffects(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
+    const level: number = p.evolutionLevel;
+    if (level === EvolutionLevel.BASE) return;
+
+    const branchColor: string = this.getBranchColor(p.evolutionBranch);
+    const t: number = this.frameCount * 0.05;
+
+    if (level >= EvolutionLevel.LEVEL_1) {
+      c.globalAlpha = 0.15 + Math.sin(t) * 0.05;
+      c.fillStyle = branchColor;
+      c.beginPath();
+      c.arc(sx, sy + bobY, 12, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 1.0;
+    }
+
+    if (level >= EvolutionLevel.LEVEL_2) {
+      const isMoving: boolean = Math.abs(p.vx) > 0.1 || Math.abs(p.vy) > 0.1;
+      if (isMoving) {
+        c.globalAlpha = 0.4;
+        c.fillStyle = branchColor;
+        for (let i: number = 0; i < 2; i++) {
+          const px: number = sx + (Math.random() - 0.5) * 8;
+          const py: number = sy + bobY + 6 + Math.random() * 4;
+          c.beginPath();
+          c.arc(px, py, 1 + Math.random(), 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 1.0;
+      }
+    }
+
+    if (level >= EvolutionLevel.LEVEL_3) {
+      c.globalAlpha = 0.2 + Math.sin(t * 1.5) * 0.08;
+      c.strokeStyle = branchColor;
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.arc(sx, sy + bobY, 16 + Math.sin(t * 0.8) * 2, 0, Math.PI * 2);
+      c.stroke();
+      c.globalAlpha = 1.0;
+
+      for (let i: number = 0; i < 3; i++) {
+        const angle: number = t * 2 + (i * Math.PI * 2 / 3);
+        const orbR: number = 14;
+        const ox: number = sx + Math.cos(angle) * orbR;
+        const oy: number = sy + bobY + Math.sin(angle) * orbR;
+        c.globalAlpha = 0.6;
+        c.fillStyle = branchColor;
+        c.beginPath();
+        c.arc(ox, oy, 1.5, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.globalAlpha = 1.0;
+    }
   }
 
   private renderEnemies(c: CanvasRenderingContext2D, offX: number, offY: number): void {
