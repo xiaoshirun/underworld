@@ -18,8 +18,8 @@ struct LoginPage {
   private bgParticles: BgParticle[] = [];
   private screenW: number = 360;
   private screenH: number = 780;
-  @State username: string = '';
-  @State password: string = '';
+  @State username: string = 'test';
+  @State password: string = 'test';
   @State errorMsg: string = '';
   @State isLoading: boolean = false;
   @State loginBtnScale: number = 1.0;

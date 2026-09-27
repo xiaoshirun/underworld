@@ -30,7 +30,7 @@ export const XP_MAGNET_RANGE: number = 80;
 export const LEVEL_UP_XP: number = 10;
 export const CHUNK_LOAD_RADIUS: number = 3;
 export const JOYSTICK_RADIUS: number = 55;
-export const MINIMAP_SIZE: number = 130;
+export const MINIMAP_SIZE: number = 90;
 export const FRAME_INTERVAL: number = 16;
 export const MINIMAP_UPDATE_INTERVAL: number = 5;
 export const NOISE_SCALE: number = 0.08;
@@ -656,3 +656,39 @@ export const COLOR_TRANSFORM_FLASH: string = '#ffffff';
 export const COLOR_PLAYER_FEMALE_BODY: string = '#8b5cf6';
 export const COLOR_PLAYER_FEMALE_BODY_DARK: string = '#7c3aed';
 export const COLOR_PLAYER_FEMALE_HAIR: string = '#4a1a6b';
+
+// ==================== Game State ====================
+
+export enum GameState {
+  LOADING = 0,
+  PLAYING = 1,
+  PAUSED = 2,
+  GAME_OVER = 3
+}
+
+export const SAVE_KEY: string = 'game_save_data';
+export const SAVE_PREF_NAME: string = 'game_prefs';
+export const SAVE_VERSION: number = 1;
+export const AUTO_SAVE_INTERVAL: number = 3750;
+
+export interface SaveData {
+  version: number;
+  timestamp: number;
+  playerX: number;
+  playerY: number;
+  hp: number;
+  xp: number;
+  level: number;
+  gender: number;
+  currentWeaponForm: number;
+  unlockedForms: number[];
+  evolutionBranch: number;
+  evolutionLevel: number;
+  inventory: Inventory;
+  isTransformed: boolean;
+  transformForm: number;
+  transformEnergy: number;
+  transformMaxEnergy: number;
+  unlockedTransforms: number[];
+  exploredChunks: string[];
+}

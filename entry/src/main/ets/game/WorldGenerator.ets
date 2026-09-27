@@ -96,30 +96,17 @@ export class WorldGenerator {
   generateChunk(cx: number, cy: number): ChunkData {
     const size: number = CHUNK_SIZE;
     const tiles: number[][] = [];
-    const biomeOriginX: number = cx * size;
-    const biomeOriginY: number = cy * size;
-
-    for (let ly: number = 0; ly < size; ly++) {
-      tiles[ly] = [];
-      for (let lx: number = 0; lx < size; lx++) {
-        const wx: number = cx * size + lx;
-        const wy: number = cy * size + ly;
-        const noiseVal: number = fbm(wx * NOISE_SCALE, wy * NOISE_SCALE, 4);
-        const biome: BiomeType = this.getBiome(wx, wy);
-        let threshold: number = CAVE_THRESHOLD;
-        if (biome === BiomeType.WATER) threshold += 0.08;
-        if (biome === BiomeType.LAVA) threshold += 0.05;
-        if (biome === BiomeType.CRYSTAL) threshold -= 0.05;
-
-        if (noiseVal < threshold) {
-          tiles[ly][lx] = TileType.WALL;
-        } else {
-          tiles[ly][lx] = TileType.FLOOR;
-        }
-      }
-    }
 
     if (cx === 0 && cy === 0) {
+      for (let ly: number = 0; ly < size; ly++) {
+        tiles[ly] = [];
+        for (let lx: number = 0; lx < size; lx++) {
+          const wx: number = lx;
+          const wy: number = ly;
+          const noiseVal: number = fbm(wx * NOISE_SCALE, wy * NOISE_SCALE, 4);
+          tiles[ly][lx] = noiseVal < CAVE_THRESHOLD ? TileType.WALL : TileType.FLOOR;
+        }
+      }
       const center: number = Math.floor(size / 2);
       const clearR: number = 6;
       for (let dy: number = -clearR; dy <= clearR; dy++) {
@@ -131,11 +118,40 @@ export class WorldGenerator {
           }
         }
       }
+      return {
+        tiles: tiles, enemies: [], generated: true,
+        bosses: [], chests: [], traps: [], mechanisms: [], secretRooms: [],
+        isBossRoom: false
+      };
     }
 
-    // Check for boss room placement before normal decoration
+    const noiseGrid: number[][] = [];
+    for (let ly: number = 0; ly < size; ly++) {
+      noiseGrid[ly] = [];
+      for (let lx: number = 0; lx < size; lx++) {
+        const wx: number = cx * size + lx;
+        const wy: number = cy * size + ly;
+        noiseGrid[ly][lx] = fbm(wx * NOISE_SCALE, wy * NOISE_SCALE, 4);
+      }
+    }
+
+    const biomeOriginX: number = cx * size;
+    const biomeOriginY: number = cy * size;
     const chunkBiome: BiomeType = this.getBiome(biomeOriginX + size / 2, biomeOriginY + size / 2);
     const distFromOrigin: number = Math.sqrt(cx * cx + cy * cy);
+
+    let threshold: number = CAVE_THRESHOLD;
+    if (chunkBiome === BiomeType.WATER) threshold += 0.08;
+    if (chunkBiome === BiomeType.LAVA) threshold += 0.05;
+    if (chunkBiome === BiomeType.CRYSTAL) threshold -= 0.05;
+
+    for (let ly: number = 0; ly < size; ly++) {
+      tiles[ly] = [];
+      for (let lx: number = 0; lx < size; lx++) {
+        tiles[ly][lx] = noiseGrid[ly][lx] < threshold ? TileType.WALL : TileType.FLOOR;
+      }
+    }
+
     const passageRoom: BossRoom | null = this.tryPlacePassageGuardian(cx, cy, chunkBiome, distFromOrigin);
     let optionalBoss: BossState | null = null;
     if (passageRoom === null) {
@@ -144,7 +160,6 @@ export class WorldGenerator {
     const isBossRoom: boolean = passageRoom !== null;
 
     if (isBossRoom) {
-      // Generate clean boss arena tiles (overrides normal terrain)
       this.generateBossRoomTiles(tiles, cx, cy, chunkBiome);
       const bosses: BossState[] = [];
       if (passageRoom !== null) {
@@ -170,11 +185,7 @@ export class WorldGenerator {
       };
     }
 
-    // Normal chunk generation
-    this.decorateChunk(tiles, cx, cy, size, biomeOriginX, biomeOriginY);
-    const enemies: SlimeState[] = this.generateChunkEnemies(cx, cy, tiles, size, biomeOriginX, biomeOriginY);
-    const traps: TrapInstance[] = this.generateTraps(cx, cy, tiles, chunkBiome, distFromOrigin);
-    const mechanisms: MechanismInstance[] = this.generateMechanisms(cx, cy, tiles, chunkBiome, distFromOrigin);
+    const entities = this.generateEntities(cx, cy, tiles, size, chunkBiome, distFromOrigin);
     const secretRooms: SecretRoom[] = this.generateSecretRooms(cx, cy, tiles, chunkBiome, distFromOrigin);
     const chests: ChestState[] = this.generateChests(cx, cy, tiles, size, secretRooms, distFromOrigin);
 
@@ -184,201 +195,166 @@ export class WorldGenerator {
     }
 
     return {
-      tiles: tiles, enemies: enemies, generated: true,
-      bosses: chunkBoss, chests: chests, traps: traps, mechanisms: mechanisms,
-      secretRooms: secretRooms, isBossRoom: false
+      tiles: tiles, enemies: entities.enemies, generated: true,
+      bosses: chunkBoss, chests: chests, traps: entities.traps,
+      mechanisms: entities.mechanisms, secretRooms: secretRooms, isBossRoom: false
     };
   }
 
-  private decorateChunk(tiles: number[][], cx: number, cy: number, size: number, bx: number, by: number): void {
-    const biome: BiomeType = this.getBiome(bx + size / 2, by + size / 2);
-
-    for (let ly: number = 0; ly < size; ly++) {
-      for (let lx: number = 0; lx < size; lx++) {
-        if (tiles[ly][lx] !== TileType.FLOOR) continue;
-        const h: number = tileHash(lx + cx * size + 1000, ly + cy * size + 2000);
-        const r: number = hashToFloat(h);
-
-        if (biome === BiomeType.MUSHROOM) {
-          if (r < 0.06) tiles[ly][lx] = TileType.MUSHROOM;
-          else if (r < 0.10) tiles[ly][lx] = TileType.PLANT;
-        } else if (biome === BiomeType.CRYSTAL) {
-          if (r < 0.05) tiles[ly][lx] = TileType.CRYSTAL;
-          else if (r < 0.08) tiles[ly][lx] = TileType.GLOW_STONE;
-        } else if (biome === BiomeType.WATER) {
-          if (r < 0.03) tiles[ly][lx] = TileType.PLANT;
-        } else if (biome === BiomeType.LAVA) {
-          if (r < 0.02) tiles[ly][lx] = TileType.GLOW_STONE;
-        } else if (biome === BiomeType.SHADOW) {
-          if (r < 0.04) tiles[ly][lx] = TileType.GLOW_STONE;
-          else if (r < 0.06) tiles[ly][lx] = TileType.WALL;
-        } else {
-          if (r < 0.015) tiles[ly][lx] = TileType.GLOW_STONE;
-          else if (r < 0.035) tiles[ly][lx] = TileType.PLANT;
-        }
-      }
-    }
-  }
-
-  private generateChunkEnemies(cx: number, cy: number, tiles: number[][], size: number, bx: number, by: number): SlimeState[] {
+  private generateEntities(cx: number, cy: number, tiles: number[][], size: number,
+    biome: BiomeType, distFromOrigin: number):
+    { enemies: SlimeState[], traps: TrapInstance[], mechanisms: MechanismInstance[] } {
     const enemies: SlimeState[] = [];
-    const biome: BiomeType = this.getBiome(bx + size / 2, by + size / 2);
-    if (cx === 0 && cy === 0) return enemies;
+    const traps: TrapInstance[] = [];
+    const mechanisms: MechanismInstance[] = [];
+    const trapDensity: number = Math.min(0.02 + distFromOrigin * 0.003, 0.08);
+    const mechDensity: number = Math.min(0.01 + distFromOrigin * 0.002, 0.04);
 
     for (let ly: number = 0; ly < size; ly++) {
       for (let lx: number = 0; lx < size; lx++) {
         if (tiles[ly][lx] !== TileType.FLOOR) continue;
-        const h: number = tileHash(lx + cx * size + 5000, ly + cy * size + 6000);
-        const r: number = hashToFloat(h);
         const worldX: number = (cx * size + lx) * TILE_SIZE + TILE_SIZE / 2;
         const worldY: number = (cy * size + ly) * TILE_SIZE + TILE_SIZE / 2;
 
-        let enemyType: EnemyType = EnemyType.GRAY_SLIME;
-        let shouldPlace: boolean = false;
+        const decH: number = tileHash(lx + cx * size + 1000, ly + cy * size + 2000);
+        const decR: number = hashToFloat(decH);
+        let decorated: boolean = false;
 
         if (biome === BiomeType.MUSHROOM) {
-          if (r < 0.03) { shouldPlace = true; enemyType = EnemyType.YELLOW_SLIME; }
-          else if (r < 0.05) { shouldPlace = true; enemyType = EnemyType.GRAY_SLIME; }
+          if (decR < 0.06) { tiles[ly][lx] = TileType.MUSHROOM; decorated = true; }
+          else if (decR < 0.10) { tiles[ly][lx] = TileType.PLANT; decorated = true; }
         } else if (biome === BiomeType.CRYSTAL) {
-          if (r < 0.02) { shouldPlace = true; enemyType = EnemyType.GHOST_SLIME; }
-          else if (r < 0.04) { shouldPlace = true; enemyType = EnemyType.PURPLE_SLIME; }
-        } else if (biome === BiomeType.LAVA) {
-          if (r < 0.03) { shouldPlace = true; enemyType = EnemyType.RED_SLIME; }
-          else if (r < 0.05) { shouldPlace = true; enemyType = EnemyType.PURPLE_SLIME; }
+          if (decR < 0.05) { tiles[ly][lx] = TileType.CRYSTAL; decorated = true; }
+          else if (decR < 0.08) { tiles[ly][lx] = TileType.GLOW_STONE; decorated = true; }
         } else if (biome === BiomeType.WATER) {
-          if (r < 0.03) { shouldPlace = true; enemyType = EnemyType.BLUE_SLIME; }
-          else if (r < 0.05) { shouldPlace = true; enemyType = EnemyType.GRAY_SLIME; }
+          if (decR < 0.03) { tiles[ly][lx] = TileType.PLANT; decorated = true; }
+        } else if (biome === BiomeType.LAVA) {
+          if (decR < 0.02) { tiles[ly][lx] = TileType.GLOW_STONE; decorated = true; }
+        } else if (biome === BiomeType.SHADOW) {
+          if (decR < 0.04) { tiles[ly][lx] = TileType.GLOW_STONE; decorated = true; }
+          else if (decR < 0.06) { tiles[ly][lx] = TileType.WALL; decorated = true; }
         } else {
-          if (r < 0.015) { shouldPlace = true; enemyType = EnemyType.GRAY_SLIME; }
-          else if (r < 0.025) { shouldPlace = true; enemyType = EnemyType.PURPLE_SLIME; }
-          else if (r < 0.03) { shouldPlace = true; enemyType = EnemyType.BLUE_SLIME; }
+          if (decR < 0.015) { tiles[ly][lx] = TileType.GLOW_STONE; decorated = true; }
+          else if (decR < 0.035) { tiles[ly][lx] = TileType.PLANT; decorated = true; }
+        }
+        if (decorated) continue;
+
+        const enemyH: number = tileHash(lx + cx * size + 5000, ly + cy * size + 6000);
+        const enemyR: number = hashToFloat(enemyH);
+        let enemyType: EnemyType = EnemyType.GRAY_SLIME;
+        let shouldPlaceEnemy: boolean = false;
+
+        if (biome === BiomeType.MUSHROOM) {
+          if (enemyR < 0.03) { shouldPlaceEnemy = true; enemyType = EnemyType.YELLOW_SLIME; }
+          else if (enemyR < 0.05) { shouldPlaceEnemy = true; enemyType = EnemyType.GRAY_SLIME; }
+        } else if (biome === BiomeType.CRYSTAL) {
+          if (enemyR < 0.02) { shouldPlaceEnemy = true; enemyType = EnemyType.GHOST_SLIME; }
+          else if (enemyR < 0.04) { shouldPlaceEnemy = true; enemyType = EnemyType.PURPLE_SLIME; }
+        } else if (biome === BiomeType.LAVA) {
+          if (enemyR < 0.03) { shouldPlaceEnemy = true; enemyType = EnemyType.RED_SLIME; }
+          else if (enemyR < 0.05) { shouldPlaceEnemy = true; enemyType = EnemyType.PURPLE_SLIME; }
+        } else if (biome === BiomeType.WATER) {
+          if (enemyR < 0.03) { shouldPlaceEnemy = true; enemyType = EnemyType.BLUE_SLIME; }
+          else if (enemyR < 0.05) { shouldPlaceEnemy = true; enemyType = EnemyType.GRAY_SLIME; }
+        } else {
+          if (enemyR < 0.015) { shouldPlaceEnemy = true; enemyType = EnemyType.GRAY_SLIME; }
+          else if (enemyR < 0.025) { shouldPlaceEnemy = true; enemyType = EnemyType.PURPLE_SLIME; }
+          else if (enemyR < 0.03) { shouldPlaceEnemy = true; enemyType = EnemyType.BLUE_SLIME; }
         }
 
-        if (shouldPlace) {
+        if (shouldPlaceEnemy) {
           enemies.push({
             x: worldX, y: worldY, vx: 0, vy: 0,
             hp: SLIME_HP, maxHp: SLIME_HP,
             enemyType: enemyType, active: true,
-            bouncePhase: hashToFloat(h + 1) * Math.PI * 2,
+            bouncePhase: hashToFloat(enemyH + 1) * Math.PI * 2,
             hitFlash: 0, moveTimer: 0, targetX: 0, targetY: 0,
             isEngulfing: false, engulfedPlayer: false,
             size: SLIME_SIZE, chargeTimer: 0, isCharging: false, splitCount: 0
           });
         }
-      }
-    }
-    return enemies;
-  }
 
-  private generateTraps(cx: number, cy: number, tiles: number[][], biome: BiomeType, distFromOrigin: number): TrapInstance[] {
-    const traps: TrapInstance[] = [];
-    if (cx === 0 && cy === 0) return traps;
+        if (lx >= 2 && lx < size - 2 && ly >= 2 && ly < size - 2) {
+          const trapH: number = tileHash(lx + cx * size + 9000, ly + cy * size + 10000);
+          const trapR: number = hashToFloat(trapH);
+          if (trapR <= trapDensity) {
+            let trapType: TrapType = TrapType.GROUND_SPIKES;
+            let placedTrap: boolean = false;
 
-    const size: number = CHUNK_SIZE;
-    const density: number = Math.min(0.02 + distFromOrigin * 0.003, 0.08);
+            if (biome === BiomeType.MUSHROOM) {
+              if (trapR < trapDensity * 0.5) { trapType = TrapType.POISON_SPORES; placedTrap = true; }
+              else if (trapR < trapDensity * 0.8) { trapType = TrapType.FALLING_ROCKS; placedTrap = true; }
+            } else if (biome === BiomeType.WATER) {
+              if (trapR < trapDensity * 0.7) { trapType = TrapType.WATER_VORTEX; placedTrap = true; }
+            } else if (biome === BiomeType.LAVA) {
+              if (trapR < trapDensity * 0.5) { trapType = TrapType.LAVA_GEYSER; placedTrap = true; }
+              else if (trapR < trapDensity * 0.8) { trapType = TrapType.FALLING_ROCKS; placedTrap = true; }
+            } else if (biome === BiomeType.CRYSTAL) {
+              if (trapR < trapDensity * 0.7) { placedTrap = true; }
+            } else if (biome === BiomeType.SHADOW) {
+              if (trapR < trapDensity * 0.7) { trapType = TrapType.VOID_CRACK; placedTrap = true; }
+            } else {
+              if (trapR < trapDensity * 0.5) { placedTrap = true; }
+              else if (trapR < trapDensity * 0.8) { trapType = TrapType.FALLING_ROCKS; placedTrap = true; }
+            }
 
-    for (let ly: number = 0; ly < size; ly++) {
-      for (let lx: number = 0; lx < size; lx++) {
-        if (tiles[ly][lx] !== TileType.FLOOR) continue;
-        const h: number = tileHash(lx + cx * size + 9000, ly + cy * size + 10000);
-        const r: number = hashToFloat(h);
-        if (r > density) continue;
+            if (placedTrap) {
+              traps.push({
+                x: worldX, y: worldY,
+                trapType: trapType,
+                state: TrapState.IDLE,
+                timer: 0,
+                triggerRadius: TRAP_TRIGGER_RADIUS,
+                damage: TRAP_DAMAGE,
+                size: TRAP_SIZE,
+                extraData: [0, 0]
+              });
+            }
+          }
 
-        const worldX: number = (cx * size + lx) * TILE_SIZE + TILE_SIZE / 2;
-        const worldY: number = (cy * size + ly) * TILE_SIZE + TILE_SIZE / 2;
+          const mechH: number = tileHash(lx + cx * size + 15000, ly + cy * size + 16000);
+          const mechR: number = hashToFloat(mechH);
+          if (mechR <= mechDensity) {
+            let mechType: MechanismType = MechanismType.PRESSURE_PLATE;
+            let placedMech: boolean = false;
 
-        let trapType: TrapType = TrapType.GROUND_SPIKES;
-        let placed: boolean = false;
+            if (biome === BiomeType.CRYSTAL) {
+              if (mechR < mechDensity * 0.5) { mechType = MechanismType.CRYSTAL_REFLECTOR; placedMech = true; }
+              else if (mechR < mechDensity * 0.8) { placedMech = true; }
+            } else if (biome === BiomeType.MUSHROOM) {
+              if (mechR < mechDensity * 0.5) { mechType = MechanismType.LEVER; placedMech = true; }
+              else if (mechR < mechDensity * 0.8) { mechType = MechanismType.PUSH_BLOCK; placedMech = true; }
+            } else if (biome === BiomeType.WATER) {
+              if (mechR < mechDensity * 0.5) { mechType = MechanismType.LEVER; placedMech = true; }
+              else if (mechR < mechDensity * 0.8) { mechType = MechanismType.TELEPORT_RUNE; placedMech = true; }
+            } else if (biome === BiomeType.LAVA) {
+              if (mechR < mechDensity * 0.5) { placedMech = true; }
+              else if (mechR < mechDensity * 0.8) { mechType = MechanismType.LEVER; placedMech = true; }
+            } else if (biome === BiomeType.SHADOW) {
+              if (mechR < mechDensity * 0.5) { mechType = MechanismType.TELEPORT_RUNE; placedMech = true; }
+              else if (mechR < mechDensity * 0.8) { mechType = MechanismType.CRYSTAL_REFLECTOR; placedMech = true; }
+            } else {
+              if (mechR < mechDensity * 0.4) { placedMech = true; }
+              else if (mechR < mechDensity * 0.7) { mechType = MechanismType.PUSH_BLOCK; placedMech = true; }
+              else if (mechR < mechDensity * 0.9) { mechType = MechanismType.BREAKABLE_WALL; placedMech = true; }
+            }
 
-        if (biome === BiomeType.MUSHROOM) {
-          if (r < density * 0.5) { trapType = TrapType.POISON_SPORES; placed = true; }
-          else if (r < density * 0.8) { trapType = TrapType.FALLING_ROCKS; placed = true; }
-        } else if (biome === BiomeType.WATER) {
-          if (r < density * 0.7) { trapType = TrapType.WATER_VORTEX; placed = true; }
-        } else if (biome === BiomeType.LAVA) {
-          if (r < density * 0.5) { trapType = TrapType.LAVA_GEYSER; placed = true; }
-          else if (r < density * 0.8) { trapType = TrapType.FALLING_ROCKS; placed = true; }
-        } else if (biome === BiomeType.CRYSTAL) {
-          if (r < density * 0.7) { trapType = TrapType.GROUND_SPIKES; placed = true; }
-        } else if (biome === BiomeType.SHADOW) {
-          if (r < density * 0.7) { trapType = TrapType.VOID_CRACK; placed = true; }
-        } else {
-          if (r < density * 0.5) { trapType = TrapType.GROUND_SPIKES; placed = true; }
-          else if (r < density * 0.8) { trapType = TrapType.FALLING_ROCKS; placed = true; }
-        }
-
-        if (placed) {
-          traps.push({
-            x: worldX, y: worldY,
-            trapType: trapType,
-            state: TrapState.IDLE,
-            timer: 0,
-            triggerRadius: TRAP_TRIGGER_RADIUS,
-            damage: TRAP_DAMAGE,
-            size: TRAP_SIZE,
-            extraData: [0, 0]
-          });
-        }
-      }
-    }
-    return traps;
-  }
-
-  private generateMechanisms(cx: number, cy: number, tiles: number[][], biome: BiomeType, distFromOrigin: number): MechanismInstance[] {
-    const mechanisms: MechanismInstance[] = [];
-    if (cx === 0 && cy === 0) return mechanisms;
-
-    const size: number = CHUNK_SIZE;
-    const density: number = Math.min(0.01 + distFromOrigin * 0.002, 0.04);
-
-    for (let ly: number = 2; ly < size - 2; ly++) {
-      for (let lx: number = 2; lx < size - 2; lx++) {
-        if (tiles[ly][lx] !== TileType.FLOOR) continue;
-        const h: number = tileHash(lx + cx * size + 15000, ly + cy * size + 16000);
-        const r: number = hashToFloat(h);
-        if (r > density) continue;
-
-        const worldX: number = (cx * size + lx) * TILE_SIZE + TILE_SIZE / 2;
-        const worldY: number = (cy * size + ly) * TILE_SIZE + TILE_SIZE / 2;
-
-        let mechType: MechanismType = MechanismType.PRESSURE_PLATE;
-        let placed: boolean = false;
-
-        if (biome === BiomeType.CRYSTAL) {
-          if (r < density * 0.5) { mechType = MechanismType.CRYSTAL_REFLECTOR; placed = true; }
-          else if (r < density * 0.8) { mechType = MechanismType.PRESSURE_PLATE; placed = true; }
-        } else if (biome === BiomeType.MUSHROOM) {
-          if (r < density * 0.5) { mechType = MechanismType.LEVER; placed = true; }
-          else if (r < density * 0.8) { mechType = MechanismType.PUSH_BLOCK; placed = true; }
-        } else if (biome === BiomeType.WATER) {
-          if (r < density * 0.5) { mechType = MechanismType.LEVER; placed = true; }
-          else if (r < density * 0.8) { mechType = MechanismType.TELEPORT_RUNE; placed = true; }
-        } else if (biome === BiomeType.LAVA) {
-          if (r < density * 0.5) { mechType = MechanismType.PRESSURE_PLATE; placed = true; }
-          else if (r < density * 0.8) { mechType = MechanismType.LEVER; placed = true; }
-        } else if (biome === BiomeType.SHADOW) {
-          if (r < density * 0.5) { mechType = MechanismType.TELEPORT_RUNE; placed = true; }
-          else if (r < density * 0.8) { mechType = MechanismType.CRYSTAL_REFLECTOR; placed = true; }
-        } else {
-          if (r < density * 0.4) { mechType = MechanismType.PRESSURE_PLATE; placed = true; }
-          else if (r < density * 0.7) { mechType = MechanismType.PUSH_BLOCK; placed = true; }
-          else if (r < density * 0.9) { mechType = MechanismType.BREAKABLE_WALL; placed = true; }
-        }
-
-        if (placed) {
-          mechanisms.push({
-            x: worldX, y: worldY,
-            mechanismType: mechType,
-            active: false,
-            linkedIndex: -1,
-            rotation: 0,
-            pushable: mechType === MechanismType.PUSH_BLOCK,
-            posX: worldX, posY: worldY
-          });
+            if (placedMech) {
+              mechanisms.push({
+                x: worldX, y: worldY,
+                mechanismType: mechType,
+                active: false,
+                linkedIndex: -1,
+                rotation: 0,
+                pushable: mechType === MechanismType.PUSH_BLOCK,
+                posX: worldX, posY: worldY
+              });
+            }
+          }
         }
       }
     }
-    return mechanisms;
+    return { enemies: enemies, traps: traps, mechanisms: mechanisms };
   }
 
   private generateSecretRooms(cx: number, cy: number, tiles: number[][], biome: BiomeType, distFromOrigin: number): SecretRoom[] {

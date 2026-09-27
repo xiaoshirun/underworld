@@ -1,5 +1,7 @@
 import { display, router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { GameEngine } from '../game/GameEngine';
+import { SaveManager } from '../game/SaveManager';
 import {
   PLAYER_MAX_HP, JOYSTICK_RADIUS, MINIMAP_SIZE,
   COLOR_HP_FULL, COLOR_HP_EMPTY,
@@ -9,7 +11,8 @@ import {
   EvolutionBranch, FORM_UNLOCK_COST, Inventory,
   TransformForm, TRANSFORM_MAX_ENERGY,
   COLOR_TRANSFORM_BTN_LOCKED, COLOR_TRANSFORM_BTN_READY, COLOR_TRANSFORM_ENERGY_BG,
-  COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_IRON_GOLD
+  COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_IRON_GOLD,
+  GameState, SaveData
 } from '../game/GameConstants';
 
 @Entry
@@ -18,8 +21,15 @@ struct Index {
   private gameEngine: GameEngine = new GameEngine();
   private gameCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private minimapCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
+  private cacheCtx0: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
+  private cacheCtx1: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
+  private cacheCtx2: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
+  private cacheCtx3: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
+  private cacheCtx4: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
+  private cacheCtx5: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private gameCanvasReady: boolean = false;
   private minimapCanvasReady: boolean = false;
+  private cacheCanvasesReady: number = 0;
   @State screenW: number = 360;
   @State screenH: number = 780;
   @State playerHp: number = PLAYER_MAX_HP;
@@ -64,6 +74,12 @@ struct Index {
   @State showFormSelect: boolean = false;
   @State transformUnlockForm: TransformForm = TransformForm.NONE;
   @State transformUnlockActive: boolean = false;
+  @State gameState: GameState = GameState.PLAYING;
+  @State showPauseMenu: boolean = false;
+  @State showGameOver: boolean = false;
+  @State showSaveIndicator: boolean = false;
+  @State deathLevel: number = 1;
+  @State deathChunks: number = 0;
   private branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
 
   aboutToAppear(): void {
@@ -101,6 +117,31 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
+      Canvas(this.cacheCtx0)
+        .width(1056)
+        .height(1056)
+        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
+      Canvas(this.cacheCtx1)
+        .width(1056)
+        .height(1056)
+        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
+      Canvas(this.cacheCtx2)
+        .width(1056)
+        .height(1056)
+        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
+      Canvas(this.cacheCtx3)
+        .width(1056)
+        .height(1056)
+        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
+      Canvas(this.cacheCtx4)
+        .width(1056)
+        .height(1056)
+        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
+      Canvas(this.cacheCtx5)
+        .width(1056)
+        .height(1056)
+        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
+
       Canvas(this.gameCtx)
         .width('100%')
         .height('100%')
@@ -137,6 +178,18 @@ struct Index {
       this.TransformEnergyBarView()
       this.FormSelectPanel()
       this.TransformUnlockNotification()
+
+      if (this.showPauseMenu) {
+        this.PauseMenuOverlay()
+      }
+
+      if (this.showGameOver) {
+        this.GameOverOverlay()
+      }
+
+      if (this.showSaveIndicator) {
+        this.SaveIndicator()
+      }
     }
     .width('100%')
     .height('100%')
@@ -156,26 +209,25 @@ struct Index {
     }
     .width(MINIMAP_SIZE + 6)
     .height(MINIMAP_SIZE + 6)
-    .margin({ left: 10, top: 76 })
-    .borderRadius(8)
-    .border({ width: 1, color: '#334155' })
+    .margin({ left: 8, top: 46 })
+    .borderRadius(4)
+    .border({ width: 3, color: '#475569' })
     .backgroundColor('#0a0a15')
-    .shadow({ radius: 8, color: '#00000080', offsetX: 0, offsetY: 2 })
   }
 
   @Builder
   WeaponFormView() {
     Stack() {
-      Row() {
+      Column() {
         Text(this.gameEngine.getWeaponFormName(this.currentWeaponForm))
-          .fontSize(12)
+          .fontSize(10)
           .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
+          .fontColor('#fbbf24')
       }
       .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-      .backgroundColor('#1e293be0')
-      .borderRadius(6)
-      .border({ width: 1, color: '#475569' })
+      .backgroundColor('#0f0f23e0')
+      .borderRadius(3)
+      .border({ width: 2, color: '#475569' })
     }
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
@@ -183,7 +235,7 @@ struct Index {
         this.currentWeaponForm = this.gameEngine.getCurrentWeaponForm();
       }
     })
-    .position({ x: 10, y: this.screenH - 130 })
+    .position({ x: 10, y: this.screenH - 100 })
   }
 
   @Builder
@@ -195,10 +247,15 @@ struct Index {
           .fontColor('#00ced1')
         Text(this.invOre.toString())
           .fontSize(10)
+          .fontWeight(FontWeight.Bold)
           .fontColor('#e2e8f0')
-          .margin({ left: 2 })
+          .margin({ left: 3 })
       }
-      .margin({ right: 8 })
+      .padding({ left: 4, right: 4, top: 2, bottom: 2 })
+      .backgroundColor('#0f0f23c0')
+      .borderRadius(2)
+      .border({ width: 1, color: '#00ced140' })
+      .margin({ right: 4 })
 
       Row() {
         Text('●')
@@ -206,10 +263,15 @@ struct Index {
           .fontColor('#a78bfa')
         Text(this.invNormal.toString())
           .fontSize(10)
+          .fontWeight(FontWeight.Bold)
           .fontColor('#e2e8f0')
-          .margin({ left: 2 })
+          .margin({ left: 3 })
       }
-      .margin({ right: 8 })
+      .padding({ left: 4, right: 4, top: 2, bottom: 2 })
+      .backgroundColor('#0f0f23c0')
+      .borderRadius(2)
+      .border({ width: 1, color: '#a78bfa40' })
+      .margin({ right: 4 })
 
       Row() {
         Text('★')
@@ -217,10 +279,15 @@ struct Index {
           .fontColor('#fbbf24')
         Text(this.invRare.toString())
           .fontSize(10)
+          .fontWeight(FontWeight.Bold)
           .fontColor('#e2e8f0')
-          .margin({ left: 2 })
+          .margin({ left: 3 })
       }
-      .margin({ right: 8 })
+      .padding({ left: 4, right: 4, top: 2, bottom: 2 })
+      .backgroundColor('#0f0f23c0')
+      .borderRadius(2)
+      .border({ width: 1, color: '#fbbf2440' })
+      .margin({ right: 4 })
 
       Row() {
         Text('◈')
@@ -228,15 +295,20 @@ struct Index {
           .fontColor('#f472b6')
         Text(this.invFormCore.toString())
           .fontSize(10)
+          .fontWeight(FontWeight.Bold)
           .fontColor('#e2e8f0')
-          .margin({ left: 2 })
+          .margin({ left: 3 })
       }
+      .padding({ left: 4, right: 4, top: 2, bottom: 2 })
+      .backgroundColor('#0f0f23c0')
+      .borderRadius(2)
+      .border({ width: 1, color: '#f472b640' })
     }
-    .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-    .backgroundColor('#1e293be0')
-    .borderRadius(6)
-    .border({ width: 1, color: '#334155' })
-    .position({ x: 10, y: this.screenH - 96 })
+    .padding({ left: 4, right: 4, top: 3, bottom: 3 })
+    .backgroundColor('#0a0a15d0')
+    .borderRadius(3)
+    .border({ width: 2, color: '#334155' })
+    .position({ x: 10, y: this.screenH - 72 })
   }
 
   @Builder
@@ -244,71 +316,106 @@ struct Index {
     Stack() {
       Column() {
         Row() {
-          Text('Lv.' + this.playerLevel)
-            .fontSize(13)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#fbbf24')
-            .margin({ right: 8 })
+          Stack() {
+            Column()
+              .width(32)
+              .height(20)
+              .backgroundColor('#4c1d95')
+              .borderRadius(3)
+              .border({ width: 1, color: '#7c3aed' })
+
+            Text(this.playerLevel.toString())
+              .fontSize(12)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#fbbf24')
+          }
+          .width(32)
+          .height(20)
+          .margin({ right: 6 })
 
           Row() {
             ForEach([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], (i: number) => {
-              Row()
-                .width(17)
-                .height(8)
-                .backgroundColor(i < this.playerHp ? COLOR_HP_FULL : COLOR_HP_EMPTY)
-                .borderRadius(2)
+              Text(i < this.playerHp ? '♥' : '♡')
+                .fontSize(14)
+                .fontColor(i < this.playerHp ? '#ef4444' : '#374151')
                 .margin({ left: i > 0 ? 1 : 0 })
-                .opacity(i < this.playerHp ? 1.0 : 0.5)
             })
           }
-          .height(12)
-          .padding({ left: 3, right: 3, top: 2, bottom: 2 })
-          .backgroundColor('#1f293780')
-          .borderRadius(4)
+          .padding({ left: 6, right: 6, top: 3, bottom: 3 })
+          .backgroundColor('#0f0f23d0')
+          .borderRadius(3)
+          .border({ width: 2, color: '#334155' })
         }
 
         Row() {
           Stack() {
             Row()
-              .width(90)
+              .width(80)
               .height(5)
-              .backgroundColor('#1e293b')
-              .borderRadius(3)
+              .backgroundColor('#0f0f23')
+              .borderRadius(2)
+              .border({ width: 1, color: '#1e293b' })
 
             Row()
-              .width(this.playerLevel > 0 ? 90 * (this.playerXp / this.gameEngine.getLevelUpXp()) : 0)
+              .width(this.playerLevel > 0 ? 80 * (this.playerXp / this.gameEngine.getLevelUpXp()) : 0)
               .height(5)
-              .backgroundColor(COLOR_XP_ORB)
-              .borderRadius(3)
+              .backgroundColor('#fbbf24')
+              .borderRadius(2)
           }
-          .width(90)
+          .width(80)
           .height(5)
 
           Text(this.playerXp + '/' + this.gameEngine.getLevelUpXp())
-            .fontSize(10)
-            .fontColor('#64748b')
-            .margin({ left: 6 })
+            .fontSize(9)
+            .fontColor('#94a3b8')
+            .margin({ left: 4 })
         }
         .margin({ top: 4 })
       }
-      .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+      .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+      .backgroundColor('#0a0a15d0')
+      .borderRadius(4)
+      .border({ width: 2, color: '#334155' })
     }
-    .position({ x: this.screenW / 2 - 105, y: 10 })
+    .position({ x: this.screenW / 2 - 100, y: 8 })
+
+    // Pause button
+    Stack() {
+      Column()
+        .width(30)
+        .height(30)
+        .backgroundColor('#0f0f23e0')
+        .borderRadius(3)
+        .border({ width: 2, color: '#f59e0b' })
+
+      Text('⏸')
+        .fontSize(15)
+        .fontColor('#fbbf24')
+    }
+    .width(30)
+    .height(30)
+    .position({ x: this.screenW - 72, y: 10 })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.gameEngine.pause();
+      }
+    })
 
     Stack() {
-      Circle()
-        .width(32)
-        .height(32)
-        .fill('#1e293b')
-        .opacity(0.8)
+      Column()
+        .width(30)
+        .height(30)
+        .backgroundColor('#0f0f23e0')
+        .borderRadius(3)
+        .border({ width: 2, color: '#475569' })
 
       Text('⚙')
-        .fontSize(16)
+        .fontSize(15)
         .fontColor('#94a3b8')
     }
-    .width(32)
-    .height(32)
-    .position({ x: this.screenW - 42, y: 12 })
+    .width(30)
+    .height(30)
+    .position({ x: this.screenW - 38, y: 10 })
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
         this.showSettings = true;
@@ -316,19 +423,20 @@ struct Index {
     })
 
     Stack() {
-      Circle()
-        .width(32)
-        .height(32)
-        .fill('#1e293b')
-        .opacity(0.8)
+      Column()
+        .width(30)
+        .height(30)
+        .backgroundColor('#0f0f23e0')
+        .borderRadius(3)
+        .border({ width: 2, color: '#7c3aed' })
 
       Text('✦')
-        .fontSize(16)
+        .fontSize(15)
         .fontColor('#a78bfa')
     }
-    .width(32)
-    .height(32)
-    .position({ x: this.screenW - 82, y: 12 })
+    .width(30)
+    .height(30)
+    .position({ x: this.screenW - 74, y: 10 })
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
         this.refreshEvoState();
@@ -340,24 +448,26 @@ struct Index {
   @Builder
   JoystickView() {
     Stack() {
-      Circle()
+      Column()
         .width(JOYSTICK_RADIUS * 2)
         .height(JOYSTICK_RADIUS * 2)
-        .fill(COLOR_JOY_BASE)
-        .opacity(0.35)
+        .backgroundColor('#0f0f2360')
+        .borderRadius(6)
+        .border({ width: 3, color: '#334155' })
 
-      Circle()
-        .width(JOYSTICK_RADIUS * 2 - 8)
-        .height(JOYSTICK_RADIUS * 2 - 8)
-        .fill('transparent')
-        .border({ width: 1, color: '#47556940' })
+      Column()
+        .width(JOYSTICK_RADIUS * 2 - 10)
+        .height(JOYSTICK_RADIUS * 2 - 10)
+        .backgroundColor('transparent')
+        .borderRadius(4)
+        .border({ width: 1, color: '#47556930' })
 
-      Circle()
-        .width(42)
-        .height(42)
-        .fill(COLOR_JOY_KNOB)
-        .opacity(0.85)
-        .shadow({ radius: 6, color: '#00000060', offsetX: 0, offsetY: 2 })
+      Column()
+        .width(38)
+        .height(38)
+        .backgroundColor('#94a3b8d0')
+        .borderRadius(4)
+        .border({ width: 2, color: '#cbd5e1' })
         .translate({ x: this.joyKnobX, y: this.joyKnobY })
     }
     .width(JOYSTICK_RADIUS * 2)
@@ -371,93 +481,86 @@ struct Index {
   @Builder
   ActionButtonsView() {
     Stack() {
-      // Attack button — primary, largest, bottom-right thumb anchor
       Stack() {
-        Circle()
-          .width(70)
-          .height(70)
-          .fill('transparent')
-          .border({ width: 1, color: '#ffffff10' })
+        Column()
+          .width(54)
+          .height(54)
+          .backgroundColor('#0f0f23e0')
+          .borderRadius(4)
+          .border({ width: 3, color: '#ef4444' })
 
-        Circle()
-          .width(62)
-          .height(62)
-          .fill(COLOR_BTN_ATTACK)
-          .opacity(0.9)
-          .shadow({ radius: 10, color: '#ef444460', offsetX: 0, offsetY: 3 })
+        Column()
+          .width(44)
+          .height(44)
+          .backgroundColor('#ef444420')
+          .borderRadius(3)
+          .border({ width: 1, color: '#ef444440' })
 
-        Circle()
-          .width(52)
-          .height(52)
-          .fill('transparent')
-          .border({ width: 1.5, color: '#ffffff25' })
-
-        Text('攻击')
-          .fontSize(15)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
+        Text('⚔')
+          .fontSize(24)
+          .fontColor('#ef4444')
       }
-      .width(62)
-      .height(62)
-      .position({ x: this.screenW - 62 - 14, y: this.screenH - 62 - 14 })
+      .width(54)
+      .height(54)
+      .position({ x: this.screenW - 66, y: this.screenH - 66 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
           this.gameEngine.setInputAttack(true);
         }
       })
 
-      // Jump button — upper-left of attack, natural thumb reach
       Stack() {
-        Circle()
-          .width(50)
-          .height(50)
-          .fill(COLOR_BTN_JUMP)
-          .opacity(0.88)
-          .shadow({ radius: 8, color: '#22c55e50', offsetX: 0, offsetY: 2 })
+        Column()
+          .width(46)
+          .height(46)
+          .backgroundColor('#0f0f23e0')
+          .borderRadius(4)
+          .border({ width: 3, color: '#22c55e' })
 
-        Circle()
-          .width(42)
-          .height(42)
-          .fill('transparent')
-          .border({ width: 1, color: '#ffffff20' })
+        Column()
+          .width(36)
+          .height(36)
+          .backgroundColor('#22c55e20')
+          .borderRadius(3)
+          .border({ width: 1, color: '#22c55e40' })
 
-        Text('跳')
-          .fontSize(15)
+        Text('↑')
+          .fontSize(22)
           .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
+          .fontColor('#22c55e')
       }
-      .width(50)
-      .height(50)
-      .position({ x: this.screenW - 62 - 14 - 50 - 14, y: this.screenH - 62 - 14 - 50 - 10 })
+      .width(46)
+      .height(46)
+      .position({ x: this.screenW - 128, y: this.screenH - 90 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
           this.gameEngine.setInputJump(true);
         }
       })
 
-      // Dash button — above attack, right column
       Stack() {
-        Circle()
-          .width(44)
-          .height(44)
-          .fill(this.dashReady ? COLOR_BTN_DASH : '#1e3a5f')
-          .opacity(this.dashReady ? 0.88 : 0.45)
-          .shadow({ radius: 8, color: '#3b82f650', offsetX: 0, offsetY: 2 })
+        Column()
+          .width(40)
+          .height(40)
+          .backgroundColor(this.dashReady ? '#0f0f23e0' : '#0a0a15e0')
+          .borderRadius(4)
+          .border({ width: 3, color: this.dashReady ? '#3b82f6' : '#1e3a5f' })
 
-        Circle()
-          .width(36)
-          .height(36)
-          .fill('transparent')
-          .border({ width: 1, color: this.dashReady ? '#ffffff20' : '#ffffff08' })
+        Column()
+          .width(30)
+          .height(30)
+          .backgroundColor(this.dashReady ? '#3b82f620' : '#1e3a5f20')
+          .borderRadius(3)
+          .border({ width: 1, color: this.dashReady ? '#3b82f640' : '#1e3a5f20' })
 
-        Text('闪')
-          .fontSize(14)
+        Text('»')
+          .fontSize(17)
           .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
+          .fontColor(this.dashReady ? '#3b82f6' : '#1e3a5f')
       }
-      .width(44)
-      .height(44)
-      .position({ x: this.screenW - 44 - 18, y: this.screenH - 62 - 14 - 44 - 50 - 14 })
+      .width(40)
+      .height(40)
+      .position({ x: this.screenW - 128, y: this.screenH - 38 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down && this.dashReady) {
           this.gameEngine.setInputDash(true);
@@ -468,29 +571,28 @@ struct Index {
         }
       })
 
-      // Drill button — left of jump, utility position
       Stack() {
-        Circle()
+        Column()
           .width(42)
           .height(42)
-          .fill(this.toolReady ? COLOR_TOOL_BTN : '#4a3520')
-          .opacity(this.toolReady ? 0.88 : 0.45)
-          .shadow({ radius: 8, color: '#f59e0b50', offsetX: 0, offsetY: 2 })
+          .backgroundColor(this.toolReady ? '#0f0f23e0' : '#0a0a15e0')
+          .borderRadius(4)
+          .border({ width: 3, color: this.toolReady ? '#f59e0b' : '#4a3520' })
 
-        Circle()
-          .width(34)
-          .height(34)
-          .fill('transparent')
-          .border({ width: 1, color: this.toolReady ? '#ffffff20' : '#ffffff08' })
+        Column()
+          .width(32)
+          .height(32)
+          .backgroundColor(this.toolReady ? '#f59e0b20' : '#4a352020')
+          .borderRadius(3)
+          .border({ width: 1, color: this.toolReady ? '#f59e0b40' : '#4a352020' })
 
-        Text('钻')
-          .fontSize(13)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
+        Text('⛏')
+          .fontSize(19)
+          .fontColor(this.toolReady ? '#f59e0b' : '#4a3520')
       }
       .width(42)
       .height(42)
-      .position({ x: this.screenW - 62 - 14 - 50 - 14 - 42 - 14, y: this.screenH - 62 - 14 - 50 - 10 - 42 - 8 })
+      .position({ x: this.screenW - 66, y: this.screenH - 120 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down && this.toolReady) {
           this.gameEngine.setInputTool(true);
@@ -510,20 +612,20 @@ struct Index {
         .fontSize(18)
         .fontWeight(FontWeight.Bold)
         .fontColor('#fbbf24')
-        .margin({ right: 8 })
+        .margin({ right: 6 })
 
       Text('被吞噬！连续攻击挣脱！')
-        .fontSize(14)
+        .fontSize(13)
         .fontWeight(FontWeight.Bold)
         .fontColor('#ffffff')
     }
     .width('90%')
-    .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-    .backgroundColor('#dc262690')
-    .borderRadius(10)
+    .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+    .backgroundColor('#7f1d1dd0')
+    .borderRadius(4)
+    .border({ width: 3, color: '#fbbf24' })
     .justifyContent(FlexAlign.Center)
-    .position({ x: this.screenW * 0.05, y: this.screenH / 2 - 20 })
-    .shadow({ radius: 12, color: '#dc262660', offsetX: 0, offsetY: 0 })
+    .position({ x: this.screenW * 0.05, y: this.screenH / 2 - 18 })
   }
 
   @Builder
@@ -531,25 +633,28 @@ struct Index {
     Stack() {
       Column() {
         Row() {
-          Text('设置')
-            .fontSize(19)
+          Text('✦ 设置 ✦')
+            .fontSize(16)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#e2e8f0')
+            .fontColor('#fbbf24')
 
           Blank()
 
           Stack() {
-            Circle()
-              .width(28)
-              .height(28)
-              .fill('#1e293b')
+            Column()
+              .width(26)
+              .height(26)
+              .backgroundColor('#2d1b4e')
+              .borderRadius(2)
+              .border({ width: 2, color: '#7c3aed' })
 
             Text('✕')
-              .fontSize(14)
-              .fontColor('#94a3b8')
+              .fontSize(13)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#c4b5fd')
           }
-          .width(28)
-          .height(28)
+          .width(26)
+          .height(26)
           .onTouch((event: TouchEvent) => {
             if (event.type === TouchType.Down) {
               this.showSettings = false;
@@ -557,142 +662,188 @@ struct Index {
           })
         }
         .width('100%')
-        .margin({ bottom: 16 })
+        .padding({ bottom: 10 })
+        .border({ width: { bottom: 2 }, color: '#334155' })
 
         Column() {
           Row() {
-            Text('音效')
-              .fontSize(14)
+            Text('♪ 音效')
+              .fontSize(13)
               .fontColor('#e2e8f0')
 
             Blank()
 
-            Toggle({ type: ToggleType.Switch, isOn: this.soundEnabled })
-              .selectedColor('#3b82f6')
-              .onChange((isOn: boolean) => {
-                this.soundEnabled = isOn;
+            Stack() {
+              Row()
+                .width(40)
+                .height(20)
+                .backgroundColor(this.soundEnabled ? '#1e3a5f' : '#1a1a2e')
+                .borderRadius(10)
+                .border({ width: 2, color: this.soundEnabled ? '#3b82f6' : '#475569' })
+
+              Column()
+                .width(16)
+                .height(16)
+                .backgroundColor(this.soundEnabled ? '#3b82f6' : '#475569')
+                .borderRadius(8)
+                .translate({ x: this.soundEnabled ? 10 : -10 })
+            }
+            .width(40)
+            .height(20)
+            .onTouch((event: TouchEvent) => {
+              if (event.type === TouchType.Down) {
+                this.soundEnabled = !this.soundEnabled;
                 this.gameEngine.setSettings({
                   soundEnabled: this.soundEnabled,
                   effectsEnabled: this.effectsEnabled
                 });
-              })
+              }
+            })
           }
           .width('100%')
           .padding({ top: 10, bottom: 10 })
 
-          Divider().color('#1e293b')
+          Divider().color('#334155').strokeWidth(1)
 
           Row() {
-            Text('特效')
-              .fontSize(14)
+            Text('✧ 特效')
+              .fontSize(13)
               .fontColor('#e2e8f0')
 
             Blank()
 
-            Toggle({ type: ToggleType.Switch, isOn: this.effectsEnabled })
-              .selectedColor('#3b82f6')
-              .onChange((isOn: boolean) => {
-                this.effectsEnabled = isOn;
+            Stack() {
+              Row()
+                .width(40)
+                .height(20)
+                .backgroundColor(this.effectsEnabled ? '#1e3a5f' : '#1a1a2e')
+                .borderRadius(10)
+                .border({ width: 2, color: this.effectsEnabled ? '#3b82f6' : '#475569' })
+
+              Column()
+                .width(16)
+                .height(16)
+                .backgroundColor(this.effectsEnabled ? '#3b82f6' : '#475569')
+                .borderRadius(8)
+                .translate({ x: this.effectsEnabled ? 10 : -10 })
+            }
+            .width(40)
+            .height(20)
+            .onTouch((event: TouchEvent) => {
+              if (event.type === TouchType.Down) {
+                this.effectsEnabled = !this.effectsEnabled;
                 this.gameEngine.setSettings({
                   soundEnabled: this.soundEnabled,
                   effectsEnabled: this.effectsEnabled
                 });
-              })
+              }
+            })
           }
           .width('100%')
           .padding({ top: 10, bottom: 10 })
         }
-        .padding({ left: 14, right: 14, top: 4, bottom: 4 })
-        .backgroundColor('#1e293b40')
-        .borderRadius(10)
+        .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+        .backgroundColor('#0f0f23e0')
+        .borderRadius(4)
+        .border({ width: 2, color: '#334155' })
 
         Column() {
           Row() {
-            Text('用户')
-              .fontSize(14)
-              .fontColor('#94a3b8')
+            Text('角色')
+              .fontSize(11)
+              .fontColor('#64748b')
 
             Blank()
 
             Text(this.username)
-              .fontSize(14)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#e2e8f0')
+              .fontSize(13)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#fbbf24')
           }
           .width('100%')
-          .padding({ top: 10, bottom: 10 })
+          .padding({ top: 8, bottom: 8 })
         }
-        .padding({ left: 14, right: 14, top: 4, bottom: 4 })
-        .backgroundColor('#1e293b40')
-        .borderRadius(10)
-        .margin({ top: 10 })
+        .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+        .backgroundColor('#0f0f23e0')
+        .borderRadius(4)
+        .border({ width: 2, color: '#334155' })
+        .margin({ top: 8 })
 
-        Button('退出登录')
-          .width('100%')
-          .height(42)
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#ffffff')
-          .backgroundColor('#dc2626')
-          .borderRadius(10)
-          .margin({ top: 18 })
-          .shadow({ radius: 8, color: '#dc262640', offsetX: 0, offsetY: 2 })
-          .onClick(() => {
+        Stack() {
+          Column()
+            .width('100%')
+            .height(36)
+            .backgroundColor('#7f1d1d')
+            .borderRadius(4)
+            .border({ width: 2, color: '#dc2626' })
+
+          Text('退出登录')
+            .fontSize(13)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#fca5a5')
+        }
+        .width('100%')
+        .height(36)
+        .margin({ top: 14 })
+        .onTouch((event: TouchEvent) => {
+          if (event.type === TouchType.Down) {
             this.gameEngine.destroy();
             router.replaceUrl({ url: 'pages/LoginPage' });
-          })
+          }
+        })
 
         Blank()
 
         Column() {
           Text('ICP备案号: 示例ICP备xxxxxxxx号')
-            .fontSize(11)
+            .fontSize(9)
             .fontColor('#374151')
           Text('v1.0.0')
-            .fontSize(10)
+            .fontSize(8)
             .fontColor('#1e293b')
             .margin({ top: 2 })
         }
         .alignItems(HorizontalAlign.Center)
-        .margin({ bottom: 8 })
+        .margin({ bottom: 6 })
       }
-      .width('82%')
-      .padding(20)
-      .backgroundColor('#0f172af5')
-      .borderRadius(18)
-      .border({ width: 1, color: '#1e293b' })
-      .shadow({ radius: 24, color: '#000000a0', offsetX: 0, offsetY: 8 })
+      .width('80%')
+      .padding(16)
+      .backgroundColor('#0a0a15f8')
+      .borderRadius(6)
+      .border({ width: 3, color: '#475569' })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#000000b0')
+    .backgroundColor('#000000c0')
   }
 
   @Builder
   EvolutionOverlay() {
     Stack() {
       Column() {
-        // Header
         Row() {
-          Text('武器进化')
-            .fontSize(19)
+          Text('✦ 武器进化 ✦')
+            .fontSize(15)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#e2e8f0')
+            .fontColor('#c4b5fd')
 
           Blank()
 
           Stack() {
-            Circle()
-              .width(28)
-              .height(28)
-              .fill('#1e293b')
+            Column()
+              .width(26)
+              .height(26)
+              .backgroundColor('#2d1b4e')
+              .borderRadius(2)
+              .border({ width: 2, color: '#7c3aed' })
 
             Text('✕')
-              .fontSize(14)
-              .fontColor('#94a3b8')
+              .fontSize(13)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#c4b5fd')
           }
-          .width(28)
-          .height(28)
+          .width(26)
+          .height(26)
           .onTouch((event: TouchEvent) => {
             if (event.type === TouchType.Down) {
               this.showEvolution = false;
@@ -700,34 +851,34 @@ struct Index {
           })
         }
         .width('100%')
-        .margin({ bottom: 12 })
+        .padding({ bottom: 8 })
+        .border({ width: { bottom: 2 }, color: '#4c1d95' })
 
-        // Current weapon form
         Row() {
-          Text('形态: ')
-            .fontSize(13)
-            .fontColor('#94a3b8')
+          Text('形态')
+            .fontSize(11)
+            .fontColor('#64748b')
           Text(this.gameEngine.getWeaponFormName(this.currentWeaponForm))
-            .fontSize(14)
+            .fontSize(12)
             .fontWeight(FontWeight.Bold)
             .fontColor('#fbbf24')
+            .margin({ left: 6 })
         }
         .width('100%')
-        .margin({ bottom: 10 })
+        .padding({ top: 8, bottom: 6 })
 
-        // Branch tabs
         Row() {
           ForEach(this.branchNames, (name: string, index: number) => {
             Stack() {
               Text(name)
-                .fontSize(11)
+                .fontSize(9)
                 .fontWeight(this.evoBranch === index ? FontWeight.Bold : FontWeight.Normal)
-                .fontColor(this.evoBranch === index ? this.getBranchColor(index) : '#64748b')
+                .fontColor(this.evoBranch === index ? '#ffffff' : '#64748b')
             }
             .padding({ left: 8, right: 8, top: 5, bottom: 5 })
-            .backgroundColor(this.evoBranch === index ? '#1e293b' : '#0f172a')
-            .borderRadius(6)
-            .border({ width: 1, color: this.evoBranch === index ? this.getBranchColor(index) : '#1e293b' })
+            .backgroundColor(this.evoBranch === index ? '#4c1d95' : '#0f0f23')
+            .borderRadius(3)
+            .border({ width: 2, color: this.evoBranch === index ? this.getBranchColor(index) : '#1e293b' })
             .margin({ left: index > 0 ? 4 : 0 })
             .onTouch((event: TouchEvent) => {
               if (event.type === TouchType.Down) {
@@ -738,134 +889,149 @@ struct Index {
         }
         .width('100%')
         .justifyContent(FlexAlign.Center)
-        .margin({ bottom: 14 })
+        .padding({ bottom: 8 })
 
-        // Evolution level display
         Row() {
           Text('进化等级')
-            .fontSize(13)
+            .fontSize(11)
             .fontColor('#94a3b8')
           Blank()
-          Text(this.evoLevel + ' / 3')
-            .fontSize(14)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.getBranchColor(this.evoBranch))
+          Row() {
+            ForEach([0, 1, 2], (i: number) => {
+              Text(i < this.evoLevel ? '★' : '☆')
+                .fontSize(14)
+                .fontColor(i < this.evoLevel ? this.getBranchColor(this.evoBranch) : '#374151')
+                .margin({ left: i > 0 ? 2 : 0 })
+            })
+          }
         }
         .width('100%')
-        .padding({ left: 14, right: 14, top: 8, bottom: 8 })
-        .backgroundColor('#1e293b40')
-        .borderRadius(8)
+        .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+        .backgroundColor('#0f0f23e0')
+        .borderRadius(4)
+        .border({ width: 2, color: '#334155' })
 
-        // Material costs
         if (!this.evoMaxLevel) {
           Column() {
             Row() {
-              Text('矿石')
-                .fontSize(12)
-                .fontColor('#94a3b8')
+              Text('◆ 矿石')
+                .fontSize(10)
+                .fontColor('#00ced1')
               Blank()
               Text(this.evoOreHave + ' / ' + this.evoOreNeed)
-                .fontSize(12)
+                .fontSize(11)
+                .fontWeight(FontWeight.Bold)
                 .fontColor(this.evoOreHave >= this.evoOreNeed ? '#22c55e' : '#ef4444')
             }
             .width('100%')
-            .padding({ top: 6, bottom: 6 })
+            .padding({ top: 5, bottom: 5 })
 
-            Divider().color('#1e293b')
+            Divider().color('#334155').strokeWidth(1)
 
             Row() {
-              Text('普通核心')
-                .fontSize(12)
-                .fontColor('#94a3b8')
+              Text('● 普通核心')
+                .fontSize(10)
+                .fontColor('#a78bfa')
               Blank()
               Text(this.evoNormalHave + ' / ' + this.evoNormalNeed)
-                .fontSize(12)
+                .fontSize(11)
+                .fontWeight(FontWeight.Bold)
                 .fontColor(this.evoNormalHave >= this.evoNormalNeed ? '#22c55e' : '#ef4444')
             }
             .width('100%')
-            .padding({ top: 6, bottom: 6 })
+            .padding({ top: 5, bottom: 5 })
 
-            Divider().color('#1e293b')
+            Divider().color('#334155').strokeWidth(1)
 
             Row() {
-              Text('稀有核心')
-                .fontSize(12)
-                .fontColor('#94a3b8')
+              Text('★ 稀有核心')
+                .fontSize(10)
+                .fontColor('#fbbf24')
               Blank()
               Text(this.evoRareHave + ' / ' + this.evoRareNeed)
-                .fontSize(12)
+                .fontSize(11)
+                .fontWeight(FontWeight.Bold)
                 .fontColor(this.evoRareHave >= this.evoRareNeed ? '#22c55e' : '#ef4444')
             }
             .width('100%')
-            .padding({ top: 6, bottom: 6 })
+            .padding({ top: 5, bottom: 5 })
           }
-          .padding({ left: 14, right: 14, top: 4, bottom: 4 })
-          .backgroundColor('#1e293b40')
-          .borderRadius(8)
-          .margin({ top: 10 })
+          .padding({ left: 12, right: 12, top: 4, bottom: 4 })
+          .backgroundColor('#0f0f23e0')
+          .borderRadius(4)
+          .border({ width: 2, color: '#334155' })
+          .margin({ top: 8 })
 
-          // Evolve button
-          Button('进化')
-            .width('100%')
-            .height(40)
-            .fontSize(14)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#ffffff')
-            .backgroundColor(this.canEvolveNow() ? '#7c3aed' : '#374151')
-            .borderRadius(10)
-            .margin({ top: 12 })
-            .enabled(this.canEvolveNow())
-            .shadow({ radius: this.canEvolveNow() ? 10 : 0, color: '#7c3aed60', offsetX: 0, offsetY: 2 })
-            .onClick(() => {
+          Stack() {
+            Column()
+              .width('100%')
+              .height(36)
+              .backgroundColor(this.canEvolveNow() ? '#4c1d95' : '#1a1a2e')
+              .borderRadius(4)
+              .border({ width: 2, color: this.canEvolveNow() ? '#7c3aed' : '#334155' })
+
+            Text('✦ 进化 ✦')
+              .fontSize(14)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(this.canEvolveNow() ? '#e9d5ff' : '#475569')
+          }
+          .width('100%')
+          .height(36)
+          .margin({ top: 10 })
+          .onTouch((event: TouchEvent) => {
+            if (event.type === TouchType.Down && this.canEvolveNow()) {
               if (this.gameEngine.tryEvolveWeapon()) {
                 this.refreshEvoState();
               }
-            })
+            }
+          })
         } else {
           Row() {
-            Text('已达最高等级')
-              .fontSize(13)
+            Text('★ 已达最高等级 ★')
+              .fontSize(12)
               .fontWeight(FontWeight.Bold)
               .fontColor('#fbbf24')
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
           .padding({ top: 12, bottom: 12 })
-          .backgroundColor('#1e293b40')
-          .borderRadius(8)
-          .margin({ top: 10 })
+          .backgroundColor('#0f0f23e0')
+          .borderRadius(4)
+          .border({ width: 2, color: '#fbbf2460' })
+          .margin({ top: 8 })
         }
 
-        // Form unlock section
         Column() {
           Row() {
             Text('解锁形态')
-              .fontSize(13)
+              .fontSize(12)
               .fontWeight(FontWeight.Bold)
               .fontColor('#e2e8f0')
             Blank()
-            Text('形态核心: ' + this.evoFormCore)
-              .fontSize(11)
-              .fontColor('#a78bfa')
+            Text('◈ ' + this.evoFormCore)
+              .fontSize(10)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#f472b6')
           }
           .width('100%')
-          .margin({ bottom: 8 })
+          .padding({ bottom: 6 })
 
           ForEach(this.lockedForms, (formIndex: number) => {
             Row() {
               Text(this.gameEngine.getWeaponFormName(formIndex as WeaponForm))
-                .fontSize(12)
+                .fontSize(10)
                 .fontColor('#94a3b8')
               Blank()
               Stack() {
                 Text('解锁 (1核心)')
-                  .fontSize(11)
+                  .fontSize(9)
                   .fontWeight(FontWeight.Medium)
                   .fontColor(this.evoFormCore >= FORM_UNLOCK_COST ? '#ffffff' : '#64748b')
               }
-              .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-              .backgroundColor(this.evoFormCore >= FORM_UNLOCK_COST ? '#4f46e5' : '#1e293b')
-              .borderRadius(6)
+              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+              .backgroundColor(this.evoFormCore >= FORM_UNLOCK_COST ? '#4c1d95' : '#0f0f23')
+              .borderRadius(3)
+              .border({ width: 2, color: this.evoFormCore >= FORM_UNLOCK_COST ? '#7c3aed' : '#1e293b' })
               .onTouch((event: TouchEvent) => {
                 if (event.type === TouchType.Down && this.evoFormCore >= FORM_UNLOCK_COST) {
                   this.gameEngine.unlockWeaponForm(formIndex as WeaponForm);
@@ -874,26 +1040,26 @@ struct Index {
               })
             }
             .width('100%')
-            .padding({ top: 5, bottom: 5 })
+            .padding({ top: 4, bottom: 4 })
           })
         }
-        .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-        .backgroundColor('#1e293b40')
-        .borderRadius(8)
-        .margin({ top: 10 })
+        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        .backgroundColor('#0f0f23e0')
+        .borderRadius(4)
+        .border({ width: 2, color: '#334155' })
+        .margin({ top: 8 })
 
         Blank()
       }
-      .width('88%')
-      .padding(18)
-      .backgroundColor('#0f172af5')
-      .borderRadius(18)
-      .border({ width: 1, color: '#1e293b' })
-      .shadow({ radius: 24, color: '#000000a0', offsetX: 0, offsetY: 8 })
+      .width('85%')
+      .padding(14)
+      .backgroundColor('#0a0a15f8')
+      .borderRadius(6)
+      .border({ width: 3, color: '#4c1d95' })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#000000b0')
+    .backgroundColor('#000000c0')
   }
 
   private getBranchColor(branch: number): string {
@@ -929,12 +1095,32 @@ struct Index {
   }
 
   private tryInitEngine(): void {
-    if (this.gameCanvasReady && this.minimapCanvasReady) {
-      this.gameEngine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH);
+    if (this.gameCanvasReady && this.minimapCanvasReady && this.cacheCanvasesReady >= 6) {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      this.gameEngine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH,
+        [this.cacheCtx0, this.cacheCtx1, this.cacheCtx2, this.cacheCtx3, this.cacheCtx4, this.cacheCtx5], ctx);
       this.gameEngine.setGender(this.playerGender);
       this.gameEngine.setSettings({
         soundEnabled: this.soundEnabled,
         effectsEnabled: this.effectsEnabled
+      });
+      this.gameEngine.setOnStateChange((state: GameState) => {
+        this.gameState = state;
+        if (state === GameState.PAUSED) {
+          this.showPauseMenu = true;
+        } else if (state === GameState.GAME_OVER) {
+          this.showGameOver = true;
+          if (this.gameEngine.getPlayer()) {
+            this.deathLevel = this.gameEngine.getPlayer()!.level;
+            this.deathChunks = this.gameEngine.getExploredChunks().length;
+          }
+        }
+      });
+      this.gameEngine.setOnSave(() => {
+        this.showSaveIndicator = true;
+        setTimeout(() => {
+          this.showSaveIndicator = false;
+        }, 1500);
       });
       this.startStatusMonitor();
     }
@@ -1023,27 +1209,27 @@ struct Index {
   @Builder
   TransformButtonView() {
     Stack() {
-      // Button background
-      Circle()
-        .width(40)
-        .height(40)
-        .fill(this.isTransformed ? this.getFormColor(this.transformForm) :
-          (this.unlockedTransforms.length > 0 && this.transformCooldown <= 0 ? COLOR_TRANSFORM_BTN_READY : COLOR_TRANSFORM_BTN_LOCKED))
+      Column()
+        .width(38)
+        .height(38)
+        .backgroundColor('#0f0f23e0')
+        .borderRadius(4)
+        .border({ width: 2, color: this.isTransformed ? this.getFormColor(this.transformForm) :
+          (this.unlockedTransforms.length > 0 && this.transformCooldown <= 0 ? COLOR_TRANSFORM_BTN_READY : COLOR_TRANSFORM_BTN_LOCKED) })
 
-      // Icon
       Text(this.getTransformIcon())
-        .fontSize(18)
+        .fontSize(17)
         .fontColor('#ffffff')
 
-      // Cooldown overlay
       if (this.transformCooldown > 0 && !this.isTransformed) {
         Text(Math.ceil(this.transformCooldown / 1000).toString())
-          .fontSize(12)
+          .fontSize(10)
+          .fontWeight(FontWeight.Bold)
           .fontColor('#ffffffa0')
-          .position({ x: 14, y: 26 })
+          .position({ x: 13, y: 23 })
       }
     }
-    .position({ x: 30, y: this.screenH - 180 })
+    .position({ x: 30, y: this.screenH - 140 })
     .onClick(() => {
       if (this.isTransformed) {
         this.gameEngine.deactivateTransform();
@@ -1060,21 +1246,23 @@ struct Index {
     if (this.isTransformed) {
       Column() {
         Stack({ alignContent: Alignment.Start }) {
-          // Background
-          Row().width(120).height(8).backgroundColor(COLOR_TRANSFORM_ENERGY_BG).borderRadius(4)
-          // Fill
+          Row().width(100).height(7).backgroundColor('#0f0f23').borderRadius(3)
           Row()
-            .width(120 * (this.transformEnergy / this.transformMaxEnergy))
-            .height(8)
+            .width(100 * (this.transformEnergy / this.transformMaxEnergy))
+            .height(7)
             .backgroundColor(this.getFormColor(this.transformForm))
-            .borderRadius(4)
+            .borderRadius(3)
         }
+        .border({ width: 2, color: '#334155' })
+        .borderRadius(3)
+
         Text(Math.floor(this.transformEnergy).toString())
-          .fontSize(9)
+          .fontSize(8)
+          .fontWeight(FontWeight.Bold)
           .fontColor('#ffffffa0')
-          .margin({ top: 2 })
+          .margin({ top: 1 })
       }
-      .position({ x: 80, y: this.screenH - 175 })
+      .position({ x: 74, y: this.screenH - 136 })
     }
   }
 
@@ -1082,27 +1270,29 @@ struct Index {
   FormSelectPanel() {
     if (this.showFormSelect) {
       Column() {
-        Text('Select Form')
-          .fontSize(14)
-          .fontColor('#ffffff')
-          .margin({ bottom: 12 })
+        Text('选择形态')
+          .fontSize(13)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#fbbf24')
+          .margin({ bottom: 10 })
 
-        Row({ space: 12 }) {
+        Row({ space: 8 }) {
           ForEach(this.unlockedTransforms, (formId: number) => {
             Column() {
               Text(this.getFormIconForId(formId))
-                .fontSize(24)
+                .fontSize(20)
                 .fontColor('#ffffff')
               Text(this.getFormNameForId(formId))
-                .fontSize(10)
+                .fontSize(9)
+                .fontWeight(FontWeight.Medium)
                 .fontColor('#ffffffc0')
-                .margin({ top: 4 })
+                .margin({ top: 3 })
             }
-            .width(56)
-            .height(64)
-            .backgroundColor('#1e293be0')
-            .borderRadius(8)
-            .border({ width: 1, color: this.getFormColor(formId as TransformForm) })
+            .width(50)
+            .height(58)
+            .backgroundColor('#0f0f23e0')
+            .borderRadius(4)
+            .border({ width: 2, color: this.getFormColor(formId as TransformForm) })
             .justifyContent(FlexAlign.Center)
             .onClick(() => {
               this.showFormSelect = false;
@@ -1111,17 +1301,18 @@ struct Index {
           })
         }
 
-        Text('Cancel')
-          .fontSize(12)
+        Text('取消')
+          .fontSize(10)
           .fontColor('#ffffff80')
           .margin({ top: 8 })
           .onClick(() => { this.showFormSelect = false; })
       }
-      .width(280)
-      .padding(16)
-      .backgroundColor('#0f172af0')
-      .borderRadius(12)
-      .position({ x: (this.screenW - 280) / 2, y: (this.screenH - 140) / 2 })
+      .width(260)
+      .padding(14)
+      .backgroundColor('#0a0a15f5')
+      .borderRadius(6)
+      .border({ width: 3, color: '#475569' })
+      .position({ x: (this.screenW - 260) / 2, y: (this.screenH - 130) / 2 })
     }
   }
 
@@ -1129,24 +1320,25 @@ struct Index {
   TransformUnlockNotification() {
     if (this.transformUnlockActive) {
       Column() {
-        Text('NEW FORM UNLOCKED!')
-          .fontSize(14)
+        Text('✦ 新形态解锁 ✦')
+          .fontSize(13)
           .fontColor('#fbbf24')
           .fontWeight(FontWeight.Bold)
         Text(this.getFormIconForId(this.transformUnlockForm as number))
-          .fontSize(32)
-          .margin({ top: 8 })
+          .fontSize(28)
+          .margin({ top: 6 })
         Text(this.getFormNameForId(this.transformUnlockForm as number))
-          .fontSize(16)
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
           .fontColor('#ffffff')
-          .margin({ top: 4 })
+          .margin({ top: 3 })
       }
-      .width(200)
-      .padding(16)
-      .backgroundColor('#0f172af0')
-      .borderRadius(12)
-      .border({ width: 2, color: '#fbbf24' })
-      .position({ x: (this.screenW - 200) / 2, y: (this.screenH - 120) / 2 })
+      .width(180)
+      .padding(14)
+      .backgroundColor('#0a0a15f5')
+      .borderRadius(6)
+      .border({ width: 3, color: '#fbbf24' })
+      .position({ x: (this.screenW - 180) / 2, y: (this.screenH - 110) / 2 })
     }
   }
 
@@ -1179,5 +1371,186 @@ struct Index {
     if (form === TransformForm.ARMOR) return COLOR_TRANSFORM_ARMOR;
     if (form === TransformForm.IRON_MAN) return COLOR_TRANSFORM_IRON_GOLD;
     return COLOR_TRANSFORM_BTN_READY;
+  }
+
+  @Builder
+  PauseMenuOverlay() {
+    Stack() {
+      Column() {
+        // Dimmed background
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor('rgba(0,0,0,0.7)')
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down) {
+          // Consume touch
+        }
+      })
+
+      Column() {
+        Text('游戏暂停')
+          .fontSize(24)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#fbbf24')
+          .margin({ bottom: 20 })
+
+        Button('继续游戏')
+          .width(180)
+          .height(44)
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ffffff')
+          .backgroundColor('#22c55e')
+          .borderRadius(8)
+          .margin({ bottom: 12 })
+          .onClick(() => {
+            this.showPauseMenu = false;
+            this.gameEngine.resume();
+          })
+
+        Button('读取存档')
+          .width(180)
+          .height(44)
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ffffff')
+          .backgroundColor('#3b82f6')
+          .borderRadius(8)
+          .margin({ bottom: 12 })
+          .onClick(async () => {
+            const ctx = getContext(this) as common.UIAbilityContext;
+            const data = await SaveManager.load(ctx);
+            if (data) {
+              this.gameEngine.applySaveData(data);
+              this.showPauseMenu = false;
+              this.gameEngine.resume();
+            }
+          })
+
+        Button('退出游戏')
+          .width(180)
+          .height(44)
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ffffff')
+          .backgroundColor('#ef4444')
+          .borderRadius(8)
+          .onClick(() => {
+            this.gameEngine.quit();
+            router.replace({ url: 'pages/LoginPage' });
+          })
+      }
+      .width(240)
+      .padding(24)
+      .backgroundColor('#1a1a2e')
+      .borderRadius(12)
+      .border({ width: 3, color: '#f59e0b' })
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  GameOverOverlay() {
+    Stack() {
+      Column() {
+        // Red dimmed background
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor('rgba(80,0,0,0.75)')
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down) {
+          // Consume touch
+        }
+      })
+
+      Column() {
+        Text('你死了')
+          .fontSize(28)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ef4444')
+          .margin({ bottom: 16 })
+
+        Text('等级: ' + this.deathLevel)
+          .fontSize(14)
+          .fontColor('#94a3b8')
+          .margin({ bottom: 4 })
+
+        Text('探索: ' + this.deathChunks + ' chunks')
+          .fontSize(14)
+          .fontColor('#94a3b8')
+          .margin({ bottom: 20 })
+
+        Button('重新开始')
+          .width(180)
+          .height(44)
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ffffff')
+          .backgroundColor('#22c55e')
+          .borderRadius(8)
+          .margin({ bottom: 12 })
+          .onClick(async () => {
+            const ctx = getContext(this) as common.UIAbilityContext;
+            await SaveManager.deleteSave(ctx);
+            this.showGameOver = false;
+            this.gameEngine.restart();
+          })
+
+        Button('读取存档')
+          .width(180)
+          .height(44)
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ffffff')
+          .backgroundColor('#3b82f6')
+          .borderRadius(8)
+          .margin({ bottom: 12 })
+          .onClick(async () => {
+            const ctx = getContext(this) as common.UIAbilityContext;
+            const data = await SaveManager.load(ctx);
+            if (data) {
+              this.showGameOver = false;
+              this.gameEngine.applySaveData(data);
+              this.gameEngine.resume();
+            }
+          })
+
+        Button('返回主页')
+          .width(180)
+          .height(44)
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ffffff')
+          .backgroundColor('#6b7280')
+          .borderRadius(8)
+          .onClick(() => {
+            this.gameEngine.quit();
+            router.replace({ url: 'pages/LoginPage' });
+          })
+      }
+      .width(260)
+      .padding(24)
+      .backgroundColor('#1a1a2e')
+      .borderRadius(12)
+      .border({ width: 3, color: '#ef4444' })
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  SaveIndicator() {
+    Text('已保存')
+      .fontSize(12)
+      .fontWeight(FontWeight.Bold)
+      .fontColor('#22c55e')
+      .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+      .backgroundColor('rgba(0,0,0,0.7)')
+      .borderRadius(6)
+      .position({ x: this.screenW - 80, y: 50 })
+      .opacity(0.9)
   }
 }
