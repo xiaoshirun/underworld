@@ -61,11 +61,9 @@ struct Index {
   @State transformForm: TransformForm = TransformForm.NONE;
   @State transformCooldown: number = 0;
   @State unlockedTransforms: number[] = [];
-  @State showTransformPanel: boolean = false;
   @State showFormSelect: boolean = false;
   @State transformUnlockForm: TransformForm = TransformForm.NONE;
   @State transformUnlockActive: boolean = false;
-  private selectedTransformForm: TransformForm = TransformForm.SLIME;
   private branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
 
   aboutToAppear(): void {

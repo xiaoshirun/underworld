@@ -95,6 +95,7 @@ export class GameEngine {
   private transformCoreDrops: { dropIndex: number; form: TransformForm }[] = [];
   private transformUnlockNotifyTimer: number = 0;
   private transformUnlockNotifyForm: TransformForm = TransformForm.NONE;
+  private transformAnimIsRevert: boolean = false;
   private input: InputState = {
     joyActive: false, joyDx: 0, joyDy: 0,
     jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false,
@@ -657,6 +658,7 @@ export class GameEngine {
     p.transformForm = form;
     p.transformEnergy = p.transformMaxEnergy;
     p.transformAnimTimer = TRANSFORM_ACTIVATE_ANIM;
+    this.transformAnimIsRevert = false;
     p.transformFormAttackCooldown = 0;
 
     // Spawn activation particles
@@ -683,6 +685,7 @@ export class GameEngine {
     p.isTransformed = false;
     p.transformForm = TransformForm.NONE;
     p.transformAnimTimer = TRANSFORM_REVERT_ANIM;
+    this.transformAnimIsRevert = true;
 
     // Set cooldown if energy depleted
     if (p.transformEnergy <= 0) {
@@ -1057,10 +1060,11 @@ export class GameEngine {
           }
           p.hp -= incomingDamage;
           if (p.hp < 0) p.hp = 0;
-          p.invincibleTimer = INVINCIBLE_DURATION;
+          p.invincibleTimer = (p.isTransformed && p.transformForm === TransformForm.GHOST) ? 1500 : INVINCIBLE_DURATION;
           const knockAngle: number = Math.atan2(cdy, cdx);
-          p.x -= Math.cos(knockAngle) * 5;
-          p.y -= Math.sin(knockAngle) * 5;
+          const knockBack: number = (p.isTransformed && p.transformForm === TransformForm.ARMOR) ? 2.5 : 5;
+          p.x -= Math.cos(knockAngle) * knockBack;
+          p.y -= Math.sin(knockAngle) * knockBack;
           this.shakeTimer = 150;
           this.audio.playPlayerDamage();
           if (this.settings.effectsEnabled) {
@@ -4142,6 +4146,9 @@ export class GameEngine {
         if (this.settings.effectsEnabled) {
           this.spawnParticle(s.x, s.y, 0, -1, 300, COLOR_DAMAGE_PARTICLE, 3);
         }
+        if (s.hp <= 0) {
+          this.onEnemyDeath(s);
+        }
       }
     }
   }
@@ -4346,7 +4353,8 @@ export class GameEngine {
   }
 
   private renderTransformAnim(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState): void {
-    const progress: number = 1 - (p.transformAnimTimer / TRANSFORM_ACTIVATE_ANIM);
+    const maxDuration: number = this.transformAnimIsRevert ? TRANSFORM_REVERT_ANIM : TRANSFORM_ACTIVATE_ANIM;
+    const progress: number = 1 - (p.transformAnimTimer / maxDuration);
     const cx: number = sx + PLAYER_SIZE / 2;
     const cy: number = sy + PLAYER_SIZE / 2;
 
