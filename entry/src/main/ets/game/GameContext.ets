@@ -1,5 +1,5 @@
 import {
-  TILE_SIZE, CHUNK_SIZE, CHUNK_LOAD_RADIUS,
+  TILE_SIZE, CHUNK_SIZE, CHUNK_LOAD_RADIUS, BOSS_ROOM_SIZE,
   TileType, BiomeType,
   ChunkData, PlayerState, SlimeState, XpOrb, Particle,
   InputState, GameSettings, AmbientParticle,
@@ -206,5 +206,37 @@ export class GameContext {
     if (bossType === BossType.LAVA_BEAST) return COLOR_BOSS_LAVA;
     if (bossType === BossType.ABYSS_SIREN) return COLOR_BOSS_ABYSS;
     return COLOR_BOSS_VOID;
+  }
+
+  getEntranceDir(cx: number, cy: number): number {
+    let h: number = (cx * 13 + 7000) * 374761393 + (cy * 13 + 8000) * 668265263;
+    h = ((h ^ (h >> 13)) * 1274126177) | 0;
+    return ((h ^ (h >> 16)) >>> 0) % 4;
+  }
+
+  getBossRoomEntranceTiles(chunkX: number, chunkY: number): number[][] {
+    const center: number = Math.floor(CHUNK_SIZE / 2);
+    const roomRadius: number = Math.floor(BOSS_ROOM_SIZE / 2);
+    const dir: number = this.getEntranceDir(chunkX, chunkY);
+    const tiles: number[][] = [];
+
+    if (dir === 0) {
+      tiles.push([chunkX * CHUNK_SIZE + center - 1, chunkY * CHUNK_SIZE + center - roomRadius]);
+      tiles.push([chunkX * CHUNK_SIZE + center, chunkY * CHUNK_SIZE + center - roomRadius]);
+      tiles.push([chunkX * CHUNK_SIZE + center + 1, chunkY * CHUNK_SIZE + center - roomRadius]);
+    } else if (dir === 1) {
+      tiles.push([chunkX * CHUNK_SIZE + center - 1, chunkY * CHUNK_SIZE + center + roomRadius]);
+      tiles.push([chunkX * CHUNK_SIZE + center, chunkY * CHUNK_SIZE + center + roomRadius]);
+      tiles.push([chunkX * CHUNK_SIZE + center + 1, chunkY * CHUNK_SIZE + center + roomRadius]);
+    } else if (dir === 2) {
+      tiles.push([chunkX * CHUNK_SIZE + center - roomRadius, chunkY * CHUNK_SIZE + center - 1]);
+      tiles.push([chunkX * CHUNK_SIZE + center - roomRadius, chunkY * CHUNK_SIZE + center]);
+      tiles.push([chunkX * CHUNK_SIZE + center - roomRadius, chunkY * CHUNK_SIZE + center + 1]);
+    } else {
+      tiles.push([chunkX * CHUNK_SIZE + center + roomRadius, chunkY * CHUNK_SIZE + center - 1]);
+      tiles.push([chunkX * CHUNK_SIZE + center + roomRadius, chunkY * CHUNK_SIZE + center]);
+      tiles.push([chunkX * CHUNK_SIZE + center + roomRadius, chunkY * CHUNK_SIZE + center + 1]);
+    }
+    return tiles;
   }
 }

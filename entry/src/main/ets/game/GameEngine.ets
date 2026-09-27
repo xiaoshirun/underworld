@@ -71,15 +71,17 @@ import { PlayerMovementSystem, MovementBridge } from './systems/PlayerMovementSy
 import { PlayerCombatSystem } from './systems/PlayerCombatSystem';
 import { TransformSystem, TransformBridge } from './systems/TransformSystem';
 import { EnemyAISystem } from './systems/EnemyAISystem';
+import { BossSystem, BossBridge } from './systems/BossSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
 
-export class GameEngine extends GameContext implements MovementBridge, TransformBridge {
+export class GameEngine extends GameContext implements MovementBridge, TransformBridge, BossBridge {
   private movementSystem: PlayerMovementSystem | null = null;
   private combatSystem: PlayerCombatSystem | null = null;
   private transformSystem: TransformSystem | null = null;
   private enemyAISystem: EnemyAISystem | null = null;
+  private bossSystem: BossSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -162,6 +164,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.combatSystem = new PlayerCombatSystem(this);
     this.transformSystem = new TransformSystem(this, this);
     this.enemyAISystem = new EnemyAISystem(this);
+    this.bossSystem = new BossSystem(this, this);
     this.startLoop();
   }
 
@@ -835,38 +838,6 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
 
   // ==================== Boss System ====================
 
-  private getEntranceDir(cx: number, cy: number): number {
-    let h: number = (cx * 13 + 7000) * 374761393 + (cy * 13 + 8000) * 668265263;
-    h = ((h ^ (h >> 13)) * 1274126177) | 0;
-    return ((h ^ (h >> 16)) >>> 0) % 4;
-  }
-
-  private getBossRoomEntranceTiles(chunkX: number, chunkY: number): number[][] {
-    const center: number = Math.floor(CHUNK_SIZE / 2);
-    const roomRadius: number = Math.floor(BOSS_ROOM_SIZE / 2);
-    const dir: number = this.getEntranceDir(chunkX, chunkY);
-    const tiles: number[][] = [];
-
-    if (dir === 0) {
-      tiles.push([chunkX * CHUNK_SIZE + center - 1, chunkY * CHUNK_SIZE + center - roomRadius]);
-      tiles.push([chunkX * CHUNK_SIZE + center, chunkY * CHUNK_SIZE + center - roomRadius]);
-      tiles.push([chunkX * CHUNK_SIZE + center + 1, chunkY * CHUNK_SIZE + center - roomRadius]);
-    } else if (dir === 1) {
-      tiles.push([chunkX * CHUNK_SIZE + center - 1, chunkY * CHUNK_SIZE + center + roomRadius]);
-      tiles.push([chunkX * CHUNK_SIZE + center, chunkY * CHUNK_SIZE + center + roomRadius]);
-      tiles.push([chunkX * CHUNK_SIZE + center + 1, chunkY * CHUNK_SIZE + center + roomRadius]);
-    } else if (dir === 2) {
-      tiles.push([chunkX * CHUNK_SIZE + center - roomRadius, chunkY * CHUNK_SIZE + center - 1]);
-      tiles.push([chunkX * CHUNK_SIZE + center - roomRadius, chunkY * CHUNK_SIZE + center]);
-      tiles.push([chunkX * CHUNK_SIZE + center - roomRadius, chunkY * CHUNK_SIZE + center + 1]);
-    } else {
-      tiles.push([chunkX * CHUNK_SIZE + center + roomRadius, chunkY * CHUNK_SIZE + center - 1]);
-      tiles.push([chunkX * CHUNK_SIZE + center + roomRadius, chunkY * CHUNK_SIZE + center]);
-      tiles.push([chunkX * CHUNK_SIZE + center + roomRadius, chunkY * CHUNK_SIZE + center + 1]);
-    }
-    return tiles;
-  }
-
   private checkBossRoomEntry(p: PlayerState): void {
     const pcx: number = Math.floor(p.x / (CHUNK_SIZE * TILE_SIZE));
     const pcy: number = Math.floor(p.y / (CHUNK_SIZE * TILE_SIZE));
@@ -911,204 +882,11 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   }
 
   private updateBosses(dt: number): void {
-    if (this.player === null) return;
-    const p: PlayerState = this.player;
-
-    for (let i: number = this.bosses.length - 1; i >= 0; i--) {
-      const boss: BossState = this.bosses[i];
-      if (!boss.active || boss.defeated) continue;
-
-      const dx: number = p.x - boss.x;
-      const dy: number = p.y - boss.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
-
-      // Movement AI
-      if (boss.bossRole === BossRole.PASSAGE_GUARDIAN) {
-        // Always chase player in sealed room
-        if (dist > 1) {
-          const speed: number = 1.5;
-          boss.vx = (dx / dist) * speed;
-          boss.vy = (dy / dist) * speed;
-        }
-      } else {
-        // Optional Challenge - only chase within aggro radius
-        if (dist < boss.aggroRadius) {
-          if (dist > 1) {
-            const speed: number = 1.8;
-            boss.vx = (dx / dist) * speed;
-            boss.vy = (dy / dist) * speed;
-          }
-        } else {
-          // Wander randomly
-          boss.attackTimer -= dt;
-          if (boss.attackTimer <= 0) {
-            const angle: number = Math.random() * Math.PI * 2;
-            boss.vx = Math.cos(angle) * 0.5;
-            boss.vy = Math.sin(angle) * 0.5;
-            boss.attackTimer = 2000 + Math.random() * 3000;
-          }
-        }
-      }
-
-      boss.x += boss.vx;
-      boss.y += boss.vy;
-
-      // Attack timer
-      boss.attackTimer -= dt;
-      if (boss.attackTimer <= 0 && dist < boss.size + PLAYER_SIZE + 20) {
-        // Melee attack
-        boss.attackTimer = BOSS_ATTACK_INTERVAL;
-        if (p.invincibleTimer <= 0) {
-          p.hp -= 2;
-          p.invincibleTimer = INVINCIBLE_DURATION;
-          this.audio.playPlayerDamage();
-          this.damageFlashTimer = 200;
-          this.shakeTimer = 200;
-          // Knockback
-          if (dist > 1) {
-            p.vx = -(dx / dist) * 6;
-            p.vy = -(dy / dist) * 6;
-          }
-          if (this.settings.effectsEnabled) {
-            this.particleMgr.blood(p.x, p.y, -(dx / dist), -(dy / dist));
-          }
-        }
-      }
-
-      // Phase transition
-      if (boss.phase === BossPhase.PHASE_1 && boss.hp <= boss.maxHp * BOSS_PHASE2_THRESHOLD) {
-        boss.phase = BossPhase.PHASE_2;
-        boss.hitFlash = 500;
-        this.shakeTimer = 400;
-        if (this.settings.effectsEnabled) {
-          this.particleMgr.explosion(boss.x, boss.y, this.getBossColor(boss.bossType), 20);
-          this.particleMgr.sparks(boss.x, boss.y, '#ffffff', 12);
-        }
-      }
-
-      // Boss death
-      if (boss.hp <= 0) {
-        boss.defeated = true;
-        // Transform energy recovery on boss kill
-        if (this.player !== null && this.player.isTransformed) {
-          this.player.transformEnergy += TRANSFORM_ENERGY_KILL_BOSS;
-          if (this.player.transformEnergy > this.player.transformMaxEnergy) {
-            this.player.transformEnergy = this.player.transformMaxEnergy;
-          }
-        }
-        boss.active = false;
-
-        // Handle boss room
-        if (boss.bossRole === BossRole.PASSAGE_GUARDIAN) {
-          this.bossRoomLocked = false;
-          this.activeBoss = null;
-          // Open entrance
-          for (let j: number = 0; j < this.bossRooms.length; j++) {
-            const room: BossRoom = this.bossRooms[j];
-            if (room.chunkX === Math.floor(boss.x / (CHUNK_SIZE * TILE_SIZE)) &&
-                room.chunkY === Math.floor(boss.y / (CHUNK_SIZE * TILE_SIZE))) {
-              room.defeated = true;
-              const entranceTiles: number[][] = this.getBossRoomEntranceTiles(room.chunkX, room.chunkY);
-              for (let e: number = 0; e < entranceTiles.length; e++) {
-                this.setTile(
-                  entranceTiles[e][0] * TILE_SIZE + TILE_SIZE / 2,
-                  entranceTiles[e][1] * TILE_SIZE + TILE_SIZE / 2,
-                  TileType.FLOOR
-                );
-              }
-              break;
-            }
-          }
-        } else {
-          // Optional Challenge - mark defeated for respawn timer
-          const bcx: number = Math.floor(boss.x / (CHUNK_SIZE * TILE_SIZE));
-          const bcy: number = Math.floor(boss.y / (CHUNK_SIZE * TILE_SIZE));
-          this.worldGen.markOptionalBossDefeated(bcx, bcy);
-          if (this.activeBoss === boss) this.activeBoss = null;
-        }
-
-        // Death particles
-        if (this.settings.effectsEnabled) {
-          this.particleMgr.explosion(boss.x, boss.y, this.getBossColor(boss.bossType), 30);
-          this.particleMgr.sparks(boss.x, boss.y, '#ffffff', 15);
-          this.particleMgr.smoke(boss.x, boss.y);
-        }
-
-        // Drop materials
-        this.spawnBossDrops(boss);
-
-        // Spawn boss chest at boss position
-        this.chests.push({
-          x: boss.x, y: boss.y,
-          chestType: ChestType.BOSS,
-          opened: false, active: true,
-          guardianDefeated: true, guardianCount: 0,
-          openAnim: 0
-        });
-
-        this.shakeTimer = 500;
-        this.audio.playEnemyDeath();
-        this.autoSave();
-      }
-
-      // Hit flash decay
-      if (boss.hitFlash > 0) {
-        boss.hitFlash -= dt;
-      }
-    }
+    this.bossSystem!.update(dt);
   }
 
-  private spawnBossDrops(boss: BossState): void {
-    // Drop 2-3 boss-specific ore materials
-    const dropCount: number = 2 + Math.floor(Math.random() * 2);
-    for (let i: number = 0; i < dropCount; i++) {
-      const angle: number = Math.random() * Math.PI * 2;
-      const dist: number = 20 + Math.random() * 30;
-      const dropX: number = boss.x + Math.cos(angle) * dist;
-      const dropY: number = boss.y + Math.sin(angle) * dist;
-
-      let matType: MaterialType = MaterialType.CORE_NORMAL;
-      if (boss.bossType === BossType.CRYSTAL_GUARDIAN) matType = MaterialType.CRYSTAL_ORE;
-      else if (boss.bossType === BossType.MUSHROOM_KING) matType = MaterialType.MUSHROOM_ORE;
-      else if (boss.bossType === BossType.LAVA_BEAST) matType = MaterialType.FLAME_ORE;
-      else if (boss.bossType === BossType.ABYSS_SIREN) matType = MaterialType.ABYSS_ORE;
-      else if (boss.bossType === BossType.VOID_RIFT) matType = MaterialType.VOID_ORE;
-
-      this.materialDrops.push({
-        x: dropX, y: dropY,
-        type: matType, count: 1,
-        bobPhase: Math.random() * Math.PI * 2,
-        active: true
-      });
-    }
-
-    // Always drop a rare core
-    this.materialDrops.push({
-      x: boss.x + (Math.random() - 0.5) * 40,
-      y: boss.y + (Math.random() - 0.5) * 40,
-      type: MaterialType.CORE_RARE, count: 1,
-      bobPhase: Math.random() * Math.PI * 2,
-      active: true
-    });
-
-    // Drop transform core (first defeat only — check if player already has it)
-    const transformDrop: TransformForm = this.transformSystem!.getCoreForBoss(boss.bossType);
-    if (transformDrop !== TransformForm.NONE) {
-      const alreadyHas: boolean = this.player !== null &&
-        this.player.unlockedTransforms.indexOf(transformDrop) !== -1;
-      if (!alreadyHas) {
-        this.materialDrops.push({
-          x: boss.x + (Math.random() - 0.5) * 30,
-          y: boss.y + (Math.random() - 0.5) * 30,
-          type: MaterialType.FORM_CORE, count: 1,
-          bobPhase: Math.random() * Math.PI * 2,
-          active: true
-        });
-        // Mark which transform core via extraData — use a separate tracking mechanism
-        // Store transform form in a parallel array indexed by drop
-        this.transformCoreDrops.push({ dropIndex: this.materialDrops.length - 1, form: transformDrop } as TransformCoreDrop);
-      }
-    }
+  getCoreForBoss(bossType: BossType): TransformForm {
+    return this.transformSystem!.getCoreForBoss(bossType);
   }
 
   private collectMaterialDrops(p: PlayerState): void {
@@ -5385,7 +5163,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     return keys;
   }
 
-  private async autoSave(): Promise<void> {
+  async autoSave(): Promise<void> {
     if (!this.context || !this.player) return;
     try {
       const { SaveManager } = await import('./SaveManager');
