@@ -12,7 +12,7 @@ import { WorldGenerator } from './WorldGenerator';
 import { AudioManager } from './AudioManager';
 import { ParticleManager } from './ParticleSystem';
 import { PhysicsEngine } from './PhysicsEngine';
-import { TileBatchRenderer, GlowBatchRenderer } from './SpriteBatch';
+import { TileBatchRenderer, GlowBatchRenderer } from '../engine/internal/SpriteBatch';
 
 export interface ChunkCacheEntry {
   key: string;

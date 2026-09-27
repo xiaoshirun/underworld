@@ -65,7 +65,7 @@ import { ParticleManager, ParticleEmitter, EmitterConfig, EmitterMode, ParticleS
   createExplosionConfig, createSparkConfig, createDustConfig, createTrailConfig,
   createBloodConfig, createMagicConfig, createSmokeConfig } from './ParticleSystem';
 import { PhysicsEngine, PhysicsBody, createBody, vec2Distance, vec2Normalize, vec2 } from './PhysicsEngine';
-import { TileBatchRenderer, SpriteBatch, GlowBatchRenderer } from './SpriteBatch';
+import { TileBatchRenderer, SpriteBatch, GlowBatchRenderer } from '../engine/internal/SpriteBatch';
 import { GameContext, ChunkCacheEntry } from './GameContext';
 import { PlayerMovementSystem, MovementBridge } from './systems/PlayerMovementSystem';
 import { PlayerCombatSystem } from './systems/PlayerCombatSystem';
