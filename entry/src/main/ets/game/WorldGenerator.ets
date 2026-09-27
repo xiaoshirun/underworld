@@ -209,6 +209,9 @@ export class WorldGenerator {
           if (r < 0.03) tiles[ly][lx] = TileType.PLANT;
         } else if (biome === BiomeType.LAVA) {
           if (r < 0.02) tiles[ly][lx] = TileType.GLOW_STONE;
+        } else if (biome === BiomeType.SHADOW) {
+          if (r < 0.04) tiles[ly][lx] = TileType.GLOW_STONE;
+          else if (r < 0.06) tiles[ly][lx] = TileType.WALL;
         } else {
           if (r < 0.015) tiles[ly][lx] = TileType.GLOW_STONE;
           else if (r < 0.035) tiles[ly][lx] = TileType.PLANT;

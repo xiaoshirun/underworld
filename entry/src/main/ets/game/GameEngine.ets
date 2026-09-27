@@ -47,7 +47,8 @@ import {
   COLOR_TELEPORT_RUNE, COLOR_TELEPORT_ENTRY, COLOR_TELEPORT_EXIT,
   COLOR_BOSS_CRYSTAL, COLOR_BOSS_MUSHROOM, COLOR_BOSS_LAVA, COLOR_BOSS_ABYSS, COLOR_BOSS_VOID,
   COLOR_BOSS_HP_BAR, COLOR_BOSS_HP_BG,
-  COLOR_CHEST_NORMAL, COLOR_CHEST_ELITE, COLOR_CHEST_BOSS, COLOR_CHEST_GLOW
+  COLOR_CHEST_NORMAL, COLOR_CHEST_ELITE, COLOR_CHEST_BOSS, COLOR_CHEST_GLOW,
+  COLOR_SHADOW_FLOOR, COLOR_SHADOW_WALL, COLOR_SHADOW_PARTICLE
 } from './GameConstants';
 import { WorldGenerator } from './WorldGenerator';
 import { AudioManager } from './AudioManager';
@@ -1489,6 +1490,15 @@ export class GameEngine {
     const endTX: number = Math.ceil((this.cameraX + this.screenW) / TILE_SIZE) + 1;
     const endTY: number = Math.ceil((this.cameraY + this.screenH) / TILE_SIZE) + 1;
 
+    // Check biome at camera center for biome-specific rendering
+    const camWorldX: number = this.cameraX + this.screenW / 2;
+    const camWorldY: number = this.cameraY + this.screenH / 2;
+    const viewBiome: BiomeType = this.worldGen.getBiome(camWorldX, camWorldY);
+    const isShadow: boolean = viewBiome === BiomeType.SHADOW;
+    const floorColor: string = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
+    const floorVarColor: string = isShadow ? '#0a0a16' : COLOR_FLOOR_VAR;
+    const wallColor: string = isShadow ? COLOR_SHADOW_WALL : COLOR_WALL;
+
     for (let ty: number = startTY; ty <= endTY; ty++) {
       for (let tx: number = startTX; tx <= endTX; tx++) {
         const screenX: number = tx * TILE_SIZE + offX;
@@ -1496,9 +1506,9 @@ export class GameEngine {
         const tile: number = this.getTile(tx * TILE_SIZE, ty * TILE_SIZE);
 
         if (tile === TileType.WALL) {
-          c.fillStyle = COLOR_WALL;
+          c.fillStyle = wallColor;
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          c.fillStyle = COLOR_WALL_EDGE;
+          c.fillStyle = isShadow ? '#2d1050' : COLOR_WALL_EDGE;
           c.fillRect(screenX, screenY, TILE_SIZE, 2);
           c.fillRect(screenX, screenY, 2, TILE_SIZE);
           const hash: number = ((tx * 31 + ty * 17) % 5);
@@ -1514,7 +1524,7 @@ export class GameEngine {
           }
         } else if (tile === TileType.FLOOR) {
           const variant: number = ((tx * 7 + ty * 13) % 3);
-          c.fillStyle = variant === 0 ? COLOR_FLOOR : COLOR_FLOOR_VAR;
+          c.fillStyle = variant === 0 ? floorColor : floorVarColor;
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
           if (variant === 1) {
             c.fillStyle = '#1e1e38';
@@ -1537,25 +1547,25 @@ export class GameEngine {
           c.fillRect(screenX + 18, screenY + 14, 8, 5);
           c.fillRect(screenX + 8, screenY + 22, 5, 6);
         } else if (tile === TileType.GLOW_STONE) {
-          c.fillStyle = COLOR_FLOOR;
+          c.fillStyle = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
           const glowR: number = 20 + Math.sin(this.frameCount * 0.05 + tx) * 4;
           c.globalAlpha = 0.15;
-          c.fillStyle = COLOR_GLOW;
+          c.fillStyle = isShadow ? '#7c3aed' : COLOR_GLOW;
           c.beginPath();
           c.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, glowR, 0, Math.PI * 2);
           c.fill();
           c.globalAlpha = 1.0;
-          c.fillStyle = COLOR_GLOW_STONE;
+          c.fillStyle = isShadow ? '#8b5cf6' : COLOR_GLOW_STONE;
           c.beginPath();
           c.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, 5, 0, Math.PI * 2);
           c.fill();
-          c.fillStyle = '#fff8dc';
+          c.fillStyle = isShadow ? '#c4b5fd' : '#fff8dc';
           c.beginPath();
           c.arc(screenX + TILE_SIZE / 2 - 1, screenY + TILE_SIZE / 2 - 1, 2, 0, Math.PI * 2);
           c.fill();
         } else if (tile === TileType.PLANT) {
-          c.fillStyle = COLOR_FLOOR;
+          c.fillStyle = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
           c.fillStyle = COLOR_PLANT;
           c.fillRect(screenX + 14, screenY + 16, 4, 12);
@@ -2669,6 +2679,10 @@ export class GameEngine {
   }
 
   private updateAmbientParticles(dt: number): void {
+    const playerBiome: BiomeType = this.player !== null ?
+      this.worldGen.getBiome(this.player.x, this.player.y) : BiomeType.NORMAL;
+    const isShadowBiome: boolean = playerBiome === BiomeType.SHADOW;
+
     for (let i: number = 0; i < this.ambientParticles.length; i++) {
       const ap: AmbientParticle = this.ambientParticles[i];
       ap.x += ap.vx;
@@ -2679,6 +2693,14 @@ export class GameEngine {
         ap.y = this.screenH + 5;
         ap.life = ap.maxLife;
         ap.alpha = 0.1 + Math.random() * 0.25;
+        if (isShadowBiome) {
+          ap.color = Math.random() < 0.6 ? '#7c3aed40' : '#4c1d9540';
+          ap.vy = -0.2 - Math.random() * 0.4;
+        } else {
+          const colors: string[] = ['#ffd70033', '#00ced133', '#ff69b433', '#4ade8033', '#60a5fa33'];
+          ap.color = colors[Math.floor(Math.random() * colors.length)];
+          ap.vy = -0.1 - Math.random() * 0.3;
+        }
       }
     }
   }
