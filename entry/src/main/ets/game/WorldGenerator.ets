@@ -1,7 +1,12 @@
 import {
   CHUNK_SIZE, TILE_SIZE, NOISE_SCALE, CAVE_THRESHOLD, BIOME_SCALE,
   TileType, EnemyType, BiomeType, SlimeState, ChunkData,
-  SLIME_HP, SLIME_SIZE
+  SLIME_HP, SLIME_SIZE,
+  TrapType, TrapState, TrapInstance,
+  TRAP_TELEGRAPH_TIME, TRAP_ACTIVE_TIME, TRAP_COOLDOWN_TIME,
+  TRAP_TRIGGER_RADIUS, TRAP_DAMAGE, TRAP_SIZE,
+  MechanismType, MechanismInstance, SecretRoom, ChestType,
+  MECH_INTERACT_RANGE, PRESSURE_PLATE_RANGE
 } from './GameConstants';
 
 function chunkHash(cx: number, cy: number): number {
@@ -60,6 +65,8 @@ export class WorldGenerator {
   getBiome(worldX: number, worldY: number): BiomeType {
     const temp: number = valueNoise2D(worldX * BIOME_SCALE, worldY * BIOME_SCALE);
     const moist: number = valueNoise2D((worldX + 500) * BIOME_SCALE, (worldY + 500) * BIOME_SCALE);
+    const dist: number = Math.sqrt(worldX * worldX + worldY * worldY) * 0.001;
+    if (dist > 0.5 && temp < 0.3 && moist > 0.5) return BiomeType.SHADOW;
     if (temp < 0.25) return BiomeType.WATER;
     if (temp > 0.75 && moist < 0.4) return BiomeType.LAVA;
     if (moist > 0.65) return BiomeType.MUSHROOM;
@@ -109,8 +116,13 @@ export class WorldGenerator {
 
     this.decorateChunk(tiles, cx, cy, size, biomeOriginX, biomeOriginY);
     const enemies: SlimeState[] = this.generateChunkEnemies(cx, cy, tiles, size, biomeOriginX, biomeOriginY);
+    const distFromOrigin: number = Math.sqrt(cx * cx + cy * cy);
+    const biome: BiomeType = this.getBiome(biomeOriginX + size / 2, biomeOriginY + size / 2);
+    const traps: TrapInstance[] = this.generateTraps(cx, cy, tiles, biome, distFromOrigin);
+    const mechanisms: MechanismInstance[] = this.generateMechanisms(cx, cy, tiles, biome, distFromOrigin);
+    const secretRooms: SecretRoom[] = this.generateSecretRooms(cx, cy, tiles, biome, distFromOrigin);
 
-    return { tiles: tiles, enemies: enemies, generated: true };
+    return { tiles: tiles, enemies: enemies, generated: true, bosses: [], chests: [], traps: traps, mechanisms: mechanisms, secretRooms: secretRooms, isBossRoom: false };
   }
 
   private decorateChunk(tiles: number[][], cx: number, cy: number, size: number, bx: number, by: number): void {
@@ -188,5 +200,155 @@ export class WorldGenerator {
       }
     }
     return enemies;
+  }
+
+  private generateTraps(cx: number, cy: number, tiles: number[][], biome: BiomeType, distFromOrigin: number): TrapInstance[] {
+    const traps: TrapInstance[] = [];
+    if (cx === 0 && cy === 0) return traps;
+
+    const size: number = CHUNK_SIZE;
+    const density: number = Math.min(0.02 + distFromOrigin * 0.003, 0.08);
+
+    for (let ly: number = 0; ly < size; ly++) {
+      for (let lx: number = 0; lx < size; lx++) {
+        if (tiles[ly][lx] !== TileType.FLOOR) continue;
+        const h: number = tileHash(lx + cx * size + 9000, ly + cy * size + 10000);
+        const r: number = hashToFloat(h);
+        if (r > density) continue;
+
+        const worldX: number = (cx * size + lx) * TILE_SIZE + TILE_SIZE / 2;
+        const worldY: number = (cy * size + ly) * TILE_SIZE + TILE_SIZE / 2;
+
+        let trapType: TrapType = TrapType.GROUND_SPIKES;
+        let placed: boolean = false;
+
+        if (biome === BiomeType.MUSHROOM) {
+          if (r < density * 0.5) { trapType = TrapType.POISON_SPORES; placed = true; }
+          else if (r < density * 0.8) { trapType = TrapType.FALLING_ROCKS; placed = true; }
+        } else if (biome === BiomeType.WATER) {
+          if (r < density * 0.7) { trapType = TrapType.WATER_VORTEX; placed = true; }
+        } else if (biome === BiomeType.LAVA) {
+          if (r < density * 0.5) { trapType = TrapType.LAVA_GEYSER; placed = true; }
+          else if (r < density * 0.8) { trapType = TrapType.FALLING_ROCKS; placed = true; }
+        } else if (biome === BiomeType.CRYSTAL) {
+          if (r < density * 0.7) { trapType = TrapType.GROUND_SPIKES; placed = true; }
+        } else if (biome === BiomeType.SHADOW) {
+          if (r < density * 0.7) { trapType = TrapType.VOID_CRACK; placed = true; }
+        } else {
+          if (r < density * 0.5) { trapType = TrapType.GROUND_SPIKES; placed = true; }
+          else if (r < density * 0.8) { trapType = TrapType.FALLING_ROCKS; placed = true; }
+        }
+
+        if (placed) {
+          traps.push({
+            x: worldX, y: worldY,
+            trapType: trapType,
+            state: TrapState.IDLE,
+            timer: 0,
+            triggerRadius: TRAP_TRIGGER_RADIUS,
+            damage: TRAP_DAMAGE,
+            size: TRAP_SIZE,
+            extraData: [0, 0]
+          });
+        }
+      }
+    }
+    return traps;
+  }
+
+  private generateMechanisms(cx: number, cy: number, tiles: number[][], biome: BiomeType, distFromOrigin: number): MechanismInstance[] {
+    const mechanisms: MechanismInstance[] = [];
+    if (cx === 0 && cy === 0) return mechanisms;
+
+    const size: number = CHUNK_SIZE;
+    const density: number = Math.min(0.01 + distFromOrigin * 0.002, 0.04);
+
+    for (let ly: number = 2; ly < size - 2; ly++) {
+      for (let lx: number = 2; lx < size - 2; lx++) {
+        if (tiles[ly][lx] !== TileType.FLOOR) continue;
+        const h: number = tileHash(lx + cx * size + 15000, ly + cy * size + 16000);
+        const r: number = hashToFloat(h);
+        if (r > density) continue;
+
+        const worldX: number = (cx * size + lx) * TILE_SIZE + TILE_SIZE / 2;
+        const worldY: number = (cy * size + ly) * TILE_SIZE + TILE_SIZE / 2;
+
+        let mechType: MechanismType = MechanismType.PRESSURE_PLATE;
+        let placed: boolean = false;
+
+        if (biome === BiomeType.CRYSTAL) {
+          if (r < density * 0.5) { mechType = MechanismType.CRYSTAL_REFLECTOR; placed = true; }
+          else if (r < density * 0.8) { mechType = MechanismType.PRESSURE_PLATE; placed = true; }
+        } else if (biome === BiomeType.MUSHROOM) {
+          if (r < density * 0.5) { mechType = MechanismType.LEVER; placed = true; }
+          else if (r < density * 0.8) { mechType = MechanismType.PUSH_BLOCK; placed = true; }
+        } else if (biome === BiomeType.WATER) {
+          if (r < density * 0.5) { mechType = MechanismType.LEVER; placed = true; }
+          else if (r < density * 0.8) { mechType = MechanismType.TELEPORT_RUNE; placed = true; }
+        } else if (biome === BiomeType.LAVA) {
+          if (r < density * 0.5) { mechType = MechanismType.PRESSURE_PLATE; placed = true; }
+          else if (r < density * 0.8) { mechType = MechanismType.LEVER; placed = true; }
+        } else if (biome === BiomeType.SHADOW) {
+          if (r < density * 0.5) { mechType = MechanismType.TELEPORT_RUNE; placed = true; }
+          else if (r < density * 0.8) { mechType = MechanismType.CRYSTAL_REFLECTOR; placed = true; }
+        } else {
+          if (r < density * 0.4) { mechType = MechanismType.PRESSURE_PLATE; placed = true; }
+          else if (r < density * 0.7) { mechType = MechanismType.PUSH_BLOCK; placed = true; }
+          else if (r < density * 0.9) { mechType = MechanismType.BREAKABLE_WALL; placed = true; }
+        }
+
+        if (placed) {
+          mechanisms.push({
+            x: worldX, y: worldY,
+            mechanismType: mechType,
+            active: false,
+            linkedIndex: -1,
+            rotation: 0,
+            pushable: mechType === MechanismType.PUSH_BLOCK,
+            posX: worldX, posY: worldY
+          });
+        }
+      }
+    }
+    return mechanisms;
+  }
+
+  private generateSecretRooms(cx: number, cy: number, tiles: number[][], biome: BiomeType, distFromOrigin: number): SecretRoom[] {
+    const rooms: SecretRoom[] = [];
+    if (cx === 0 && cy === 0) return rooms;
+
+    const size: number = CHUNK_SIZE;
+    const chance: number = Math.min(0.005 + distFromOrigin * 0.001, 0.02);
+
+    for (let ly: number = 3; ly < size - 3; ly++) {
+      for (let lx: number = 3; lx < size - 3; lx++) {
+        if (tiles[ly][lx] !== TileType.WALL) continue;
+        const h: number = tileHash(lx + cx * size + 20000, ly + cy * size + 21000);
+        const r: number = hashToFloat(h);
+        if (r > chance) continue;
+
+        const hasFloorAdjacent: boolean =
+          (ly > 0 && tiles[ly - 1][lx] === TileType.FLOOR) ||
+          (ly < size - 1 && tiles[ly + 1][lx] === TileType.FLOOR) ||
+          (lx > 0 && tiles[ly][lx - 1] === TileType.FLOOR) ||
+          (lx < size - 1 && tiles[ly][lx + 1] === TileType.FLOOR);
+
+        if (!hasFloorAdjacent) continue;
+
+        const worldX: number = (cx * size + lx) * TILE_SIZE + TILE_SIZE / 2;
+        const worldY: number = (cy * size + ly) * TILE_SIZE + TILE_SIZE / 2;
+
+        tiles[ly][lx] = TileType.BROKEN_WALL;
+
+        const chestType: ChestType = distFromOrigin > 5 ? ChestType.ELITE : ChestType.NORMAL;
+        rooms.push({
+          chunkX: cx, chunkY: cy,
+          wallTileX: lx, wallTileY: ly,
+          revealed: false,
+          chestType: chestType
+        });
+      }
+    }
+    return rooms;
   }
 }

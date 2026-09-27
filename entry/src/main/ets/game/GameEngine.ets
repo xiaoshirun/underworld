@@ -13,8 +13,11 @@ import {
   ChunkData, InputState, GameSettings, AmbientParticle,
   GenderType, WeaponForm, EvolutionBranch, EvolutionLevel,
   BossState, ChestState, BossRoom, MaterialDrop, TrapInstance, MechanismInstance,
-  Inventory,
+  Inventory, TrapType, TrapState,
+  MechanismType, SecretRoom,
   WEAPON_FORM_STATS,
+  TRAP_TELEGRAPH_TIME, TRAP_ACTIVE_TIME, TRAP_COOLDOWN_TIME, TRAP_TRIGGER_RADIUS, TRAP_DAMAGE, TRAP_SIZE,
+  MECH_INTERACT_RANGE, PUSH_BLOCK_SPEED, TELEPORT_COOLDOWN,
   COLOR_BG, COLOR_WALL, COLOR_WALL_EDGE, COLOR_FLOOR, COLOR_FLOOR_VAR,
   COLOR_WATER, COLOR_WATER_LIGHT, COLOR_LAVA, COLOR_LAVA_LIGHT,
   COLOR_CRYSTAL, COLOR_CRYSTAL_GLOW,
@@ -29,7 +32,13 @@ import {
   COLOR_SLIME_EYE, COLOR_SLIME_PUPIL,
   COLOR_XP_ORB, COLOR_XP_GLOW,
   COLOR_MINIMAP_BG, COLOR_MINIMAP_PLAYER, COLOR_MINIMAP_ENEMY,
-  COLOR_ATTACK_FLASH, COLOR_DAMAGE_PARTICLE, COLOR_DRILL_PARTICLE
+  COLOR_ATTACK_FLASH, COLOR_DAMAGE_PARTICLE, COLOR_DRILL_PARTICLE,
+  COLOR_SPIKE, COLOR_SPIKE_TIP, COLOR_ROCK, COLOR_POISON_CLOUD,
+  COLOR_LAVA_GEYSER, COLOR_VOID_CRACK, COLOR_VOID_PULL, COLOR_VORTEX,
+  COLOR_TRAP_WARNING,
+  COLOR_PRESSURE_PLATE, COLOR_PLATE_ACTIVE, COLOR_LEVER, COLOR_LEVER_HANDLE,
+  COLOR_PUSH_BLOCK, COLOR_REFLECTOR, COLOR_BEAM, COLOR_BREAKABLE_WALL,
+  COLOR_TELEPORT_RUNE, COLOR_TELEPORT_ENTRY, COLOR_TELEPORT_EXIT
 } from './GameConstants';
 import { WorldGenerator } from './WorldGenerator';
 import { AudioManager } from './AudioManager';
@@ -61,6 +70,10 @@ export class GameEngine {
   private bossRoomLocked: boolean = false;
   private materialDrops: MaterialDrop[] = [];
   private bossRooms: BossRoom[] = [];
+  private traps: TrapInstance[] = [];
+  private mechanisms: MechanismInstance[] = [];
+  private secretRooms: SecretRoom[] = [];
+  private teleportCooldown: number = 0;
   private input: InputState = {
     joyActive: false, joyDx: 0, joyDy: 0,
     jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false,
@@ -225,6 +238,15 @@ export class GameEngine {
           for (let i: number = 0; i < chunk.enemies.length; i++) {
             this.enemies.push(chunk.enemies[i]);
           }
+          for (let i: number = 0; i < chunk.traps.length; i++) {
+            this.traps.push(chunk.traps[i]);
+          }
+          for (let i: number = 0; i < chunk.mechanisms.length; i++) {
+            this.mechanisms.push(chunk.mechanisms[i]);
+          }
+          for (let i: number = 0; i < chunk.secretRooms.length; i++) {
+            this.secretRooms.push(chunk.secretRooms[i]);
+          }
         }
       }
     }
@@ -257,7 +279,7 @@ export class GameEngine {
   }
 
   private isWalkable(tile: number): boolean {
-    return tile !== TileType.WALL && tile !== TileType.VOID;
+    return tile !== TileType.WALL && tile !== TileType.VOID && tile !== TileType.BROKEN_WALL;
   }
 
   private update(dt: number): void {
@@ -270,6 +292,8 @@ export class GameEngine {
 
     this.updatePlayer(p, dt);
     this.updateEnemies(dt);
+    this.updateTraps(dt);
+    this.updateMechanisms(dt);
     this.updateXpOrbs(dt);
     this.updateParticles(dt);
     this.updateAmbientParticles(dt);
@@ -810,6 +834,207 @@ export class GameEngine {
     }
   }
 
+  private updateTraps(dt: number): void {
+    if (this.player === null) return;
+    const p: PlayerState = this.player;
+
+    for (let i: number = 0; i < this.traps.length; i++) {
+      const trap: TrapInstance = this.traps[i];
+      const dx: number = p.x - trap.x;
+      const dy: number = p.y - trap.y;
+      const dist: number = Math.sqrt(dx * dx + dy * dy);
+
+      switch (trap.state) {
+        case TrapState.IDLE:
+          if (dist < trap.triggerRadius) {
+            trap.state = TrapState.TELEGRAPH;
+            trap.timer = TRAP_TELEGRAPH_TIME;
+          }
+          break;
+
+        case TrapState.TELEGRAPH:
+          trap.timer -= dt;
+          if (trap.timer <= 0) {
+            trap.state = TrapState.ACTIVE;
+            trap.timer = TRAP_ACTIVE_TIME;
+            this.audio.playPlayerDamage();
+          }
+          break;
+
+        case TrapState.ACTIVE:
+          trap.timer -= dt;
+          if (trap.trapType === TrapType.VOID_CRACK && dist < trap.triggerRadius * 1.5) {
+            const pullStrength: number = 0.8 * (1.0 - dist / (trap.triggerRadius * 1.5));
+            p.vx -= (dx / dist) * pullStrength;
+            p.vy -= (dy / dist) * pullStrength;
+          }
+          if (dist < trap.size) {
+            if (p.invincibleTimer <= 0) {
+              p.hp -= trap.damage;
+              p.invincibleTimer = INVINCIBLE_DURATION;
+              this.shakeTimer = 150;
+              if (this.settings.effectsEnabled) {
+                for (let k: number = 0; k < 6; k++) {
+                  const angle: number = Math.random() * Math.PI * 2;
+                  const speed: number = 1.5 + Math.random() * 2;
+                  this.spawnParticle(p.x, p.y,
+                    Math.cos(angle) * speed, Math.sin(angle) * speed, 400, COLOR_DAMAGE_PARTICLE, 3);
+                }
+              }
+              if (trap.trapType === TrapType.WATER_VORTEX) {
+                p.x += (Math.random() - 0.5) * 120;
+                p.y += (Math.random() - 0.5) * 120;
+              }
+            }
+          }
+          if (trap.timer <= 0) {
+            trap.state = TrapState.COOLDOWN;
+            trap.timer = TRAP_COOLDOWN_TIME;
+          }
+          break;
+
+        case TrapState.COOLDOWN:
+          trap.timer -= dt;
+          if (trap.timer <= 0) {
+            trap.state = TrapState.IDLE;
+          }
+          break;
+      }
+    }
+  }
+
+  private updateMechanisms(dt: number): void {
+    if (this.player === null) return;
+    const p: PlayerState = this.player;
+
+    if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
+
+    for (let i: number = 0; i < this.mechanisms.length; i++) {
+      const mech: MechanismInstance = this.mechanisms[i];
+      const dx: number = p.x - mech.x;
+      const dy: number = p.y - mech.y;
+      const dist: number = Math.sqrt(dx * dx + dy * dy);
+
+      switch (mech.mechanismType) {
+        case MechanismType.PRESSURE_PLATE:
+          const wasActive: boolean = mech.active;
+          mech.active = dist < PRESSURE_PLATE_RANGE;
+          if (mech.active !== wasActive) {
+            this.checkMechanismLinks(mech);
+          }
+          break;
+
+        case MechanismType.PUSH_BLOCK:
+          if (mech.pushable && dist < PLAYER_SIZE + 12) {
+            const pushDirX: number = p.vx;
+            const pushDirY: number = p.vy;
+            const pushLen: number = Math.sqrt(pushDirX * pushDirX + pushDirY * pushDirY);
+            if (pushLen > 0.5) {
+              const newX: number = mech.posX + (pushDirX / pushLen) * PUSH_BLOCK_SPEED;
+              const newY: number = mech.posY + (pushDirY / pushLen) * PUSH_BLOCK_SPEED;
+              const tileAtNew: number = this.getTile(newX, newY);
+              if (tileAtNew === TileType.FLOOR || tileAtNew === TileType.BROKEN_WALL) {
+                mech.posX = newX;
+                mech.posY = newY;
+                mech.x = newX;
+                mech.y = newY;
+                if (this.settings.effectsEnabled && this.frameCount % 3 === 0) {
+                  this.spawnParticle(mech.x, mech.y + 8, (Math.random() - 0.5) * 0.5, -0.3, 300, COLOR_DRILL_PARTICLE, 2);
+                }
+              }
+            }
+          }
+          break;
+
+        case MechanismType.TELEPORT_RUNE:
+          if (dist < MECH_INTERACT_RANGE && this.teleportCooldown <= 0) {
+            const pairIndex: number = mech.linkedIndex;
+            if (pairIndex >= 0 && pairIndex < this.mechanisms.length) {
+              const paired: MechanismInstance = this.mechanisms[pairIndex];
+              if (paired.mechanismType === MechanismType.TELEPORT_RUNE) {
+                p.x = paired.x;
+                p.y = paired.y;
+                this.teleportCooldown = TELEPORT_COOLDOWN;
+                this.audio.playDash();
+                if (this.settings.effectsEnabled) {
+                  for (let k: number = 0; k < 10; k++) {
+                    const angle: number = Math.random() * Math.PI * 2;
+                    const speed: number = 1.5 + Math.random() * 2;
+                    this.spawnParticle(paired.x, paired.y,
+                      Math.cos(angle) * speed, Math.sin(angle) * speed, 500, COLOR_TELEPORT_RUNE, 3);
+                  }
+                }
+              }
+            }
+          }
+          break;
+
+        case MechanismType.LEVER:
+          if (dist < MECH_INTERACT_RANGE && this.input.toolPressed) {
+            this.input.toolPressed = false;
+            mech.active = !mech.active;
+            mech.rotation = mech.active ? 45 : -45;
+            this.audio.playDrillHit();
+            this.checkMechanismLinks(mech);
+          }
+          break;
+
+        case MechanismType.CRYSTAL_REFLECTOR:
+          if (dist < MECH_INTERACT_RANGE && this.input.toolPressed) {
+            this.input.toolPressed = false;
+            mech.rotation = (mech.rotation + 60) % 360;
+            this.audio.playDrillHit();
+          }
+          break;
+      }
+    }
+
+    this.checkBreakableWalls(p);
+  }
+
+  private checkMechanismLinks(mech: MechanismInstance): void {
+    for (let i: number = 0; i < this.mechanisms.length; i++) {
+      const other: MechanismInstance = this.mechanisms[i];
+      if (other.linkedIndex >= 0 && other !== mech) {
+        const linkedMech: MechanismInstance = this.mechanisms[other.linkedIndex];
+        if (linkedMech === mech) {
+          other.active = mech.active;
+        }
+      }
+    }
+  }
+
+  private checkBreakableWalls(p: PlayerState): void {
+    if (!p.isDrilling) return;
+    const wallTX: number = p.drillTargetX;
+    const wallTY: number = p.drillTargetY;
+    const wallWorldX: number = wallTX * TILE_SIZE + TILE_SIZE / 2;
+    const wallWorldY: number = wallTY * TILE_SIZE + TILE_SIZE / 2;
+
+    for (let i: number = 0; i < this.secretRooms.length; i++) {
+      const room: SecretRoom = this.secretRooms[i];
+      if (room.revealed) continue;
+      const roomWX: number = (room.chunkX * CHUNK_SIZE + room.wallTileX) * TILE_SIZE + TILE_SIZE / 2;
+      const roomWY: number = (room.chunkY * CHUNK_SIZE + room.wallTileY) * TILE_SIZE + TILE_SIZE / 2;
+      const dx: number = wallWorldX - roomWX;
+      const dy: number = wallWorldY - roomWY;
+      if (Math.abs(dx) < TILE_SIZE && Math.abs(dy) < TILE_SIZE) {
+        room.revealed = true;
+        this.setTile(roomWX, roomWY, TileType.FLOOR);
+        this.audio.playWallBreak();
+        this.shakeTimer = 200;
+        if (this.settings.effectsEnabled) {
+          for (let k: number = 0; k < 12; k++) {
+            const angle: number = Math.random() * Math.PI * 2;
+            const speed: number = 1 + Math.random() * 3;
+            this.spawnParticle(roomWX, roomWY,
+              Math.cos(angle) * speed, Math.sin(angle) * speed, 600, COLOR_BREAKABLE_WALL, 4);
+          }
+        }
+      }
+    }
+  }
+
   private spawnParticle(x: number, y: number, vx: number, vy: number, life: number, color: string, size: number): void {
     this.particles.push({ x: x, y: y, vx: vx, vy: vy, life: life, maxLife: life, color: color, size: size });
   }
@@ -862,6 +1087,8 @@ export class GameEngine {
     this.renderWorld(c, offX, offY);
     this.renderPlayerLight(c, offX, offY, p);
     this.renderXpOrbs(c, offX, offY);
+    this.renderTraps(c, offX, offY);
+    this.renderMechanisms(c, offX, offY);
     this.renderEnemies(c, offX, offY);
     this.renderPlayer(c, offX, offY, p);
     this.renderParticles(c, offX, offY);
@@ -1751,6 +1978,280 @@ export class GameEngine {
       c.beginPath();
       c.arc(screenX - 1, screenY - 1 + bob, 2, 0, Math.PI * 2);
       c.fill();
+    }
+    c.globalAlpha = 1.0;
+  }
+
+  private renderTraps(c: CanvasRenderingContext2D, offX: number, offY: number): void {
+    for (let i: number = 0; i < this.traps.length; i++) {
+      const trap: TrapInstance = this.traps[i];
+      const screenX: number = trap.x + offX;
+      const screenY: number = trap.y + offY;
+
+      if (screenX < -40 || screenX > this.screenW + 40 || screenY < -40 || screenY > this.screenH + 40) {
+        continue;
+      }
+
+      if (trap.state === TrapState.IDLE) continue;
+
+      const isActive: boolean = trap.state === TrapState.ACTIVE;
+      const isTelegraph: boolean = trap.state === TrapState.TELEGRAPH;
+
+      if (isTelegraph) {
+        const pulse: number = 0.3 + 0.3 * Math.sin(this.frameCount * 0.3);
+        c.globalAlpha = pulse;
+        c.fillStyle = COLOR_TRAP_WARNING;
+        c.beginPath();
+        c.arc(screenX, screenY, trap.triggerRadius, 0, Math.PI * 2);
+        c.fill();
+        c.globalAlpha = 1.0;
+      }
+
+      switch (trap.trapType) {
+        case TrapType.GROUND_SPIKES:
+          if (isActive) {
+            c.fillStyle = COLOR_SPIKE;
+            for (let s: number = 0; s < 5; s++) {
+              const sx: number = screenX - 10 + s * 5;
+              const sy: number = screenY + 6;
+              c.beginPath();
+              c.moveTo(sx - 3, sy);
+              c.lineTo(sx, sy - 14);
+              c.lineTo(sx + 3, sy);
+              c.closePath();
+              c.fill();
+            }
+            c.fillStyle = COLOR_SPIKE_TIP;
+            for (let s: number = 0; s < 5; s++) {
+              const sx: number = screenX - 10 + s * 5;
+              const sy: number = screenY + 6;
+              c.beginPath();
+              c.moveTo(sx - 1, sy - 10);
+              c.lineTo(sx, sy - 14);
+              c.lineTo(sx + 1, sy - 10);
+              c.closePath();
+              c.fill();
+            }
+          } else {
+            c.fillStyle = COLOR_SPIKE;
+            c.globalAlpha = 0.3;
+            c.fillRect(screenX - 12, screenY + 4, 24, 3);
+            c.globalAlpha = 1.0;
+          }
+          break;
+
+        case TrapType.FALLING_ROCKS:
+          if (isActive) {
+            c.fillStyle = COLOR_ROCK;
+            for (let r: number = 0; r < 4; r++) {
+              const rx: number = screenX - 8 + r * 6;
+              const ry: number = screenY - 6 + Math.sin(r * 1.5) * 4;
+              c.fillRect(rx, ry, 5, 5);
+            }
+          } else if (isTelegraph) {
+            c.fillStyle = COLOR_ROCK;
+            c.globalAlpha = 0.4;
+            const fallProgress: number = 1.0 - (trap.timer / TRAP_TELEGRAPH_TIME);
+            for (let r: number = 0; r < 3; r++) {
+              const rx: number = screenX - 6 + r * 6;
+              const ry: number = screenY - 30 + fallProgress * 24;
+              c.fillRect(rx, ry, 4, 4);
+            }
+            c.globalAlpha = 1.0;
+          }
+          break;
+
+        case TrapType.POISON_SPORES:
+          if (isActive) {
+            c.globalAlpha = 0.5;
+            c.fillStyle = COLOR_POISON_CLOUD;
+            c.beginPath();
+            c.arc(screenX, screenY, trap.size * 0.8, 0, Math.PI * 2);
+            c.fill();
+            c.globalAlpha = 0.3;
+            c.beginPath();
+            c.arc(screenX + 4, screenY - 3, trap.size * 0.5, 0, Math.PI * 2);
+            c.fill();
+            c.globalAlpha = 1.0;
+          }
+          break;
+
+        case TrapType.LAVA_GEYSER:
+          if (isActive) {
+            const geyserH: number = 20 + Math.sin(this.frameCount * 0.2) * 5;
+            c.fillStyle = COLOR_LAVA_GEYSER;
+            c.globalAlpha = 0.8;
+            c.fillRect(screenX - 6, screenY - geyserH, 12, geyserH);
+            c.globalAlpha = 0.4;
+            c.fillStyle = COLOR_LAVA;
+            c.fillRect(screenX - 10, screenY - geyserH * 0.6, 20, geyserH * 0.6);
+            c.globalAlpha = 1.0;
+          } else if (isTelegraph) {
+            c.fillStyle = COLOR_LAVA_GEYSER;
+            c.globalAlpha = 0.2;
+            c.beginPath();
+            c.arc(screenX, screenY, 8, 0, Math.PI * 2);
+            c.fill();
+            c.globalAlpha = 1.0;
+          }
+          break;
+
+        case TrapType.VOID_CRACK:
+          c.fillStyle = COLOR_VOID_CRACK;
+          if (isActive) {
+            c.globalAlpha = 0.7 + 0.3 * Math.sin(this.frameCount * 0.15);
+            c.beginPath();
+            c.arc(screenX, screenY, trap.size * 0.6, 0, Math.PI * 2);
+            c.fill();
+            c.fillStyle = COLOR_VOID_PULL;
+            c.globalAlpha = 0.4;
+            c.beginPath();
+            c.arc(screenX, screenY, trap.triggerRadius * 1.2, 0, Math.PI * 2);
+            c.fill();
+            c.globalAlpha = 1.0;
+          } else {
+            c.globalAlpha = 0.3;
+            c.beginPath();
+            c.arc(screenX, screenY, 6, 0, Math.PI * 2);
+            c.fill();
+            c.globalAlpha = 1.0;
+          }
+          break;
+
+        case TrapType.WATER_VORTEX:
+          if (isActive) {
+            const spin: number = this.frameCount * 0.1;
+            c.strokeStyle = COLOR_VORTEX;
+            c.lineWidth = 2;
+            c.globalAlpha = 0.7;
+            for (let ring: number = 0; ring < 3; ring++) {
+              const r: number = 4 + ring * 5;
+              c.beginPath();
+              c.arc(screenX, screenY, r, spin + ring, spin + ring + Math.PI * 1.2);
+              c.stroke();
+            }
+            c.globalAlpha = 1.0;
+            c.lineWidth = 1;
+          } else {
+            c.fillStyle = COLOR_VORTEX;
+            c.globalAlpha = 0.2;
+            c.beginPath();
+            c.arc(screenX, screenY, 5, 0, Math.PI * 2);
+            c.fill();
+            c.globalAlpha = 1.0;
+          }
+          break;
+      }
+    }
+    c.globalAlpha = 1.0;
+  }
+
+  private renderMechanisms(c: CanvasRenderingContext2D, offX: number, offY: number): void {
+    for (let i: number = 0; i < this.mechanisms.length; i++) {
+      const mech: MechanismInstance = this.mechanisms[i];
+      const screenX: number = mech.x + offX;
+      const screenY: number = mech.y + offY;
+
+      if (screenX < -40 || screenX > this.screenW + 40 || screenY < -40 || screenY > this.screenH + 40) {
+        continue;
+      }
+
+      switch (mech.mechanismType) {
+        case MechanismType.PRESSURE_PLATE:
+          c.fillStyle = mech.active ? COLOR_PLATE_ACTIVE : COLOR_PRESSURE_PLATE;
+          c.globalAlpha = mech.active ? 0.9 : 0.5;
+          c.fillRect(screenX - 10, screenY - 10, 20, 20);
+          c.globalAlpha = 0.3;
+          c.fillStyle = mech.active ? COLOR_PLATE_ACTIVE : COLOR_PRESSURE_PLATE;
+          c.fillRect(screenX - 12, screenY - 12, 24, 24);
+          c.globalAlpha = 1.0;
+          break;
+
+        case MechanismType.LEVER:
+          c.fillStyle = COLOR_LEVER;
+          c.fillRect(screenX - 3, screenY - 12, 6, 24);
+          c.save();
+          c.translate(screenX, screenY);
+          c.rotate(mech.rotation * Math.PI / 180);
+          c.fillStyle = COLOR_LEVER_HANDLE;
+          c.fillRect(-2, -14, 4, 14);
+          c.beginPath();
+          c.arc(0, -14, 4, 0, Math.PI * 2);
+          c.fill();
+          c.restore();
+          break;
+
+        case MechanismType.PUSH_BLOCK:
+          const bx: number = mech.posX + offX;
+          const by: number = mech.posY + offY;
+          c.fillStyle = COLOR_PUSH_BLOCK;
+          c.fillRect(bx - 12, by - 12, 24, 24);
+          c.strokeStyle = '#737373';
+          c.lineWidth = 1;
+          c.strokeRect(bx - 12, by - 12, 24, 24);
+          c.fillStyle = '#737373';
+          c.fillRect(bx - 4, by - 4, 3, 3);
+          c.fillRect(bx + 2, by + 2, 3, 3);
+          break;
+
+        case MechanismType.CRYSTAL_REFLECTOR:
+          c.save();
+          c.translate(screenX, screenY);
+          c.rotate(mech.rotation * Math.PI / 180);
+          c.fillStyle = COLOR_REFLECTOR;
+          c.beginPath();
+          for (let v: number = 0; v < 6; v++) {
+            const angle: number = (v / 6) * Math.PI * 2;
+            const r: number = 10;
+            if (v === 0) c.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
+            else c.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+          }
+          c.closePath();
+          c.fill();
+          c.fillStyle = '#ffffff';
+          c.globalAlpha = 0.5 + 0.3 * Math.sin(this.frameCount * 0.1);
+          c.beginPath();
+          c.arc(0, 0, 4, 0, Math.PI * 2);
+          c.fill();
+          c.globalAlpha = 1.0;
+          c.restore();
+          break;
+
+        case MechanismType.BREAKABLE_WALL:
+          c.fillStyle = COLOR_BREAKABLE_WALL;
+          c.fillRect(screenX - TILE_SIZE / 2, screenY - TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+          c.strokeStyle = '#3a3a55';
+          c.lineWidth = 1;
+          c.beginPath();
+          c.moveTo(screenX - 8, screenY - 10);
+          c.lineTo(screenX + 2, screenY + 4);
+          c.moveTo(screenX + 6, screenY - 8);
+          c.lineTo(screenX - 2, screenY + 8);
+          c.stroke();
+          break;
+
+        case MechanismType.TELEPORT_RUNE:
+          const runeColor: string = mech.active ? COLOR_TELEPORT_EXIT : COLOR_TELEPORT_ENTRY;
+          const spin: number = this.frameCount * 0.03;
+          c.strokeStyle = runeColor;
+          c.lineWidth = 2;
+          c.globalAlpha = 0.6;
+          c.beginPath();
+          c.arc(screenX, screenY, 12, 0, Math.PI * 2);
+          c.stroke();
+          c.globalAlpha = 0.4;
+          c.beginPath();
+          c.arc(screenX, screenY, 8, spin, spin + Math.PI * 1.5);
+          c.stroke();
+          c.fillStyle = COLOR_TELEPORT_RUNE;
+          c.globalAlpha = 0.3 + 0.2 * Math.sin(this.frameCount * 0.08);
+          c.beginPath();
+          c.arc(screenX, screenY, 6, 0, Math.PI * 2);
+          c.fill();
+          c.globalAlpha = 1.0;
+          c.lineWidth = 1;
+          break;
+      }
     }
     c.globalAlpha = 1.0;
   }
