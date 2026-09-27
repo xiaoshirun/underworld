@@ -75,11 +75,12 @@ import { BossSystem, BossBridge } from './systems/BossSystem';
 import { TrapSystem } from './systems/TrapSystem';
 import { MechanismSystem, MechanismBridge } from './systems/MechanismSystem';
 import { ChunkLoadSystem } from './systems/ChunkLoadSystem';
+import { DamageSystem, DamageBridge } from './systems/DamageSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
 
-export class GameEngine extends GameContext implements MovementBridge, TransformBridge, BossBridge, MechanismBridge {
+export class GameEngine extends GameContext implements MovementBridge, TransformBridge, BossBridge, MechanismBridge, DamageBridge {
   private movementSystem: PlayerMovementSystem | null = null;
   private combatSystem: PlayerCombatSystem | null = null;
   private transformSystem: TransformSystem | null = null;
@@ -88,6 +89,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   private trapSystem: TrapSystem | null = null;
   private mechanismSystem: MechanismSystem | null = null;
   private chunkLoadSystem: ChunkLoadSystem | null = null;
+  private damageSystem: DamageSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -174,6 +176,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.trapSystem = new TrapSystem(this);
     this.mechanismSystem = new MechanismSystem(this, this);
     this.chunkLoadSystem = new ChunkLoadSystem(this);
+    this.damageSystem = new DamageSystem(this, this);
     this.startLoop();
   }
 
@@ -543,6 +546,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     const p: PlayerState = this.player;
 
     this.chunkLoadSystem!.update();
+    this.damageSystem!.update(dt);
 
     this.movementSystem!.update(dt);
     // === Transform System Update ===
@@ -561,15 +565,6 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.updateAmbientParticles(dt);
     this.updateCamera(p);
     this.updateShake(dt);
-    if (this.damageFlashTimer > 0) {
-      this.damageFlashTimer -= dt;
-      if (this.damageFlashTimer < 0) this.damageFlashTimer = 0;
-    }
-
-    // Death detection
-    if (p.hp <= 0 && this.state === GameState.PLAYING) {
-      this.handlePlayerDeath();
-    }
 
     // Auto-save interval
     if (this.frameCount > 0 && this.frameCount % AUTO_SAVE_INTERVAL === 0) {
@@ -5025,19 +5020,4 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     }
   }
 
-  private handlePlayerDeath(): void {
-    if (!this.player) return;
-    const p: PlayerState = this.player;
-    p.hp = 0;
-
-    if (this.settings.effectsEnabled) {
-      this.particleMgr.explosion(p.x, p.y, '#ef4444', 20);
-      this.particleMgr.sparks(p.x, p.y, '#fbbf24', 12);
-    }
-    this.shakeTimer = 500;
-    this.audio.playPlayerDamage();
-
-    this.autoSave();
-    this.setState(GameState.GAME_OVER);
-  }
 }
