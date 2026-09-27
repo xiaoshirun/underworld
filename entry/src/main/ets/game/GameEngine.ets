@@ -4176,6 +4176,9 @@ export class GameEngine {
       if (dx * dx + dy * dy < 30 * 30) {
         s.hp -= 1;
         s.hitFlash = 200;
+        if (s.hp <= 0) {
+          this.onEnemyDeath(s);
+        }
       }
     }
   }
