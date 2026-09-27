@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Slime Monster Design - Underworld Explorer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #08080f; color: #e2e8f0; font-family: 'Courier New', monospace; overflow-x: hidden; }
+  .header { text-align: center; padding: 40px 20px 20px; }
+  .header h1 { font-size: 28px; color: #e2e8f0; letter-spacing: 4px; text-shadow: 0 0 20px rgba(100,200,255,0.3); }
+  .header p { font-size: 13px; color: #64748b; margin-top: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; max-width: 960px; margin: 30px auto; padding: 0 24px; }
+  .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 24px; text-align: center; transition: transform 0.2s, box-shadow 0.2s; }
+  .card:hover { transform: translateY(-4px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+  .card canvas { display: block; margin: 0 auto 16px; image-rendering: pixelated; border-radius: 8px; }
+  .card h3 { font-size: 16px; margin-bottom: 4px; }
+  .card .cn-name { font-size: 13px; color: #94a3b8; margin-bottom: 10px; }
+  .card .desc { font-size: 11px; color: #64748b; line-height: 1.6; text-align: left; }
+  .card .stats { display: flex; justify-content: space-between; margin-top: 12px; padding-top: 10px; border-top: 1px solid #1e293b; }
+  .card .stat { text-align: center; }
+  .card .stat-label { font-size: 9px; color: #475569; text-transform: uppercase; }
+  .card .stat-value { font-size: 13px; font-weight: bold; margin-top: 2px; }
+  .tag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin: 2px; }
+  .tag-passive { background: #1a3a2a; color: #4ade80; }
+  .tag-aggressive { background: #3a1a1a; color: #f87171; }
+  .tag-special { background: #1a1a3a; color: #818cf8; }
+  .footer { text-align: center; padding: 30px; color: #334155; font-size: 11px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: repeat(2, 1fr); gap: 16px; } }
+  @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>SLIME BESTIARY</h1>
+  <p>Underworld Explorer - Monster Design Reference</p>
+</div>
+<div class="grid" id="grid"></div>
+<div class="footer">Pixel Art Slime Designs - 6 Enemy Types for Underground World Exploration</div>
+
+<script>
+const SLIMES = [
+  {
+    name: 'Gray Slime', cnName: '灰色史莱姆',
+    color: '#6b8e7b', light: '#8fb8a0', eye: '#ffffff', pupil: '#1a1a2e',
+    tags: [['passive', '被动']], stats: { hp: 3, atk: 1, spd: 1 },
+    desc: '地下世界最常见的史莱姆。性情温和，不会主动攻击。在洞穴中漫无目的地游荡，是初学探索者的练手目标。',
+    draw: function(c, ctx, f) {
+      const cx = 64, cy = 68;
+      const bounce = Math.sin(f * 0.06) * 3;
+      const squash = 1 + Math.sin(f * 0.06) * 0.08;
+      ctx.save();
+      ctx.translate(cx, cy + bounce);
+      ctx.scale(squash, 1 / squash);
+      // shadow
+      ctx.globalAlpha = 0.2;
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(0, 28, 24, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // body
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 26, 22, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // highlight
+      ctx.fillStyle = this.light;
+      ctx.beginPath();
+      ctx.ellipse(-6, -8, 12, 9, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // shine
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.ellipse(-10, -12, 4, 3, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // eyes
+      ctx.fillStyle = this.eye;
+      ctx.beginPath(); ctx.arc(-7, -2, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(7, -2, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = this.pupil;
+      ctx.beginPath(); ctx.arc(-6, -1, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(8, -1, 2.5, 0, Math.PI * 2); ctx.fill();
+      // mouth
+      ctx.strokeStyle = this.pupil;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 6, 4, 0.1, Math.PI - 0.1);
+      ctx.stroke();
+      ctx.restore();
+    }
+  },
+  {
+    name: 'Purple Slime', cnName: '紫色史莱姆',
+    color: '#8b5cf6', light: '#a78bfa', eye: '#ffffff', pupil: '#1a1a2e',
+    tags: [['aggressive', '主动攻击'], ['special', '吞噬']], stats: { hp: 5, atk: 2, spd: 2 },
+    desc: '危险的掠食者。会主动追踪探索者并尝试吞噬。拥有巨大的口腔可以包裹猎物，被困后需连续攻击挣脱。',
+    draw: function(c, ctx, f) {
+      const cx = 64, cy = 66;
+      const bounce = Math.sin(f * 0.08) * 2;
+      const pulse = Math.sin(f * 0.04) * 0.06;
+      ctx.save();
+      ctx.translate(cx, cy + bounce);
+      // aura
+      ctx.globalAlpha = 0.12 + Math.sin(f * 0.05) * 0.05;
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 38, 34, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // shadow
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(0, 30, 26, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // body
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 28, 24, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // tentacles
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2 + f * 0.03;
+        const tx = Math.cos(angle) * 30;
+        const ty = Math.sin(angle) * 20 + 8;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.ellipse(tx, ty, 6, 4, angle, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // highlight
+      ctx.fillStyle = this.light;
+      ctx.beginPath();
+      ctx.ellipse(-6, -8, 13, 10, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // eyes (angry)
+      ctx.fillStyle = this.eye;
+      ctx.beginPath(); ctx.arc(-8, -4, 5.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(8, -4, 5.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff0040';
+      ctx.beginPath(); ctx.arc(-7, -3, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(9, -3, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1a1a2e';
+      ctx.beginPath(); ctx.arc(-7, -3, 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(9, -3, 1.5, 0, Math.PI * 2); ctx.fill();
+      // angry brows
+      ctx.strokeStyle = '#4c1d95';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(-14, -10); ctx.lineTo(-4, -8); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(14, -10); ctx.lineTo(4, -8); ctx.stroke();
+      // mouth
+      ctx.fillStyle = '#2d1060';
+      ctx.beginPath();
+      ctx.ellipse(0, 10, 10, 7 + pulse * 20, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  },
+  {
+    name: 'Red Slime', cnName: '红色史莱姆',
+    color: '#dc2626', light: '#f87171', eye: '#ffffff', pupil: '#1a1a2e',
+    tags: [['aggressive', '冲锋']], stats: { hp: 4, atk: 3, spd: 3 },
+    desc: '暴躁的战斗型史莱姆。会蓄力后高速冲向探索者，造成大量伤害。冲锋时身体发出炽热红光，需闪避其冲撞。',
+    draw: function(c, ctx, f) {
+      const cx = 64, cy = 66;
+      const charge = Math.abs(Math.sin(f * 0.04));
+      ctx.save();
+      ctx.translate(cx, cy);
+      // heat aura
+      ctx.globalAlpha = 0.1 + charge * 0.1;
+      ctx.fillStyle = '#ff4444';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 36 + charge * 4, 32 + charge * 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // shadow
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(0, 28, 24, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // body (streamlined)
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.ellipse(2, 0, 27, 21, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      // flame spikes
+      for (let i = 0; i < 5; i++) {
+        const angle = -Math.PI * 0.8 + (i / 4) * Math.PI * 0.6;
+        const len = 10 + Math.sin(f * 0.1 + i) * 4;
+        const sx = Math.cos(angle) * 24;
+        const sy = Math.sin(angle) * 20;
+        const ex = sx + Math.cos(angle) * len;
+        const ey = sy + Math.sin(angle) * len;
+        ctx.fillStyle = '#ff6600';
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(sx - 3, sy);
+        ctx.lineTo(ex, ey);
+        ctx.lineTo(sx + 3, sy);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      // highlight
+      ctx.fillStyle = this.light;
+      ctx.beginPath();
+      ctx.ellipse(-4, -7, 11, 8, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      // eyes (furious)
+      ctx.fillStyle = this.eye;
+      ctx.beginPath(); ctx.arc(-7, -3, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(8, -3, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffcc00';
+      ctx.beginPath(); ctx.arc(-6, -2, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(9, -2, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1a1a2e';
+      ctx.beginPath(); ctx.arc(-6, -2, 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(9, -2, 1.2, 0, Math.PI * 2); ctx.fill();
+      // angry mouth
+      ctx.strokeStyle = '#7f1d1d';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-6, 8);
+      ctx.lineTo(-2, 6);
+      ctx.lineTo(2, 8);
+      ctx.lineTo(6, 6);
+      ctx.stroke();
+      ctx.restore();
+    }
+  },
+  {
+    name: 'Blue Slime', cnName: '蓝色史莱姆',
+    color: '#2563eb', light: '#60a5fa', eye: '#ffffff', pupil: '#1a1a2e',
+    tags: [['special', '水属性'], ['passive', '半被动']], stats: { hp: 4, atk: 1, spd: 2 },
+    desc: '栖息在地下水域的史莱姆。身体呈半透明水状，带有波纹效果。仅在靠近时才会反应，周围漂浮着水滴粒子。',
+    draw: function(c, ctx, f) {
+      const cx = 64, cy = 66;
+      const bounce = Math.sin(f * 0.05) * 2;
+      ctx.save();
+      ctx.translate(cx, cy + bounce);
+      // water drops
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2 + f * 0.02;
+        const dist = 32 + Math.sin(f * 0.03 + i * 2) * 6;
+        const dx = Math.cos(angle) * dist;
+        const dy = Math.sin(angle) * dist * 0.7 - 5;
+        ctx.fillStyle = '#60a5fa';
+        ctx.globalAlpha = 0.4 + Math.sin(f * 0.04 + i) * 0.2;
+        ctx.beginPath();
+        ctx.arc(dx, dy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      // shadow
+      ctx.globalAlpha = 0.2;
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(0, 28, 24, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // body (translucent)
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 26, 23, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // inner ripple
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = this.light;
+      const rippleOff = Math.sin(f * 0.04) * 3;
+      ctx.beginPath();
+      ctx.ellipse(0, rippleOff, 18, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // wave lines
+      ctx.strokeStyle = '#93c5fd';
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.4;
+      for (let w = 0; w < 2; w++) {
+        const wy = -4 + w * 10;
+        const woff = Math.sin(f * 0.05 + w) * 4;
+        ctx.beginPath();
+        ctx.moveTo(-14, wy + woff);
+        ctx.quadraticCurveTo(0, wy - woff - 3, 14, wy + woff);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      // highlight
+      ctx.fillStyle = this.light;
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.ellipse(-8, -10, 8, 6, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // eyes (gentle)
+      ctx.fillStyle = this.eye;
+      ctx.beginPath(); ctx.arc(-7, -2, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(7, -2, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1e40af';
+      ctx.beginPath(); ctx.arc(-6, -1, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(8, -1, 2.5, 0, Math.PI * 2); ctx.fill();
+      // gentle smile
+      ctx.strokeStyle = '#1e3a5f';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 5, 5, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  },
+  {
+    name: 'Yellow Slime', cnName: '黄色史莱姆',
+    color: '#eab308', light: '#fde047', eye: '#ffffff', pupil: '#1a1a2e',
+    tags: [['passive', '被动']], stats: { hp: 2, atk: 0, spd: 1 },
+    desc: '最温顺的史莱姆品种。身体散发金色微光，像一颗跳动的小太阳。不会攻击，受到威胁时会快速弹跳逃离。',
+    draw: function(c, ctx, f) {
+      const cx = 64, cy = 68;
+      const bounce = Math.abs(Math.sin(f * 0.07)) * 5;
+      ctx.save();
+      ctx.translate(cx, cy - bounce);
+      // golden glow
+      ctx.globalAlpha = 0.08 + Math.sin(f * 0.04) * 0.03;
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 40, 36, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // sparkles
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 + f * 0.03;
+        const dist = 28 + Math.sin(f * 0.05 + i * 3) * 8;
+        const sx = Math.cos(angle) * dist;
+        const sy = Math.sin(angle) * dist * 0.6;
+        const sparkSize = 1.5 + Math.sin(f * 0.08 + i * 2) * 1;
+        ctx.fillStyle = '#fde047';
+        ctx.globalAlpha = 0.5 + Math.sin(f * 0.06 + i) * 0.3;
+        // star shape
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - sparkSize * 2);
+        ctx.lineTo(sx + sparkSize * 0.5, sy - sparkSize * 0.5);
+        ctx.lineTo(sx + sparkSize * 2, sy);
+        ctx.lineTo(sx + sparkSize * 0.5, sy + sparkSize * 0.5);
+        ctx.lineTo(sx, sy + sparkSize * 2);
+        ctx.lineTo(sx - sparkSize * 0.5, sy + sparkSize * 0.5);
+        ctx.lineTo(sx - sparkSize * 2, sy);
+        ctx.lineTo(sx - sparkSize * 0.5, sy - sparkSize * 0.5);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      // shadow
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(0, 26 + bounce, 22, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // body
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 24, 20, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // highlight
+      ctx.fillStyle = this.light;
+      ctx.beginPath();
+      ctx.ellipse(-5, -7, 11, 8, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      // shine
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.ellipse(-8, -11, 4, 3, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // eyes (happy)
+      ctx.fillStyle = this.eye;
+      ctx.beginPath(); ctx.arc(-6, -1, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(6, -1, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#92400e';
+      ctx.beginPath(); ctx.arc(-5, 0, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(7, 0, 2, 0, Math.PI * 2); ctx.fill();
+      // big smile
+      ctx.strokeStyle = '#92400e';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 5, 6, 0.1, Math.PI - 0.1);
+      ctx.stroke();
+      // blush
+      ctx.fillStyle = '#f59e0b';
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath(); ctx.ellipse(-12, 4, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(12, 4, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+  },
+  {
+    name: 'Ghost Slime', cnName: '幽灵史莱姆',
+    color: '#94a3b8', light: '#cbd5e1', eye: '#ffffff', pupil: '#e2e8f0',
+    tags: [['special', '穿墙'], ['aggressive', '追踪']], stats: { hp: 3, atk: 2, spd: 2 },
+    desc: '超自然存在，可以穿越墙壁。半透明的身体散发幽冷光芒，在黑暗中无声地追踪探索者。物理攻击难以命中。',
+    draw: function(c, ctx, f) {
+      const cx = 64, cy = 64;
+      const float = Math.sin(f * 0.03) * 6;
+      const phase = Math.sin(f * 0.05) * 0.15;
+      ctx.save();
+      ctx.translate(cx, cy + float);
+      // spectral aura
+      ctx.globalAlpha = 0.06 + Math.sin(f * 0.04) * 0.03;
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 42, 38, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // wisps
+      for (let i = 0; i < 4; i++) {
+        const wAngle = (i / 4) * Math.PI * 2 + f * 0.02;
+        const wDist = 20 + Math.sin(f * 0.03 + i * 2) * 10;
+        const wx = Math.cos(wAngle) * wDist;
+        const wy = Math.sin(wAngle) * wDist * 0.5 + 10;
+        ctx.fillStyle = '#cbd5e1';
+        ctx.globalAlpha = 0.15 + Math.sin(f * 0.05 + i) * 0.1;
+        ctx.beginPath();
+        ctx.ellipse(wx, wy, 5, 3, wAngle, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      // body (ghostly, semi-transparent)
+      ctx.globalAlpha = 0.45 + phase;
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.moveTo(-24, 8);
+      ctx.quadraticCurveTo(-26, -20, 0, -24);
+      ctx.quadraticCurveTo(26, -20, 24, 8);
+      // wavy bottom
+      const wave1 = Math.sin(f * 0.06) * 3;
+      const wave2 = Math.sin(f * 0.06 + 1) * 3;
+      const wave3 = Math.sin(f * 0.06 + 2) * 3;
+      ctx.quadraticCurveTo(20, 20 + wave1, 12, 16);
+      ctx.quadraticCurveTo(6, 24 + wave2, 0, 18);
+      ctx.quadraticCurveTo(-6, 24 + wave3, -12, 16);
+      ctx.quadraticCurveTo(-20, 20 + wave1, -24, 8);
+      ctx.closePath();
+      ctx.fill();
+      // inner glow
+      ctx.fillStyle = this.light;
+      ctx.globalAlpha = 0.2;
+      ctx.beginPath();
+      ctx.ellipse(0, -4, 14, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.5 + phase;
+      // eyes (hollow, glowing)
+      ctx.fillStyle = '#e2e8f0';
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath(); ctx.ellipse(-8, -6, 5, 6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(8, -6, 5, 6, 0, 0, Math.PI * 2); ctx.fill();
+      // hollow centers
+      ctx.fillStyle = '#1e293b';
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.ellipse(-8, -5, 2.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(8, -5, 2.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+      // ghost mouth
+      ctx.fillStyle = '#1e293b';
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.ellipse(0, 6, 5, 4 + Math.sin(f * 0.04) * 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+  }
+];
+
+const grid = document.getElementById('grid');
+let frame = 0;
+
+SLIMES.forEach((slime, idx) => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  canvas.style.width = '128px';
+  canvas.style.height = '128px';
+  const tagsHtml = slime.tags.map(t => `<span class="tag tag-${t[0]}">${t[1]}</span>`).join('');
+  card.innerHTML = '';
+  card.appendChild(canvas);
+  const info = document.createElement('div');
+  info.innerHTML = `
+    <h3 style="color:${slime.color}">${slime.name}</h3>
+    <div class="cn-name">${slime.cnName}</div>
+    <div style="margin-bottom:8px">${tagsHtml}</div>
+    <div class="desc">${slime.desc}</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-label">HP</div><div class="stat-value" style="color:#ef4444">${slime.stats.hp}</div></div>
+      <div class="stat"><div class="stat-label">ATK</div><div class="stat-value" style="color:#f59e0b">${slime.stats.atk}</div></div>
+      <div class="stat"><div class="stat-label">SPD</div><div class="stat-value" style="color:#22d3ee">${slime.stats.spd}</div></div>
+    </div>
+  `;
+  card.appendChild(info);
+  grid.appendChild(card);
+
+  const ctx = canvas.getContext('2d');
+  function animate() {
+    ctx.clearRect(0, 0, 128, 128);
+    ctx.fillStyle = '#0a0a15';
+    ctx.fillRect(0, 0, 128, 128);
+    slime.draw(canvas, ctx, frame);
+    requestAnimationFrame(animate);
+  }
+  animate();
+});
+
+function tick() {
+  frame++;
+  requestAnimationFrame(tick);
+}
+tick();
+</script>
+</body>
+</html>
