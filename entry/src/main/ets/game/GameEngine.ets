@@ -360,6 +360,8 @@ export class GameEngine {
     this.loadChunksAround(ptx, pty);
 
     this.updatePlayer(p, dt);
+    // === Transform System Update ===
+    this.updateTransformSystem(p, dt);
     this.updateEnemies(dt);
     this.updateBosses(dt);
     this.checkBossRoomEntry(p);
@@ -542,6 +544,170 @@ export class GameEngine {
         p.drillHitCount = 0;
       }
     }
+  }
+
+  // === Transform System ===
+
+  private updateTransformSystem(p: PlayerState, dt: number): void {
+    // Cooldown tick when not transformed
+    if (!p.isTransformed && p.transformCooldown > 0) {
+      p.transformCooldown -= dt;
+      if (p.transformCooldown < 0) p.transformCooldown = 0;
+    }
+
+    // Transform animation timer
+    if (p.transformAnimTimer > 0) {
+      p.transformAnimTimer -= dt;
+      if (p.transformAnimTimer < 0) p.transformAnimTimer = 0;
+    }
+
+    // Unlock notification timer
+    if (this.transformUnlockNotifyTimer > 0) {
+      this.transformUnlockNotifyTimer -= dt;
+      if (this.transformUnlockNotifyTimer < 0) this.transformUnlockNotifyTimer = 0;
+    }
+
+    if (!p.isTransformed) {
+      // Passive energy regen when not transformed
+      p.transformEnergy += TRANSFORM_PASSIVE_REGEN * (dt / 1000);
+      if (p.transformEnergy > p.transformMaxEnergy) {
+        p.transformEnergy = p.transformMaxEnergy;
+      }
+      return;
+    }
+
+    // Energy drain
+    const formIndex: number = p.transformForm as number;
+    const drainRate: number = TRANSFORM_DRAIN_RATES[formIndex];
+    p.transformEnergy -= drainRate * (dt / 1000);
+
+    // Form attack cooldown tick
+    if (p.transformFormAttackCooldown > 0) {
+      p.transformFormAttackCooldown -= dt;
+      if (p.transformFormAttackCooldown < 0) p.transformFormAttackCooldown = 0;
+    }
+
+    // Auto-revert on energy depletion
+    if (p.transformEnergy <= 0) {
+      p.transformEnergy = 0;
+      this.deactivateTransform();
+    }
+
+    // Form-specific ambient effects
+    this.updateTransformAmbientEffects(p, dt);
+  }
+
+  private updateTransformAmbientEffects(p: PlayerState, dt: number): void {
+    if (!this.settings.effectsEnabled) return;
+    const form: TransformForm = p.transformForm;
+
+    if (form === TransformForm.SLIME && this.frameCount % 20 === 0) {
+      // Drip particles
+      this.spawnParticle(p.x, p.y + PLAYER_SIZE, 0, 1, 400, COLOR_TRANSFORM_SLIME, 2);
+    } else if (form === TransformForm.GHOST && this.frameCount % 5 === 0) {
+      // Trailing wisps
+      this.spawnParticle(p.x + (Math.random() - 0.5) * 8, p.y + (Math.random() - 0.5) * 8,
+        (Math.random() - 0.5) * 0.5, -0.5 - Math.random() * 0.5, 300, COLOR_TRANSFORM_GHOST, 3);
+    } else if (form === TransformForm.IRON_MAN && this.frameCount % 3 === 0) {
+      // Jet flame particles from feet
+      this.spawnParticle(p.x - 3, p.y + PLAYER_SIZE, (Math.random() - 0.5) * 0.5, 1.5 + Math.random(), 200,
+        Math.random() > 0.5 ? '#ff6b00' : '#fbbf24', 2 + Math.random() * 2);
+      this.spawnParticle(p.x + 3, p.y + PLAYER_SIZE, (Math.random() - 0.5) * 0.5, 1.5 + Math.random(), 200,
+        Math.random() > 0.5 ? '#ff6b00' : '#fbbf24', 2 + Math.random() * 2);
+    }
+  }
+
+  activateTransform(form: TransformForm): void {
+    if (this.player === null) return;
+    const p: PlayerState = this.player;
+    if (p.isTransformed) return;
+    if (p.transformCooldown > 0) return;
+    if (p.unlockedTransforms.indexOf(form as number) === -1) return;
+
+    // Save weapon form
+    p.savedWeaponForm = p.currentWeaponForm;
+
+    // Activate
+    p.isTransformed = true;
+    p.transformForm = form;
+    p.transformEnergy = p.transformMaxEnergy;
+    p.transformAnimTimer = TRANSFORM_ACTIVATE_ANIM;
+    p.transformFormAttackCooldown = 0;
+
+    // Spawn activation particles
+    if (this.settings.effectsEnabled) {
+      for (let i: number = 0; i < 12; i++) {
+        const angle: number = Math.random() * Math.PI * 2;
+        const speed: number = 2 + Math.random() * 3;
+        const color: string = this.getTransformColor(form);
+        this.spawnParticle(p.x, p.y, Math.cos(angle) * speed, Math.sin(angle) * speed, 600, color, 3 + Math.random() * 2);
+      }
+    }
+    this.shakeTimer = 200;
+  }
+
+  deactivateTransform(): void {
+    if (this.player === null) return;
+    const p: PlayerState = this.player;
+    if (!p.isTransformed) return;
+
+    // Restore weapon
+    p.currentWeaponForm = p.savedWeaponForm;
+
+    // Deactivate
+    p.isTransformed = false;
+    p.transformForm = TransformForm.NONE;
+    p.transformAnimTimer = TRANSFORM_REVERT_ANIM;
+
+    // Set cooldown if energy depleted
+    if (p.transformEnergy <= 0) {
+      p.transformCooldown = TRANSFORM_COOLDOWN;
+    }
+
+    // Revert particles
+    if (this.settings.effectsEnabled) {
+      for (let i: number = 0; i < 6; i++) {
+        const angle: number = Math.random() * Math.PI * 2;
+        const speed: number = 1 + Math.random() * 2;
+        this.spawnParticle(p.x, p.y, -Math.cos(angle) * speed, -Math.sin(angle) * speed, 400, '#ffffff', 2);
+      }
+    }
+  }
+
+  private getTransformColor(form: TransformForm): string {
+    if (form === TransformForm.SLIME) return COLOR_TRANSFORM_SLIME;
+    if (form === TransformForm.GHOST) return COLOR_TRANSFORM_GHOST;
+    if (form === TransformForm.ARMOR) return COLOR_TRANSFORM_ARMOR;
+    return COLOR_TRANSFORM_IRON_GOLD;
+  }
+
+  // Public getters for UI
+  getIsTransformed(): boolean {
+    return this.player !== null && this.player.isTransformed;
+  }
+
+  getTransformEnergy(): number {
+    return this.player !== null ? this.player.transformEnergy : 0;
+  }
+
+  getTransformMaxEnergy(): number {
+    return this.player !== null ? this.player.transformMaxEnergy : TRANSFORM_MAX_ENERGY;
+  }
+
+  getTransformForm(): TransformForm {
+    return this.player !== null ? this.player.transformForm : TransformForm.NONE;
+  }
+
+  getTransformCooldown(): number {
+    return this.player !== null ? this.player.transformCooldown : 0;
+  }
+
+  getUnlockedTransforms(): number[] {
+    return this.player !== null ? this.player.unlockedTransforms : [];
+  }
+
+  getTransformUnlockNotify(): { active: boolean; form: TransformForm } {
+    return { active: this.transformUnlockNotifyTimer > 0, form: this.transformUnlockNotifyForm };
   }
 
   private updateEngulfedPlayer(p: PlayerState, dt: number): void {
