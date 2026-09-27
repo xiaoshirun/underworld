@@ -80,11 +80,12 @@ import { XpLevelSystem } from './systems/XpLevelSystem';
 import { ChestSystem, ChestBridge } from './systems/ChestSystem';
 import { MaterialDropSystem } from './systems/MaterialDropSystem';
 import { EvolutionSystem } from './systems/EvolutionSystem';
+import { SaveLoadSystem, SaveLoadBridge } from './systems/SaveLoadSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
 
-export class GameEngine extends GameContext implements MovementBridge, TransformBridge, BossBridge, MechanismBridge, DamageBridge, ChestBridge {
+export class GameEngine extends GameContext implements MovementBridge, TransformBridge, BossBridge, MechanismBridge, DamageBridge, ChestBridge, SaveLoadBridge {
   private movementSystem: PlayerMovementSystem | null = null;
   private combatSystem: PlayerCombatSystem | null = null;
   private transformSystem: TransformSystem | null = null;
@@ -98,6 +99,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   private chestSystem: ChestSystem | null = null;
   private materialDropSystem: MaterialDropSystem | null = null;
   private evolutionSystem: EvolutionSystem | null = null;
+  private saveLoadSystem: SaveLoadSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -189,6 +191,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.chestSystem = new ChestSystem(this, this);
     this.materialDropSystem = new MaterialDropSystem(this);
     this.evolutionSystem = new EvolutionSystem(this);
+    this.saveLoadSystem = new SaveLoadSystem(this, this);
     this.startLoop();
   }
 
@@ -4614,133 +4617,19 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   // ==================== Save/Load ====================
 
   getSaveData(): SaveData {
-    const p: PlayerState = this.player!;
-    return {
-      version: SAVE_VERSION,
-      timestamp: Date.now(),
-      playerX: p.x,
-      playerY: p.y,
-      hp: p.hp,
-      xp: p.xp,
-      level: p.level,
-      gender: p.gender,
-      currentWeaponForm: p.currentWeaponForm,
-      unlockedForms: p.unlockedForms.slice(),
-      evolutionBranch: p.evolutionBranch,
-      evolutionLevel: p.evolutionLevel,
-      inventory: {
-        crystalOre: p.inventory.crystalOre,
-        mushroomOre: p.inventory.mushroomOre,
-        flameOre: p.inventory.flameOre,
-        abyssOre: p.inventory.abyssOre,
-        voidOre: p.inventory.voidOre,
-        coreNormal: p.inventory.coreNormal,
-        coreRare: p.inventory.coreRare,
-        formCore: p.inventory.formCore,
-        hpPotions: p.inventory.hpPotions,
-        gold: p.inventory.gold,
-        transformCoreSlime: p.inventory.transformCoreSlime,
-        transformCoreArmor: p.inventory.transformCoreArmor,
-        transformCoreIronMan: p.inventory.transformCoreIronMan,
-        transformCoreGhost: p.inventory.transformCoreGhost
-      },
-      isTransformed: p.isTransformed,
-      transformForm: p.transformForm,
-      transformEnergy: p.transformEnergy,
-      transformMaxEnergy: p.transformMaxEnergy,
-      unlockedTransforms: p.unlockedTransforms.slice(),
-      exploredChunks: this.getExploredChunks()
-    };
+    return this.saveLoadSystem!.getSaveData();
   }
 
   applySaveData(data: SaveData): void {
-    if (!this.player) return;
-    const p: PlayerState = this.player;
-    p.x = data.playerX;
-    p.y = data.playerY;
-    p.hp = data.hp;
-    p.xp = data.xp;
-    p.level = data.level;
-    p.gender = data.gender;
-    p.currentWeaponForm = data.currentWeaponForm;
-    p.unlockedForms = data.unlockedForms.slice();
-    p.evolutionBranch = data.evolutionBranch;
-    p.evolutionLevel = data.evolutionLevel;
-    p.inventory = {
-      crystalOre: data.inventory.crystalOre,
-      mushroomOre: data.inventory.mushroomOre,
-      flameOre: data.inventory.flameOre,
-      abyssOre: data.inventory.abyssOre,
-      voidOre: data.inventory.voidOre,
-      coreNormal: data.inventory.coreNormal,
-      coreRare: data.inventory.coreRare,
-      formCore: data.inventory.formCore,
-      hpPotions: data.inventory.hpPotions,
-      gold: data.inventory.gold,
-      transformCoreSlime: data.inventory.transformCoreSlime,
-      transformCoreArmor: data.inventory.transformCoreArmor,
-      transformCoreIronMan: data.inventory.transformCoreIronMan,
-      transformCoreGhost: data.inventory.transformCoreGhost
-    };
-    p.isTransformed = data.isTransformed;
-    p.transformForm = data.transformForm;
-    p.transformEnergy = data.transformEnergy;
-    p.transformMaxEnergy = data.transformMaxEnergy;
-    p.unlockedTransforms = data.unlockedTransforms.slice();
-    p.vx = 0;
-    p.vy = 0;
-    p.isAttacking = false;
-    p.isDashing = false;
-    p.isJumping = false;
-    p.isDrilling = false;
-    p.isEngulfed = false;
-    p.invincibleTimer = 1000;
-
-    this.cameraX = p.x - this.screenW / 2;
-    this.cameraY = p.y - this.screenH / 2;
-
-    this.chunks.clear();
-    this.enemies = [];
-    this.xpOrbs = [];
-    this.bosses = [];
-    this.chests = [];
-    this.traps = [];
-    this.mechanisms = [];
-    this.materialDrops = [];
-    this.particles = [];
-    this.particleMgr.clear();
-    this.activeChunkCaches.clear();
-    this.cacheEntryPool = new Array(this.cacheCtxs.length).fill(null);
-    this.freePoolIndices = [];
-    for (let i: number = 0; i < this.cacheCtxs.length; i++) {
-      this.freePoolIndices.push(i);
-    }
-
-    const ptx: number = Math.floor(p.x / TILE_SIZE);
-    const pty: number = Math.floor(p.y / TILE_SIZE);
-    this.loadChunksAround(ptx, pty);
+    this.saveLoadSystem!.applySaveData(data);
   }
 
   getExploredChunks(): string[] {
-    const keys: string[] = [];
-    this.chunks.forEach((_: ChunkData, key: string) => {
-      keys.push(key);
-    });
-    return keys;
+    return this.saveLoadSystem!.getExploredChunks();
   }
 
   async autoSave(): Promise<void> {
-    if (!this.context || !this.player) return;
-    try {
-      const { SaveManager } = await import('./SaveManager');
-      const data: SaveData = this.getSaveData();
-      await SaveManager.save(this.context as any, data);
-      if (this.onSave) {
-        this.onSave();
-      }
-    } catch (e) {
-      console.error('autoSave failed: ' + JSON.stringify(e));
-    }
+    await this.saveLoadSystem!.autoSave();
   }
 
 }
