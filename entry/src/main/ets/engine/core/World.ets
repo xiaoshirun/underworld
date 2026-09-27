@@ -13,9 +13,11 @@ export class World {
   private pendingDestroy: Entity[] = [];
   private queryCache: Map<string, Entity[]> = new Map();
   private cacheDirty: Set<string> = new Set();
+  private indexToEntity: Map<number, Entity> = new Map();
 
   createEntity(): Entity {
     const entity: Entity = this.pool.acquire();
+    this.indexToEntity.set(getIndex(entity), entity);
     this.invalidateAllQueries();
     return entity;
   }
@@ -32,6 +34,7 @@ export class World {
       this.components.forEach((entry: ComponentEntry) => {
         entry.data.delete(index);
       });
+      this.indexToEntity.delete(index);
       this.pool.release(entity);
     }
     this.pendingDestroy = [];
@@ -101,7 +104,10 @@ export class World {
         }
       }
       if (match) {
-        result.push(makeEntityFromIndex(index));
+        const fullEntity: Entity | undefined = this.indexToEntity.get(index);
+        if (fullEntity !== undefined) {
+          result.push(fullEntity);
+        }
       }
     });
 
@@ -156,11 +162,7 @@ export class World {
   }
 
   getEntityCount(): number {
-    let count: number = 0;
-    this.components.forEach((entry: ComponentEntry) => {
-      if (entry.data.size > count) count = entry.data.size;
-    });
-    return count;
+    return this.pool.count();
   }
 
   private sortSystems(): void {
@@ -174,7 +176,8 @@ export class World {
 
   private invalidateQueriesFor(tag: string): void {
     this.queryCache.forEach((_value: Entity[], key: string) => {
-      if (key.indexOf(tag) >= 0) {
+      const tags: string[] = key.split(',');
+      if (tags.indexOf(tag) >= 0) {
         this.cacheDirty.add(key);
       }
     });
@@ -185,8 +188,4 @@ export class World {
       this.cacheDirty.add(key);
     });
   }
-}
-
-function makeEntityFromIndex(index: number): Entity {
-  return index;
 }

@@ -44,6 +44,8 @@ export class Engine {
       engine.scenes.register(sceneDef.name, sceneDef.factory);
     }
 
+    engine.scenes.switchTo(config.entryScene);
+
     return engine;
   }
 

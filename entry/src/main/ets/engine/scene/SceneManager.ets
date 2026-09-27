@@ -19,7 +19,6 @@ export class SceneManager {
   private transitionDuration: number = 0;
   private transitionType: string = 'fade';
   private pendingAction: (() => void) | null = null;
-  private pendingTransition: Transition | null = null;
 
   register(name: string, factory: () => Scene): void {
     this.registry.set(name, { factory: factory, instance: null, loaded: false });
@@ -132,6 +131,7 @@ export class SceneManager {
       entry.instance = entry.factory();
     }
     const scene: Scene = entry.instance;
+    this.stack.push(scene);
     if (!entry.loaded) {
       const result: void | Promise<void> = scene.onLoad();
       if (result instanceof Promise) {
@@ -144,7 +144,6 @@ export class SceneManager {
       entry.loaded = true;
     }
     scene.onEnter();
-    this.stack.push(scene);
   }
 
   private startTransition(transition: Transition, action: () => void): void {
@@ -156,7 +155,9 @@ export class SceneManager {
   }
 
   private renderTransition(ctx: CanvasRenderingContext2D): void {
-    const progress: number = Math.min(1.0, this.transitionProgress / this.transitionDuration);
+    const progress: number = this.transitionDuration > 0
+      ? Math.min(1.0, this.transitionProgress / this.transitionDuration)
+      : 1.0;
     const canvasWidth: number = ctx.canvas.width;
     const canvasHeight: number = ctx.canvas.height;
 

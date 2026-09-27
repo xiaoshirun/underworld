@@ -20,17 +20,20 @@ export class EntityPool {
   private available: number[] = [];
   private alive: boolean[] = [];
   private nextIndex: number = 0;
+  private aliveCount: number = 0;
 
   acquire(): Entity {
     if (this.available.length > 0) {
       const index: number = this.available.pop()!;
       this.alive[index] = true;
+      this.aliveCount++;
       return makeEntity(index, this.generations[index]);
     }
     const index: number = this.nextIndex;
     this.nextIndex++;
     this.generations[index] = 0;
     this.alive[index] = true;
+    this.aliveCount++;
     return makeEntity(index, 0);
   }
 
@@ -38,6 +41,7 @@ export class EntityPool {
     const index: number = getIndex(entity);
     if (!this.alive[index]) return;
     this.alive[index] = false;
+    this.aliveCount--;
     this.generations[index]++;
     this.available.push(index);
   }
@@ -52,5 +56,9 @@ export class EntityPool {
 
   isAlive(index: number): boolean {
     return index < this.nextIndex && this.alive[index] === true;
+  }
+
+  count(): number {
+    return this.aliveCount;
   }
 }

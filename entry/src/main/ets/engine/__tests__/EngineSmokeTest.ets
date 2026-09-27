@@ -1,7 +1,8 @@
-import { Engine, EngineConfig } from '../core/Engine';
+import { Engine } from '../core/Engine';
 import { Scene } from '../scene/Scene';
 import { createTransform, Transform } from '../components/Transform';
 import { createSprite, Sprite } from '../components/Sprite';
+import { common } from '@kit.AbilityKit';
 
 class TestScene extends Scene {
   constructor() {
@@ -28,7 +29,7 @@ class TestScene extends Scene {
 
 export async function runEngineSmokeTest(
   canvas: CanvasRenderingContext2D,
-  context: Object
+  context: common.UIAbilityContext
 ): Promise<void> {
   const engine: Engine = await Engine.init({
     canvas: canvas,
@@ -38,10 +39,8 @@ export async function runEngineSmokeTest(
       { name: 'test', factory: (): Scene => new TestScene() }
     ],
     entryScene: 'test',
-    appContext: context as any
+    appContext: context
   });
-
-  engine.scenes.switchTo('test');
 
   const world = engine.world;
   const e1 = world.createEntity();

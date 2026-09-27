@@ -65,9 +65,23 @@ export class HarmonyOSPlatform {
 
   static async createAudioRenderer(sampleRate: number): Promise<AudioRendererAdapter | null> {
     try {
+      let samplingRate: audio.AudioSamplingRate = audio.AudioSamplingRate.SAMPLE_RATE_44100;
+      if (sampleRate === 8000) {
+        samplingRate = audio.AudioSamplingRate.SAMPLE_RATE_8000;
+      } else if (sampleRate === 16000) {
+        samplingRate = audio.AudioSamplingRate.SAMPLE_RATE_16000;
+      } else if (sampleRate === 22050) {
+        samplingRate = audio.AudioSamplingRate.SAMPLE_RATE_22050;
+      } else if (sampleRate === 48000) {
+        samplingRate = audio.AudioSamplingRate.SAMPLE_RATE_48000;
+      } else if (sampleRate === 64000) {
+        samplingRate = audio.AudioSamplingRate.SAMPLE_RATE_64000;
+      } else if (sampleRate === 96000) {
+        samplingRate = audio.AudioSamplingRate.SAMPLE_RATE_96000;
+      }
       const renderer: audio.AudioRenderer = await audio.createAudioRenderer({
         streamInfo: {
-          samplingRate: audio.AudioSamplingRate.SAMPLE_RATE_44100,
+          samplingRate: samplingRate,
           channels: audio.AudioChannel.CHANNEL_1,
           sampleFormat: audio.AudioSampleFormat.SAMPLE_FORMAT_S16LE,
           encodingType: audio.AudioEncodingType.ENCODING_TYPE_RAW
