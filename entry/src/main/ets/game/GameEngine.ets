@@ -174,6 +174,16 @@ export class GameEngine {
     return this.player === null ? 1 : this.player.level;
   }
 
+  getInventory(): Inventory {
+    if (this.player === null) {
+      return {
+        crystalOre: 0, mushroomOre: 0, flameOre: 0, abyssOre: 0, voidOre: 0,
+        coreNormal: 0, coreRare: 0, formCore: 0, hpPotions: 0, gold: 0
+      };
+    }
+    return this.player.inventory;
+  }
+
   getLevelUpXp(): number {
     return LEVEL_UP_XP;
   }

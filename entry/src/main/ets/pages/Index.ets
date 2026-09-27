@@ -6,7 +6,7 @@ import {
   COLOR_JOY_BASE, COLOR_JOY_KNOB,
   COLOR_BTN_JUMP, COLOR_BTN_ATTACK, COLOR_BTN_DASH, COLOR_TOOL_BTN,
   COLOR_XP_ORB, DASH_COOLDOWN, GenderType, WeaponForm,
-  EvolutionBranch, FORM_UNLOCK_COST
+  EvolutionBranch, FORM_UNLOCK_COST, Inventory
 } from '../game/GameConstants';
 
 @Entry
@@ -48,6 +48,10 @@ struct Index {
   @State evoFormCore: number = 0;
   @State evoMaxLevel: boolean = false;
   @State lockedForms: number[] = [1, 2, 3, 4, 5];
+  @State invOre: number = 0;
+  @State invNormal: number = 0;
+  @State invRare: number = 0;
+  @State invFormCore: number = 0;
   private branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
 
   aboutToAppear(): void {
@@ -88,6 +92,8 @@ struct Index {
       this.MinimapView()
 
       this.WeaponFormView()
+
+      this.InventoryBarView()
 
       this.TopBarView()
 
@@ -153,6 +159,59 @@ struct Index {
       }
     })
     .position({ x: 10, y: 76 + MINIMAP_SIZE + 14 })
+  }
+
+  @Builder
+  InventoryBarView() {
+    Row() {
+      Row() {
+        Text('◆')
+          .fontSize(10)
+          .fontColor('#00ced1')
+        Text(this.invOre.toString())
+          .fontSize(10)
+          .fontColor('#e2e8f0')
+          .margin({ left: 2 })
+      }
+      .margin({ right: 8 })
+
+      Row() {
+        Text('●')
+          .fontSize(10)
+          .fontColor('#a78bfa')
+        Text(this.invNormal.toString())
+          .fontSize(10)
+          .fontColor('#e2e8f0')
+          .margin({ left: 2 })
+      }
+      .margin({ right: 8 })
+
+      Row() {
+        Text('★')
+          .fontSize(10)
+          .fontColor('#fbbf24')
+        Text(this.invRare.toString())
+          .fontSize(10)
+          .fontColor('#e2e8f0')
+          .margin({ left: 2 })
+      }
+      .margin({ right: 8 })
+
+      Row() {
+        Text('◈')
+          .fontSize(10)
+          .fontColor('#f472b6')
+        Text(this.invFormCore.toString())
+          .fontSize(10)
+          .fontColor('#e2e8f0')
+          .margin({ left: 2 })
+      }
+    }
+    .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+    .backgroundColor('#1e293be0')
+    .borderRadius(6)
+    .border({ width: 1, color: '#334155' })
+    .position({ x: 10, y: 76 + MINIMAP_SIZE + 14 + 36 })
   }
 
   @Builder
@@ -874,6 +933,20 @@ struct Index {
       const level: number = this.gameEngine.getPlayerLevel();
       if (level !== this.playerLevel) {
         this.playerLevel = level;
+      }
+      const inv: Inventory = this.gameEngine.getInventory();
+      const branchOre: number = this.gameEngine.getEvoOreHave();
+      if (branchOre !== this.invOre) {
+        this.invOre = branchOre;
+      }
+      if (inv.coreNormal !== this.invNormal) {
+        this.invNormal = inv.coreNormal;
+      }
+      if (inv.coreRare !== this.invRare) {
+        this.invRare = inv.coreRare;
+      }
+      if (inv.formCore !== this.invFormCore) {
+        this.invFormCore = inv.formCore;
       }
     }, 100);
   }
