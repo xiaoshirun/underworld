@@ -443,6 +443,16 @@ export interface Inventory {
   transformCoreGhost: number;
 }
 
+export interface TransformCoreDrop {
+  dropIndex: number;
+  form: TransformForm;
+}
+
+export interface TransformUnlockNotify {
+  active: boolean;
+  form: TransformForm;
+}
+
 export interface MaterialDrop {
   x: number;
   y: number;

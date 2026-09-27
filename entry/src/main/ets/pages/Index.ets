@@ -243,7 +243,7 @@ struct Index {
             .margin({ right: 8 })
 
           Column() {
-            for (let i = 0; i < 10; i++) {
+            ForEach([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], (i: number) => {
               Row()
                 .width(17)
                 .height(8)
@@ -251,7 +251,7 @@ struct Index {
                 .borderRadius(2)
                 .margin({ left: i > 0 ? 1 : 0 })
                 .opacity(i < this.playerHp ? 1.0 : 0.5)
-            }
+            })
           }
           .height(12)
           .padding({ left: 3, right: 3, top: 2, bottom: 2 })

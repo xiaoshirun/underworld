@@ -14,6 +14,7 @@ import {
   GenderType, WeaponForm, EvolutionBranch, EvolutionLevel,
   BossState, ChestState, ChestType, BossRoom, MaterialDrop, TrapInstance, MechanismInstance,
   Inventory, TrapType, TrapState,
+  TransformCoreDrop, TransformUnlockNotify,
   MechanismType, SecretRoom,
   BossType, BossRole, BossPhase, MaterialType,
   BOSS_HP, BOSS_SIZE, BOSS_ATTACK_INTERVAL, BOSS_PHASE2_THRESHOLD,
@@ -21,7 +22,7 @@ import {
   PASSAGE_GUARDIAN_AGGRO, OPTIONAL_CHALLENGE_AGGRO,
   WEAPON_FORM_STATS,
   TRAP_TELEGRAPH_TIME, TRAP_ACTIVE_TIME, TRAP_COOLDOWN_TIME, TRAP_TRIGGER_RADIUS, TRAP_DAMAGE, TRAP_SIZE,
-  MECH_INTERACT_RANGE, PUSH_BLOCK_SPEED, TELEPORT_COOLDOWN,
+  MECH_INTERACT_RANGE, PUSH_BLOCK_SPEED, TELEPORT_COOLDOWN, PRESSURE_PLATE_RANGE,
   CHEST_SIZE, CHEST_INTERACT_RANGE,
   EVOLUTION_COST_ORE, EVOLUTION_COST_NORMAL, EVOLUTION_COST_RARE, FORM_UNLOCK_COST,
   COLOR_BG, COLOR_WALL, COLOR_WALL_EDGE, COLOR_FLOOR, COLOR_FLOOR_VAR,
@@ -92,7 +93,7 @@ export class GameEngine {
   private mechanisms: MechanismInstance[] = [];
   private secretRooms: SecretRoom[] = [];
   private teleportCooldown: number = 0;
-  private transformCoreDrops: { dropIndex: number; form: TransformForm }[] = [];
+  private transformCoreDrops: TransformCoreDrop[] = [];
   private transformUnlockNotifyTimer: number = 0;
   private transformUnlockNotifyForm: TransformForm = TransformForm.NONE;
   private transformAnimIsRevert: boolean = false;
@@ -200,7 +201,8 @@ export class GameEngine {
     if (this.player === null) {
       return {
         crystalOre: 0, mushroomOre: 0, flameOre: 0, abyssOre: 0, voidOre: 0,
-        coreNormal: 0, coreRare: 0, formCore: 0, hpPotions: 0, gold: 0
+        coreNormal: 0, coreRare: 0, formCore: 0, hpPotions: 0, gold: 0,
+        transformCoreSlime: 0, transformCoreArmor: 0, transformCoreIronMan: 0, transformCoreGhost: 0
       };
     }
     return this.player.inventory;
@@ -734,8 +736,8 @@ export class GameEngine {
     return this.player !== null ? this.player.unlockedTransforms : [];
   }
 
-  getTransformUnlockNotify(): { active: boolean; form: TransformForm } {
-    return { active: this.transformUnlockNotifyTimer > 0, form: this.transformUnlockNotifyForm };
+  getTransformUnlockNotify(): TransformUnlockNotify {
+    return { active: this.transformUnlockNotifyTimer > 0, form: this.transformUnlockNotifyForm } as TransformUnlockNotify;
   }
 
   private updateEngulfedPlayer(p: PlayerState, dt: number): void {
@@ -1647,7 +1649,7 @@ export class GameEngine {
         });
         // Mark which transform core via extraData — use a separate tracking mechanism
         // Store transform form in a parallel array indexed by drop
-        this.transformCoreDrops.push({ dropIndex: this.materialDrops.length - 1, form: transformDrop });
+        this.transformCoreDrops.push({ dropIndex: this.materialDrops.length - 1, form: transformDrop } as TransformCoreDrop);
       }
     }
   }
