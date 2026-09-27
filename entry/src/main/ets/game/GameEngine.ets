@@ -69,13 +69,15 @@ import { TileBatchRenderer, SpriteBatch, GlowBatchRenderer } from './SpriteBatch
 import { GameContext, ChunkCacheEntry } from './GameContext';
 import { PlayerMovementSystem, MovementBridge } from './systems/PlayerMovementSystem';
 import { PlayerCombatSystem } from './systems/PlayerCombatSystem';
+import { TransformSystem, TransformBridge } from './systems/TransformSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
 
-export class GameEngine extends GameContext implements MovementBridge {
+export class GameEngine extends GameContext implements MovementBridge, TransformBridge {
   private movementSystem: PlayerMovementSystem | null = null;
   private combatSystem: PlayerCombatSystem | null = null;
+  private transformSystem: TransformSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -156,6 +158,7 @@ export class GameEngine extends GameContext implements MovementBridge {
     this.initAmbientParticles();
     this.movementSystem = new PlayerMovementSystem(this, this);
     this.combatSystem = new PlayerCombatSystem(this);
+    this.transformSystem = new TransformSystem(this, this);
     this.startLoop();
   }
 
@@ -564,129 +567,7 @@ export class GameEngine extends GameContext implements MovementBridge {
   // === Transform System ===
 
   private updateTransformSystem(p: PlayerState, dt: number): void {
-    // Cooldown tick when not transformed
-    if (!p.isTransformed && p.transformCooldown > 0) {
-      p.transformCooldown -= dt;
-      if (p.transformCooldown < 0) p.transformCooldown = 0;
-    }
-
-    // Transform animation timer
-    if (p.transformAnimTimer > 0) {
-      p.transformAnimTimer -= dt;
-      if (p.transformAnimTimer < 0) p.transformAnimTimer = 0;
-    }
-
-    // Unlock notification timer
-    if (this.transformUnlockNotifyTimer > 0) {
-      this.transformUnlockNotifyTimer -= dt;
-      if (this.transformUnlockNotifyTimer < 0) this.transformUnlockNotifyTimer = 0;
-    }
-
-    if (!p.isTransformed) {
-      // Passive energy regen when not transformed
-      p.transformEnergy += TRANSFORM_PASSIVE_REGEN * (dt / 1000);
-      if (p.transformEnergy > p.transformMaxEnergy) {
-        p.transformEnergy = p.transformMaxEnergy;
-      }
-      return;
-    }
-
-    // Energy drain
-    const formIndex: number = p.transformForm as number;
-    const drainRate: number = TRANSFORM_DRAIN_RATES[formIndex];
-    p.transformEnergy -= drainRate * (dt / 1000);
-
-    // Form attack cooldown tick
-    if (p.transformFormAttackCooldown > 0) {
-      p.transformFormAttackCooldown -= dt;
-      if (p.transformFormAttackCooldown < 0) p.transformFormAttackCooldown = 0;
-    }
-
-    // Auto-revert on energy depletion
-    if (p.transformEnergy <= 0) {
-      p.transformEnergy = 0;
-      this.deactivateTransform();
-    }
-
-    // Form-specific ambient effects
-    this.updateTransformAmbientEffects(p, dt);
-  }
-
-  private updateTransformAmbientEffects(p: PlayerState, dt: number): void {
-    if (!this.settings.effectsEnabled) return;
-    const form: TransformForm = p.transformForm;
-
-    if (form === TransformForm.SLIME && this.frameCount % 20 === 0) {
-      // Drip particles
-      this.spawnParticle(p.x, p.y + PLAYER_SIZE, 0, 1, 400, COLOR_TRANSFORM_SLIME, 2);
-    } else if (form === TransformForm.GHOST && this.frameCount % 5 === 0) {
-      // Trailing wisps
-      this.spawnParticle(p.x + (Math.random() - 0.5) * 8, p.y + (Math.random() - 0.5) * 8,
-        (Math.random() - 0.5) * 0.5, -0.5 - Math.random() * 0.5, 300, COLOR_TRANSFORM_GHOST, 3);
-    } else if (form === TransformForm.IRON_MAN && this.frameCount % 3 === 0) {
-      // Jet flame particles from feet
-      this.spawnParticle(p.x - 3, p.y + PLAYER_SIZE, (Math.random() - 0.5) * 0.5, 1.5 + Math.random(), 200,
-        Math.random() > 0.5 ? '#ff6b00' : '#fbbf24', 2 + Math.random() * 2);
-      this.spawnParticle(p.x + 3, p.y + PLAYER_SIZE, (Math.random() - 0.5) * 0.5, 1.5 + Math.random(), 200,
-        Math.random() > 0.5 ? '#ff6b00' : '#fbbf24', 2 + Math.random() * 2);
-    }
-  }
-
-  activateTransform(form: TransformForm): void {
-    if (this.player === null) return;
-    const p: PlayerState = this.player;
-    if (p.isTransformed) return;
-    if (p.transformCooldown > 0) return;
-    if (p.unlockedTransforms.indexOf(form as number) === -1) return;
-
-    // Save weapon form
-    p.savedWeaponForm = p.currentWeaponForm;
-
-    // Activate
-    p.isTransformed = true;
-    p.transformForm = form;
-    p.transformEnergy = p.transformMaxEnergy;
-    p.transformAnimTimer = TRANSFORM_ACTIVATE_ANIM;
-    this.transformAnimIsRevert = false;
-    p.transformFormAttackCooldown = 0;
-
-    // Spawn activation particles
-    if (this.settings.effectsEnabled) {
-      this.particleMgr.magic(p.x, p.y, this.getTransformColor(form));
-    }
-    this.shakeTimer = 200;
-  }
-
-  deactivateTransform(): void {
-    if (this.player === null) return;
-    const p: PlayerState = this.player;
-    if (!p.isTransformed) return;
-
-    // Restore weapon
-    p.currentWeaponForm = p.savedWeaponForm;
-
-    // Deactivate
-    p.isTransformed = false;
-    p.transformForm = TransformForm.NONE;
-    p.transformAnimTimer = TRANSFORM_REVERT_ANIM;
-    this.transformAnimIsRevert = true;
-
-    // Set cooldown if energy depleted
-    if (p.transformEnergy <= 0) {
-      p.transformCooldown = TRANSFORM_COOLDOWN;
-    }
-
-    // Revert particles
-    if (this.settings.effectsEnabled) {
-      this.particleMgr.dust(p.x, p.y);
-    }
-  }
-
-  private getTransformColor(form: TransformForm): string {
-    if (form === TransformForm.SLIME) return COLOR_TRANSFORM_SLIME;
-    if (form === TransformForm.GHOST) return COLOR_TRANSFORM_GHOST;
-    if (form === TransformForm.ARMOR) return COLOR_TRANSFORM_ARMOR;
-    return COLOR_TRANSFORM_IRON_GOLD;
+    this.transformSystem!.update(p, dt);
   }
 
   // Public getters for UI
@@ -1380,7 +1261,7 @@ export class GameEngine extends GameContext implements MovementBridge {
     });
 
     // Drop transform core (first defeat only — check if player already has it)
-    const transformDrop: TransformForm = this.getTransformCoreForBoss(boss.bossType);
+    const transformDrop: TransformForm = this.transformSystem!.getCoreForBoss(boss.bossType);
     if (transformDrop !== TransformForm.NONE) {
       const alreadyHas: boolean = this.player !== null &&
         this.player.unlockedTransforms.indexOf(transformDrop) !== -1;
@@ -1397,14 +1278,6 @@ export class GameEngine extends GameContext implements MovementBridge {
         this.transformCoreDrops.push({ dropIndex: this.materialDrops.length - 1, form: transformDrop } as TransformCoreDrop);
       }
     }
-  }
-
-  private getTransformCoreForBoss(bossType: BossType): TransformForm {
-    if (bossType === BossType.MUSHROOM_KING) return TransformForm.SLIME;
-    if (bossType === BossType.CRYSTAL_GUARDIAN) return TransformForm.ARMOR;
-    if (bossType === BossType.LAVA_BEAST) return TransformForm.IRON_MAN;
-    if (bossType === BossType.VOID_RIFT) return TransformForm.GHOST;
-    return TransformForm.NONE;
   }
 
   private collectMaterialDrops(p: PlayerState): void {
@@ -5272,244 +5145,15 @@ export class GameEngine extends GameContext implements MovementBridge {
   // === Transform Form Movement & Combat Methods ===
 
   private updateTransformMovement(p: PlayerState, dt: number, moveX: number, moveY: number): void {
-    const form: TransformForm = p.transformForm;
-    const speed: number = TRANSFORM_SPEEDS[form as number];
-
-    if (form === TransformForm.IRON_MAN) {
-      // Flight: direct movement in all directions, no gravity
-      p.vx = moveX * speed;
-      p.vy = moveY * speed;
-    } else if (form === TransformForm.GHOST) {
-      // Ghost: normal movement but no wall collision
-      p.vx = moveX * speed;
-      p.vy = moveY * speed;
-    } else if (form === TransformForm.SLIME) {
-      // Slime: normal movement with higher speed
-      if (p.isDashing) {
-        p.dashTimer -= dt;
-        if (p.dashTimer <= 0) p.isDashing = false;
-        else {
-          p.vx = p.dashDirX * DASH_SPEED;
-          p.vy = p.dashDirY * DASH_SPEED;
-        }
-      } else {
-        p.vx = moveX * speed;
-        p.vy = moveY * speed;
-      }
-    } else {
-      // ARMOR: slower, heavy feel
-      if (p.isDashing) {
-        p.dashTimer -= dt;
-        if (p.dashTimer <= 0) p.isDashing = false;
-        else {
-          p.vx = p.dashDirX * DASH_SPEED * 1.5;
-          p.vy = p.dashDirY * DASH_SPEED * 1.5;
-          // Dash damage to enemies
-          this.checkTransformDashDamage(p);
-        }
-      } else {
-        p.vx = moveX * speed;
-        p.vy = moveY * speed;
-      }
-    }
-
-    // Facing direction
-    if (Math.abs(moveX) > 0.1 || Math.abs(moveY) > 0.1) {
-      p.facing = Math.atan2(moveY, moveX);
-    }
-
-    // Jump timer
-    if (p.isJumping) {
-      p.jumpTimer -= dt;
-      if (form === TransformForm.SLIME) {
-        p.jumpHeight = Math.sin((1 - p.jumpTimer / 400) * Math.PI) * 16;
-      } else {
-        p.jumpHeight = Math.sin((1 - p.jumpTimer / 300) * Math.PI) * 8;
-      }
-      if (p.jumpTimer <= 0) {
-        p.isJumping = false;
-        p.jumpHeight = 0;
-      }
-    }
+    this.transformSystem!.updateMovement(p, dt, moveX, moveY);
   }
 
   private applyTransformCollision(p: PlayerState): void {
-    const newX: number = p.x + p.vx;
-    const newY: number = p.y + p.vy;
-
-    if (p.transformForm === TransformForm.GHOST) {
-      p.x = newX;
-      p.y = newY;
-    } else if (p.transformForm === TransformForm.IRON_MAN) {
-      if (!this.movementSystem!.checkPlayerCollision(newX, p.y)) {
-        p.x = newX;
-      }
-      if (!this.movementSystem!.checkPlayerCollision(p.x, newY)) {
-        p.y = newY;
-      }
-    } else if (p.transformForm === TransformForm.SLIME) {
-      if (!this.movementSystem!.checkPlayerCollision(newX, p.y)) {
-        p.x = newX;
-      } else {
-        p.vx = -p.vx;
-      }
-      if (!this.movementSystem!.checkPlayerCollision(p.x, newY)) {
-        p.y = newY;
-      } else {
-        p.vy = -p.vy;
-      }
-    } else {
-      if (!this.movementSystem!.checkPlayerCollision(newX, p.y)) {
-        p.x = newX;
-      }
-      if (!this.movementSystem!.checkPlayerCollision(p.x, newY)) {
-        p.y = newY;
-      }
-    }
+    this.transformSystem!.applyCollision(p);
   }
 
   private handleTransformAttack(p: PlayerState): void {
-    const form: TransformForm = p.transformForm;
-    const formIndex: number = form as number;
-    const cost: number = TRANSFORM_ATTACK_COSTS[formIndex];
-    const cooldown: number = TRANSFORM_ATTACK_COOLDOWNS[formIndex];
-
-    if (p.transformFormAttackCooldown > 0) return;
-    if (p.transformEnergy < cost) return;
-
-    p.transformEnergy -= cost;
-    p.transformFormAttackCooldown = cooldown;
-    p.isAttacking = true;
-    p.attackTimer = ATTACK_DURATION;
-
-    const cosF: number = Math.cos(p.facing);
-    const sinF: number = Math.sin(p.facing);
-
-    if (form === TransformForm.SLIME) {
-      // Split Shot: 3 small slimes shoot outward
-      for (let i: number = -1; i <= 1; i++) {
-        const spreadAngle: number = p.facing + i * 0.3;
-        const sx: number = Math.cos(spreadAngle);
-        const sy: number = Math.sin(spreadAngle);
-        // Spawn projectile-like particles that damage enemies
-        for (let d: number = 0; d < 80; d += 8) {
-          const px: number = p.x + sx * d;
-          const py: number = p.y + sy * d;
-          this.damageEnemiesAt(px, py, 10, 2);
-        }
-        if (this.settings.effectsEnabled) {
-          for (let d: number = 0; d < 60; d += 12) {
-            this.spawnParticle(p.x + sx * d, p.y + sy * d,
-              sx * 0.5, sy * 0.5, 300, COLOR_TRANSFORM_SLIME, 4);
-          }
-        }
-      }
-    } else if (form === TransformForm.GHOST) {
-      // Soul Shockwave: expanding ring
-      if (this.settings.effectsEnabled) {
-        const ghostRing: EmitterConfig = {
-          x: p.x, y: p.y,
-          count: 16,
-          speedMin: 1.5, speedMax: 2.5,
-          angleMin: 0, angleMax: Math.PI * 2,
-          lifeMin: 300, lifeMax: 400,
-          sizeMin: 2, sizeMax: 4,
-          endSizeMin: 0, endSizeMax: 1,
-          colors: [COLOR_TRANSFORM_GHOST, '#b0e0e6'],
-          endColors: [],
-          gravity: 0,
-          friction: 0.97,
-          shape: ParticleShape.RING,
-          shrink: true,
-          fadeOut: true,
-          spreadX: 6, spreadY: 6
-        };
-        this.particleMgr.burst(ghostRing);
-      }
-      this.damageEnemiesInRadius(p.x, p.y, 80, 3);
-    } else if (form === TransformForm.ARMOR) {
-      // Rider Kick: charge forward 60px
-      const chargeDist: number = 60;
-      for (let d: number = 0; d < chargeDist; d += 6) {
-        const cx: number = p.x + cosF * d;
-        const cy: number = p.y + sinF * d;
-        this.damageEnemiesAt(cx, cy, 12, 5);
-      }
-      // Move player forward
-      p.x += cosF * chargeDist;
-      p.y += sinF * chargeDist;
-      if (this.settings.effectsEnabled) {
-        for (let d: number = 0; d < chargeDist; d += 10) {
-          this.spawnParticle(p.x - cosF * d, p.y - sinF * d,
-            (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 400, COLOR_TRANSFORM_ARMOR_ACCENT, 4);
-        }
-      }
-      this.shakeTimer = 150;
-    } else if (form === TransformForm.IRON_MAN) {
-      // Repulsor Beam: projectile traveling 150px
-      const beamLen: number = 150;
-      for (let d: number = 0; d < beamLen; d += 6) {
-        const bx: number = p.x + cosF * d;
-        const by: number = p.y + sinF * d;
-        this.damageEnemiesAt(bx, by, 8, 3);
-      }
-      if (this.settings.effectsEnabled) {
-        for (let d: number = 0; d < beamLen; d += 10) {
-          this.spawnParticle(p.x + cosF * d, p.y + sinF * d,
-            cosF * 0.3 + (Math.random() - 0.5), sinF * 0.3 + (Math.random() - 0.5),
-            250, COLOR_TRANSFORM_IRON_GOLD, 3);
-        }
-      }
-    }
-  }
-
-  private damageEnemiesAt(x: number, y: number, radius: number, damage: number): void {
-    for (let i: number = 0; i < this.enemies.length; i++) {
-      const s: SlimeState = this.enemies[i];
-      if (!s.active) continue;
-      const dx: number = s.x - x;
-      const dy: number = s.y - y;
-      if (dx * dx + dy * dy < radius * radius) {
-        s.hp -= damage;
-        s.hitFlash = 200;
-        if (this.settings.effectsEnabled) {
-          this.particleMgr.sparks(s.x, s.y, COLOR_DAMAGE_PARTICLE, 3);
-        }
-        if (s.hp <= 0) {
-          this.combatSystem!.onEnemyDeath(s);
-        }
-      }
-    }
-  }
-
-  private damageEnemiesInRadius(cx: number, cy: number, radius: number, damage: number): void {
-    this.damageEnemiesAt(cx, cy, radius, damage);
-    // Also damage bosses
-    if (this.activeBoss !== null && this.activeBoss.active && !this.activeBoss.defeated) {
-      const dx: number = this.activeBoss.x - cx;
-      const dy: number = this.activeBoss.y - cy;
-      if (dx * dx + dy * dy < radius * radius) {
-        this.activeBoss.hp -= damage;
-        this.activeBoss.hitFlash = 200;
-      }
-    }
-  }
-
-  private checkTransformDashDamage(p: PlayerState): void {
-    // Armor dash: damage enemies in path
-    for (let i: number = 0; i < this.enemies.length; i++) {
-      const s: SlimeState = this.enemies[i];
-      if (!s.active) continue;
-      const dx: number = s.x - p.x;
-      const dy: number = s.y - p.y;
-      if (dx * dx + dy * dy < 30 * 30) {
-        s.hp -= 1;
-        s.hitFlash = 200;
-        if (s.hp <= 0) {
-          this.combatSystem!.onEnemyDeath(s);
-        }
-      }
-    }
+    this.transformSystem!.handleAttack(p);
   }
 
   private renderSlimeForm(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
