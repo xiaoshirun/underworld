@@ -12,7 +12,7 @@ import {
   TileType, EnemyType, BiomeType, PlayerState, SlimeState, XpOrb, Particle,
   ChunkData, InputState, GameSettings, AmbientParticle,
   GenderType, WeaponForm, EvolutionBranch, EvolutionLevel,
-  BossState, ChestState, BossRoom, MaterialDrop, TrapInstance, MechanismInstance,
+  BossState, ChestState, ChestType, BossRoom, MaterialDrop, TrapInstance, MechanismInstance,
   Inventory, TrapType, TrapState,
   MechanismType, SecretRoom,
   BossType, BossRole, BossPhase, MaterialType,
@@ -22,6 +22,7 @@ import {
   WEAPON_FORM_STATS,
   TRAP_TELEGRAPH_TIME, TRAP_ACTIVE_TIME, TRAP_COOLDOWN_TIME, TRAP_TRIGGER_RADIUS, TRAP_DAMAGE, TRAP_SIZE,
   MECH_INTERACT_RANGE, PUSH_BLOCK_SPEED, TELEPORT_COOLDOWN,
+  CHEST_SIZE, CHEST_INTERACT_RANGE,
   COLOR_BG, COLOR_WALL, COLOR_WALL_EDGE, COLOR_FLOOR, COLOR_FLOOR_VAR,
   COLOR_WATER, COLOR_WATER_LIGHT, COLOR_LAVA, COLOR_LAVA_LIGHT,
   COLOR_CRYSTAL, COLOR_CRYSTAL_GLOW,
@@ -44,7 +45,8 @@ import {
   COLOR_PUSH_BLOCK, COLOR_REFLECTOR, COLOR_BEAM, COLOR_BREAKABLE_WALL,
   COLOR_TELEPORT_RUNE, COLOR_TELEPORT_ENTRY, COLOR_TELEPORT_EXIT,
   COLOR_BOSS_CRYSTAL, COLOR_BOSS_MUSHROOM, COLOR_BOSS_LAVA, COLOR_BOSS_ABYSS, COLOR_BOSS_VOID,
-  COLOR_BOSS_HP_BAR, COLOR_BOSS_HP_BG
+  COLOR_BOSS_HP_BAR, COLOR_BOSS_HP_BG,
+  COLOR_CHEST_NORMAL, COLOR_CHEST_ELITE, COLOR_CHEST_BOSS, COLOR_CHEST_GLOW
 } from './GameConstants';
 import { WorldGenerator } from './WorldGenerator';
 import { AudioManager } from './AudioManager';
@@ -76,6 +78,7 @@ export class GameEngine {
   private bossRoomLocked: boolean = false;
   private materialDrops: MaterialDrop[] = [];
   private bossRooms: BossRoom[] = [];
+  private chests: ChestState[] = [];
   private traps: TrapInstance[] = [];
   private mechanisms: MechanismInstance[] = [];
   private secretRooms: SecretRoom[] = [];
@@ -257,6 +260,10 @@ export class GameEngine {
           for (let i: number = 0; i < chunk.bosses.length; i++) {
             this.bosses.push(chunk.bosses[i]);
           }
+          // Extract chest data
+          for (let i: number = 0; i < chunk.chests.length; i++) {
+            this.chests.push(chunk.chests[i]);
+          }
         }
       }
     }
@@ -324,6 +331,8 @@ export class GameEngine {
     this.updateBosses(dt);
     this.checkBossRoomEntry(p);
     this.collectMaterialDrops(p);
+    this.checkChestInteraction();
+    this.updateChestAnims(dt);
     this.updateTraps(dt);
     this.updateMechanisms(dt);
     this.updateXpOrbs(dt);
@@ -1297,6 +1306,16 @@ export class GameEngine {
 
         // Drop materials
         this.spawnBossDrops(boss);
+
+        // Spawn boss chest at boss position
+        this.chests.push({
+          x: boss.x, y: boss.y,
+          chestType: ChestType.BOSS,
+          opened: false, active: true,
+          guardianDefeated: true, guardianCount: 0,
+          openAnim: 0
+        });
+
         this.shakeTimer = 500;
         this.audio.playEnemyDeath();
       }
@@ -1448,6 +1467,7 @@ export class GameEngine {
     this.renderXpOrbs(c, offX, offY);
     this.renderTraps(c, offX, offY);
     this.renderMechanisms(c, offX, offY);
+    this.renderChests(c, offX, offY);
     this.renderEnemies(c, offX, offY);
     this.renderBosses(c, offX, offY);
     this.renderMaterialDrops(c, offX, offY);
@@ -2766,6 +2786,19 @@ export class GameEngine {
       mc.fillRect(bsx - 3, bsy - 3, 6, 6);
     }
 
+    // Chest dots (yellow/gold)
+    for (let i: number = 0; i < this.chests.length; i++) {
+      const chest: ChestState = this.chests[i];
+      if (!chest.active || chest.opened) continue;
+      const cdx: number = (chest.x / TILE_SIZE) - playerTX;
+      const cdy: number = (chest.y / TILE_SIZE) - playerTY;
+      if (Math.abs(cdx) > viewRange || Math.abs(cdy) > viewRange) continue;
+      const csx: number = (cdx + viewRange) * scale;
+      const csy: number = (cdy + viewRange) * scale;
+      mc.fillStyle = COLOR_CHEST_GLOW;
+      mc.fillRect(csx - 2, csy - 2, 4, 4);
+    }
+
     mc.fillStyle = COLOR_MINIMAP_PLAYER;
     mc.fillRect(size / 2 - 2, size / 2 - 2, 5, 5);
 
@@ -3036,5 +3069,202 @@ export class GameEngine {
     else if (boss.bossType === BossType.VOID_RIFT) name = 'Void Rift';
     if (boss.phase === BossPhase.PHASE_2) name += ' [Enraged]';
     c.fillText(name, this.screenW / 2, barY - 6);
+  }
+
+  // ==================== Chest System ====================
+
+  private updateChestAnims(dt: number): void {
+    for (let i: number = 0; i < this.chests.length; i++) {
+      const chest: ChestState = this.chests[i];
+      if (chest.openAnim > 0) {
+        chest.openAnim -= dt;
+        if (chest.openAnim < 0) chest.openAnim = 0;
+      }
+    }
+  }
+
+  private renderChests(c: CanvasRenderingContext2D, offX: number, offY: number): void {
+    for (let i: number = 0; i < this.chests.length; i++) {
+      const chest: ChestState = this.chests[i];
+      if (!chest.active) continue;
+      const sx: number = chest.x - offX;
+      const sy: number = chest.y - offY;
+      if (sx < -30 || sx > this.screenW + 30 || sy < -30 || sy > this.screenH + 30) continue;
+
+      const halfSize: number = CHEST_SIZE / 2;
+
+      // Glow effect
+      if (this.settings.effectsEnabled) {
+        c.globalAlpha = 0.3 + Math.sin(this.frameCount * 0.05) * 0.1;
+        c.fillStyle = COLOR_CHEST_GLOW;
+        c.beginPath();
+        c.arc(sx, sy, halfSize + 6, 0, Math.PI * 2);
+        c.fill();
+        c.globalAlpha = 1.0;
+      }
+
+      if (chest.chestType === ChestType.NORMAL) {
+        // Brown wooden box
+        c.fillStyle = COLOR_CHEST_NORMAL;
+        c.fillRect(sx - halfSize, sy - halfSize, CHEST_SIZE, CHEST_SIZE);
+        // Lid line
+        c.fillStyle = '#6b4f10';
+        c.fillRect(sx - halfSize, sy - 1, CHEST_SIZE, 2);
+        // Lock
+        c.fillStyle = '#c0a030';
+        c.fillRect(sx - 1, sy - 3, 3, 3);
+      } else if (chest.chestType === ChestType.ELITE) {
+        // Gray iron box
+        c.fillStyle = COLOR_CHEST_ELITE;
+        c.fillRect(sx - halfSize - 1, sy - halfSize - 1, CHEST_SIZE + 2, CHEST_SIZE + 2);
+        // Rune cross-hatch
+        c.strokeStyle = '#a0b0c0';
+        c.lineWidth = 1;
+        c.globalAlpha = 0.6;
+        c.beginPath();
+        c.moveTo(sx - halfSize, sy - halfSize);
+        c.lineTo(sx + halfSize, sy + halfSize);
+        c.moveTo(sx + halfSize, sy - halfSize);
+        c.lineTo(sx - halfSize, sy + halfSize);
+        c.stroke();
+        c.globalAlpha = 1.0;
+        // Lock indicator
+        if (!chest.guardianDefeated) {
+          c.fillStyle = '#ff3333';
+          c.fillRect(sx - 2, sy - 2, 4, 4);
+        } else {
+          c.fillStyle = '#33ff33';
+          c.fillRect(sx - 2, sy - 2, 4, 4);
+        }
+      } else if (chest.chestType === ChestType.BOSS) {
+        // Golden ornate box
+        c.fillStyle = COLOR_CHEST_BOSS;
+        c.fillRect(sx - halfSize - 2, sy - halfSize - 2, CHEST_SIZE + 4, CHEST_SIZE + 4);
+        // Inner border
+        c.strokeStyle = '#ffaa00';
+        c.lineWidth = 2;
+        c.strokeRect(sx - halfSize, sy - halfSize, CHEST_SIZE, CHEST_SIZE);
+        // Star decoration
+        c.fillStyle = '#ffffff';
+        c.globalAlpha = 0.8;
+        c.fillRect(sx - 1, sy - halfSize + 1, 2, 2);
+        c.fillRect(sx - 1, sy + halfSize - 3, 2, 2);
+        c.fillRect(sx - halfSize + 1, sy - 1, 2, 2);
+        c.fillRect(sx + halfSize - 3, sy - 1, 2, 2);
+        c.globalAlpha = 1.0;
+      }
+
+      // Open animation (lid lifting)
+      if (chest.opened && chest.openAnim > 0) {
+        c.fillStyle = chest.chestType === ChestType.BOSS ? COLOR_CHEST_BOSS :
+          (chest.chestType === ChestType.ELITE ? COLOR_CHEST_ELITE : COLOR_CHEST_NORMAL);
+        const lift: number = Math.min(chest.openAnim / 200, 1) * 6;
+        c.fillRect(sx - halfSize, sy - halfSize - lift - 3, CHEST_SIZE, 3);
+      }
+    }
+  }
+
+  private checkChestInteraction(): void {
+    if (this.player === null) return;
+    const p: PlayerState = this.player;
+
+    for (let i: number = 0; i < this.chests.length; i++) {
+      const chest: ChestState = this.chests[i];
+      if (!chest.active || chest.opened) continue;
+
+      const dx: number = chest.x - p.x;
+      const dy: number = chest.y - p.y;
+      const dist: number = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < CHEST_INTERACT_RANGE) {
+        // Boss chest: auto-open on spawn (already handled by boss death)
+        // Elite chest: only if guardian defeated
+        if (chest.chestType === ChestType.ELITE && !chest.guardianDefeated) continue;
+        this.openChest(chest);
+      }
+    }
+  }
+
+  private openChest(chest: ChestState): void {
+    if (this.player === null) return;
+    const p: PlayerState = this.player;
+
+    chest.opened = true;
+    chest.openAnim = 500;
+
+    // Spawn light pillar particles
+    if (this.settings.effectsEnabled) {
+      for (let k: number = 0; k < 12; k++) {
+        const angle: number = Math.random() * Math.PI * 2;
+        const speed: number = 1 + Math.random() * 2;
+        this.spawnParticle(chest.x, chest.y,
+          Math.cos(angle) * speed, -2 - Math.random() * 3,
+          600, COLOR_CHEST_GLOW, 3);
+      }
+    }
+
+    // Generate loot based on chest type
+    if (chest.chestType === ChestType.NORMAL) {
+      // Normal: 1-2 core_normal, 1-2 hp potions, small gold
+      const coreCount: number = 1 + Math.floor(Math.random() * 2);
+      const potionCount: number = 1 + Math.floor(Math.random() * 2);
+      const goldCount: number = 5 + Math.floor(Math.random() * 10);
+      p.inventory.coreNormal += coreCount;
+      p.inventory.hpPotions += potionCount;
+      p.inventory.gold += goldCount;
+      this.spawnLootText(chest.x, chest.y, '+' + coreCount + ' Core');
+    } else if (chest.chestType === ChestType.ELITE) {
+      // Elite: 1 core_rare, 1 form_core, 2-3 hp potions
+      const potionCount: number = 2 + Math.floor(Math.random() * 2);
+      p.inventory.coreRare += 1;
+      p.inventory.formCore += 1;
+      p.inventory.hpPotions += potionCount;
+      p.inventory.gold += 20;
+      this.spawnLootText(chest.x, chest.y, '+Rare Core +Form Core');
+    } else if (chest.chestType === ChestType.BOSS) {
+      // Boss: 2-3 boss ore, 1-2 core_rare, chance form_core
+      const oreCount: number = 2 + Math.floor(Math.random() * 2);
+      const rareCount: number = 1 + Math.floor(Math.random() * 2);
+      // Add boss-specific ore based on nearest boss type
+      this.addBossOre(p, oreCount);
+      p.inventory.coreRare += rareCount;
+      if (Math.random() < 0.5) {
+        p.inventory.formCore += 1;
+      }
+      p.inventory.gold += 50;
+      this.spawnLootText(chest.x, chest.y, '+Boss Loot!');
+    }
+  }
+
+  private addBossOre(p: PlayerState, count: number): void {
+    // Determine which boss ore to add based on player's current biome
+    const biome: BiomeType = this.worldGen.getBiome(p.x, p.y);
+    if (biome === BiomeType.CRYSTAL) {
+      p.inventory.crystalOre += count;
+    } else if (biome === BiomeType.MUSHROOM) {
+      p.inventory.mushroomOre += count;
+    } else if (biome === BiomeType.LAVA) {
+      p.inventory.flameOre += count;
+    } else if (biome === BiomeType.WATER) {
+      p.inventory.abyssOre += count;
+    } else if (biome === BiomeType.SHADOW) {
+      p.inventory.voidOre += count;
+    } else {
+      // Default to crystal ore if in normal biome
+      p.inventory.crystalOre += count;
+    }
+  }
+
+  private spawnLootText(x: number, y: number, text: string): void {
+    // Spawn floating text particle to show loot pickup
+    if (this.settings.effectsEnabled) {
+      for (let k: number = 0; k < 5; k++) {
+        const angle: number = Math.random() * Math.PI * 2;
+        const speed: number = 0.5 + Math.random();
+        this.spawnParticle(x, y - 10,
+          Math.cos(angle) * speed, -1.5 - Math.random(),
+          400, '#ffd700', 2);
+      }
+    }
   }
 }

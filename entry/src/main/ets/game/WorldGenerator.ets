@@ -5,8 +5,9 @@ import {
   TrapType, TrapState, TrapInstance,
   TRAP_TELEGRAPH_TIME, TRAP_ACTIVE_TIME, TRAP_COOLDOWN_TIME,
   TRAP_TRIGGER_RADIUS, TRAP_DAMAGE, TRAP_SIZE,
-  MechanismType, MechanismInstance, SecretRoom, ChestType,
+  MechanismType, MechanismInstance, SecretRoom, ChestType, ChestState,
   MECH_INTERACT_RANGE, PRESSURE_PLATE_RANGE,
+  CHEST_SIZE, NORMAL_CHEST_CHANCE,
   BossType, BossRole, BossRoom, BossState, BossPhase,
   BOSS_ROOM_SIZE, BOSS_HP, BOSS_SIZE,
   PASSAGE_GUARDIAN_AGGRO, OPTIONAL_CHALLENGE_AGGRO
@@ -175,6 +176,7 @@ export class WorldGenerator {
     const traps: TrapInstance[] = this.generateTraps(cx, cy, tiles, chunkBiome, distFromOrigin);
     const mechanisms: MechanismInstance[] = this.generateMechanisms(cx, cy, tiles, chunkBiome, distFromOrigin);
     const secretRooms: SecretRoom[] = this.generateSecretRooms(cx, cy, tiles, chunkBiome, distFromOrigin);
+    const chests: ChestState[] = this.generateChests(cx, cy, tiles, size, secretRooms, distFromOrigin);
 
     const chunkBoss: BossState[] = [];
     if (optionalBoss !== null) {
@@ -183,7 +185,7 @@ export class WorldGenerator {
 
     return {
       tiles: tiles, enemies: enemies, generated: true,
-      bosses: chunkBoss, chests: [], traps: traps, mechanisms: mechanisms,
+      bosses: chunkBoss, chests: chests, traps: traps, mechanisms: mechanisms,
       secretRooms: secretRooms, isBossRoom: false
     };
   }
@@ -413,6 +415,84 @@ export class WorldGenerator {
       }
     }
     return rooms;
+  }
+
+  // ==================== Chest Generation ====================
+
+  private generateChests(cx: number, cy: number, tiles: number[][], size: number,
+    secretRooms: SecretRoom[], distFromOrigin: number): ChestState[] {
+    const chests: ChestState[] = [];
+    if (cx === 0 && cy === 0) return chests;
+
+    // Place elite chests inside secret rooms
+    for (let i: number = 0; i < secretRooms.length; i++) {
+      const room: SecretRoom = secretRooms[i];
+      // Place chest one tile past the broken wall (inside the secret area)
+      const wallWX: number = (cx * size + room.wallTileX) * TILE_SIZE + TILE_SIZE / 2;
+      const wallWY: number = (cy * size + room.wallTileY) * TILE_SIZE + TILE_SIZE / 2;
+      // Find adjacent floor tile to place chest
+      let chestX: number = wallWX;
+      let chestY: number = wallWY;
+      const wtx: number = room.wallTileX;
+      const wty: number = room.wallTileY;
+      if (wty > 0 && tiles[wty - 1][wtx] === TileType.FLOOR) {
+        chestY = wallWY - TILE_SIZE;
+      } else if (wty < size - 1 && tiles[wty + 1][wtx] === TileType.FLOOR) {
+        chestY = wallWY + TILE_SIZE;
+      } else if (wtx > 0 && tiles[wty][wtx - 1] === TileType.FLOOR) {
+        chestX = wallWX - TILE_SIZE;
+      } else if (wtx < size - 1 && tiles[wty][wtx + 1] === TileType.FLOOR) {
+        chestX = wallWX + TILE_SIZE;
+      }
+      chests.push({
+        x: chestX, y: chestY,
+        chestType: room.chestType,
+        opened: false, active: true,
+        guardianDefeated: true, guardianCount: 0,
+        openAnim: 0
+      });
+    }
+
+    // Place normal chests in open world (max 1 per chunk)
+    const h: number = chunkHash(cx + 30000, cy + 40000);
+    const r: number = hashToFloat(h);
+    if (r > NORMAL_CHEST_CHANCE) return chests;
+
+    // Find a suitable floor tile away from walls
+    const startLx: number = 2 + (h % (size - 4));
+    const startLy: number = 2 + ((h >> 8) % (size - 4));
+    for (let attempt: number = 0; attempt < 20; attempt++) {
+      const lx: number = (startLx + attempt * 3) % (size - 2) + 1;
+      const ly: number = (startLy + attempt * 5) % (size - 2) + 1;
+      if (tiles[ly][lx] !== TileType.FLOOR) continue;
+
+      // Check not adjacent to walls (want open area)
+      let wallAdj: boolean = false;
+      for (let dy: number = -1; dy <= 1; dy++) {
+        for (let dx: number = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const ny: number = ly + dy;
+          const nx: number = lx + dx;
+          if (ny >= 0 && ny < size && nx >= 0 && nx < size) {
+            if (tiles[ny][nx] === TileType.WALL) wallAdj = true;
+          }
+        }
+      }
+      if (wallAdj) continue;
+
+      const worldX: number = (cx * size + lx) * TILE_SIZE + TILE_SIZE / 2;
+      const worldY: number = (cy * size + ly) * TILE_SIZE + TILE_SIZE / 2;
+      chests.push({
+        x: worldX, y: worldY,
+        chestType: ChestType.NORMAL,
+        opened: false, active: true,
+        guardianDefeated: true, guardianCount: 0,
+        openAnim: 0
+      });
+      break; // max 1 normal chest per chunk
+    }
+
+    return chests;
   }
 
   // ==================== Boss Room Generation ====================
