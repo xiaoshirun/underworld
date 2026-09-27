@@ -306,7 +306,7 @@ struct LoginPage {
       setTimeout(() => {
         this.isLoading = false;
         router.replaceUrl({
-          url: 'pages/Index',
+          url: 'pages/CharacterSelectPage',
           params: { username: this.username }
         });
       }, 600);
