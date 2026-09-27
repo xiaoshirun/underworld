@@ -69,8 +69,16 @@ struct Index {
   aboutToAppear(): void {
     try {
       const displayInfo = display.getDefaultDisplaySync();
-      this.screenW = px2vp(displayInfo.width);
-      this.screenH = px2vp(displayInfo.height);
+      // Ensure landscape: width > height
+      const rawW: number = px2vp(displayInfo.width);
+      const rawH: number = px2vp(displayInfo.height);
+      if (rawW > rawH) {
+        this.screenW = rawW;
+        this.screenH = rawH;
+      } else {
+        this.screenW = rawH;
+        this.screenH = rawW;
+      }
       const params = router.getParams();
       if (params !== null && params !== undefined) {
         const p = params as Record<string, Object>;
@@ -82,8 +90,8 @@ struct Index {
         }
       }
     } catch (e) {
-      this.screenW = 360;
-      this.screenH = 780;
+      this.screenW = 780;
+      this.screenH = 360;
     }
   }
 
@@ -175,7 +183,7 @@ struct Index {
         this.currentWeaponForm = this.gameEngine.getCurrentWeaponForm();
       }
     })
-    .position({ x: 10, y: 76 + MINIMAP_SIZE + 14 })
+    .position({ x: 10, y: this.screenH - 130 })
   }
 
   @Builder
@@ -228,7 +236,7 @@ struct Index {
     .backgroundColor('#1e293be0')
     .borderRadius(6)
     .border({ width: 1, color: '#334155' })
-    .position({ x: 10, y: 76 + MINIMAP_SIZE + 14 + 36 })
+    .position({ x: 10, y: this.screenH - 96 })
   }
 
   @Builder
@@ -242,7 +250,7 @@ struct Index {
             .fontColor('#fbbf24')
             .margin({ right: 8 })
 
-          Column() {
+          Row() {
             ForEach([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], (i: number) => {
               Row()
                 .width(17)
@@ -362,113 +370,137 @@ struct Index {
 
   @Builder
   ActionButtonsView() {
-    Column() {
-      Row() {
-        Stack() {
-          Circle()
-            .width(44)
-            .height(44)
-            .fill(this.toolReady ? COLOR_TOOL_BTN : '#4a3520')
-            .opacity(this.toolReady ? 0.85 : 0.5)
-            .shadow({ radius: 6, color: '#f59e0b40', offsetX: 0, offsetY: 2 })
+    Stack() {
+      // Attack button — primary, largest, bottom-right thumb anchor
+      Stack() {
+        Circle()
+          .width(70)
+          .height(70)
+          .fill('transparent')
+          .border({ width: 1, color: '#ffffff10' })
 
-          Text('钻')
-            .fontSize(14)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#ffffff')
-        }
-        .width(44)
-        .height(44)
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down && this.toolReady) {
-            this.gameEngine.setInputTool(true);
-            this.toolReady = false;
-            setTimeout(() => {
-              this.toolReady = true;
-            }, 200);
-          }
-        })
+        Circle()
+          .width(62)
+          .height(62)
+          .fill(COLOR_BTN_ATTACK)
+          .opacity(0.9)
+          .shadow({ radius: 10, color: '#ef444460', offsetX: 0, offsetY: 3 })
 
-        Stack() {
-          Circle()
-            .width(50)
-            .height(50)
-            .fill(COLOR_BTN_JUMP)
-            .opacity(0.85)
-            .shadow({ radius: 6, color: '#22c55e40', offsetX: 0, offsetY: 2 })
+        Circle()
+          .width(52)
+          .height(52)
+          .fill('transparent')
+          .border({ width: 1.5, color: '#ffffff25' })
 
-          Text('跳')
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#ffffff')
-        }
-        .width(50)
-        .height(50)
-        .margin({ left: 10 })
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            this.gameEngine.setInputJump(true);
-          }
-        })
-
-        Stack() {
-          Circle()
-            .width(50)
-            .height(50)
-            .fill(this.dashReady ? COLOR_BTN_DASH : '#1e3a5f')
-            .opacity(this.dashReady ? 0.85 : 0.5)
-            .shadow({ radius: 6, color: '#3b82f640', offsetX: 0, offsetY: 2 })
-
-          Text('闪')
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#ffffff')
-        }
-        .width(50)
-        .height(50)
-        .margin({ left: 12 })
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down && this.dashReady) {
-            this.gameEngine.setInputDash(true);
-            this.dashReady = false;
-            setTimeout(() => {
-              this.dashReady = true;
-            }, DASH_COOLDOWN);
-          }
-        })
+        Text('攻击')
+          .fontSize(15)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ffffff')
       }
-
-      Row() {
-        Stack() {
-          Circle()
-            .width(62)
-            .height(62)
-            .fill(COLOR_BTN_ATTACK)
-            .opacity(0.85)
-            .shadow({ radius: 8, color: '#ef444450', offsetX: 0, offsetY: 3 })
-
-          Circle()
-            .width(54)
-            .height(54)
-            .fill('transparent')
-            .border({ width: 1, color: '#ffffff20' })
-
-          Text('攻击')
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#ffffff')
+      .width(62)
+      .height(62)
+      .position({ x: this.screenW - 62 - 14, y: this.screenH - 62 - 14 })
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down) {
+          this.gameEngine.setInputAttack(true);
         }
-        .width(62)
-        .height(62)
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            this.gameEngine.setInputAttack(true);
-          }
-        })
+      })
+
+      // Jump button — upper-left of attack, natural thumb reach
+      Stack() {
+        Circle()
+          .width(50)
+          .height(50)
+          .fill(COLOR_BTN_JUMP)
+          .opacity(0.88)
+          .shadow({ radius: 8, color: '#22c55e50', offsetX: 0, offsetY: 2 })
+
+        Circle()
+          .width(42)
+          .height(42)
+          .fill('transparent')
+          .border({ width: 1, color: '#ffffff20' })
+
+        Text('跳')
+          .fontSize(15)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ffffff')
       }
-      .margin({ top: 10 })
+      .width(50)
+      .height(50)
+      .position({ x: this.screenW - 62 - 14 - 50 - 14, y: this.screenH - 62 - 14 - 50 - 10 })
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down) {
+          this.gameEngine.setInputJump(true);
+        }
+      })
+
+      // Dash button — above attack, right column
+      Stack() {
+        Circle()
+          .width(44)
+          .height(44)
+          .fill(this.dashReady ? COLOR_BTN_DASH : '#1e3a5f')
+          .opacity(this.dashReady ? 0.88 : 0.45)
+          .shadow({ radius: 8, color: '#3b82f650', offsetX: 0, offsetY: 2 })
+
+        Circle()
+          .width(36)
+          .height(36)
+          .fill('transparent')
+          .border({ width: 1, color: this.dashReady ? '#ffffff20' : '#ffffff08' })
+
+        Text('闪')
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ffffff')
+      }
+      .width(44)
+      .height(44)
+      .position({ x: this.screenW - 44 - 18, y: this.screenH - 62 - 14 - 44 - 50 - 14 })
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down && this.dashReady) {
+          this.gameEngine.setInputDash(true);
+          this.dashReady = false;
+          setTimeout(() => {
+            this.dashReady = true;
+          }, DASH_COOLDOWN);
+        }
+      })
+
+      // Drill button — left of jump, utility position
+      Stack() {
+        Circle()
+          .width(42)
+          .height(42)
+          .fill(this.toolReady ? COLOR_TOOL_BTN : '#4a3520')
+          .opacity(this.toolReady ? 0.88 : 0.45)
+          .shadow({ radius: 8, color: '#f59e0b50', offsetX: 0, offsetY: 2 })
+
+        Circle()
+          .width(34)
+          .height(34)
+          .fill('transparent')
+          .border({ width: 1, color: this.toolReady ? '#ffffff20' : '#ffffff08' })
+
+        Text('钻')
+          .fontSize(13)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ffffff')
+      }
+      .width(42)
+      .height(42)
+      .position({ x: this.screenW - 62 - 14 - 50 - 14 - 42 - 14, y: this.screenH - 62 - 14 - 50 - 10 - 42 - 8 })
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down && this.toolReady) {
+          this.gameEngine.setInputTool(true);
+          this.toolReady = false;
+          setTimeout(() => {
+            this.toolReady = true;
+          }, 200);
+        }
+      })
     }
-    .position({ x: this.screenW - 160, y: this.screenH - 200 })
   }
 
   @Builder
@@ -1011,7 +1043,7 @@ struct Index {
           .position({ x: 14, y: 26 })
       }
     }
-    .position({ x: this.screenW - 55, y: this.screenH - 200 })
+    .position({ x: 30, y: this.screenH - 180 })
     .onClick(() => {
       if (this.isTransformed) {
         this.gameEngine.deactivateTransform();
@@ -1042,7 +1074,7 @@ struct Index {
           .fontColor('#ffffffa0')
           .margin({ top: 2 })
       }
-      .position({ x: this.screenW - 135, y: this.screenH - 155 })
+      .position({ x: 80, y: this.screenH - 175 })
     }
   }
 

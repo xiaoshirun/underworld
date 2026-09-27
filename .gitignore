@@ -10,3 +10,7 @@
 .hvigor/
 oh_modules/
 build/
+*.p12
+.idea/
+local_build-profile.json5
+entry/signature/
