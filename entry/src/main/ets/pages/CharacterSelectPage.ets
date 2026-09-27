@@ -26,12 +26,22 @@ struct CharacterSelectPage {
   @State username: string = '';
   @State selectedGender: GenderType = -1;
   @State confirmBtnScale: number = 1.0;
+  @State isLandscape: boolean = false;
 
   aboutToAppear(): void {
     try {
       const displayInfo = display.getDefaultDisplaySync();
-      this.screenW = px2vp(displayInfo.width);
-      this.screenH = px2vp(displayInfo.height);
+      const rawW: number = px2vp(displayInfo.width);
+      const rawH: number = px2vp(displayInfo.height);
+      if (rawW > rawH) {
+        this.screenW = rawW;
+        this.screenH = rawH;
+        this.isLandscape = true;
+      } else {
+        this.screenW = rawH;
+        this.screenH = rawW;
+        this.isLandscape = false;
+      }
       const params = router.getParams();
       if (params !== null && params !== undefined) {
         const p = params as Record<string, Object>;
@@ -40,8 +50,9 @@ struct CharacterSelectPage {
         }
       }
     } catch (e) {
-      this.screenW = 360;
-      this.screenH = 780;
+      this.screenW = 780;
+      this.screenH = 360;
+      this.isLandscape = true;
     }
   }
 
@@ -52,6 +63,136 @@ struct CharacterSelectPage {
     if (this.charAnimId !== -1) {
       clearInterval(this.charAnimId);
     }
+  }
+
+  @Builder
+  MaleCardView() {
+    Column() {
+      Stack() {
+        Canvas(this.maleCtx)
+          .width(120)
+          .height(160)
+          .onReady(() => {
+            this.startCharAnimation();
+          })
+
+        if (this.selectedGender === GenderType.MALE) {
+          Column()
+            .width(120)
+            .height(160)
+            .borderRadius(12)
+            .border({ width: 2, color: '#3b82f6' })
+            .shadow({ radius: 16, color: '#3b82f660', offsetX: 0, offsetY: 0 })
+        }
+      }
+
+      Text('男性')
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.selectedGender === GenderType.MALE ? '#3b82f6' : '#94a3b8')
+        .margin({ top: 10 })
+
+      Text('坚韧的探索者')
+        .fontSize(11)
+        .fontColor('#475569')
+        .margin({ top: 2 })
+    }
+    .width(140)
+    .padding({ top: 16, bottom: 16, left: 10, right: 10 })
+    .backgroundColor('#0f172af0')
+    .borderRadius(14)
+    .border({ width: 1, color: this.selectedGender === GenderType.MALE ? '#3b82f640' : '#1e293b' })
+    .shadow({ radius: 12, color: '#00000040', offsetX: 0, offsetY: 4 })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.selectedGender = GenderType.MALE;
+      }
+    })
+  }
+
+  @Builder
+  FemaleCardView() {
+    Column() {
+      Stack() {
+        Canvas(this.femaleCtx)
+          .width(120)
+          .height(160)
+
+        if (this.selectedGender === GenderType.FEMALE) {
+          Column()
+            .width(120)
+            .height(160)
+            .borderRadius(12)
+            .border({ width: 2, color: '#8b5cf6' })
+            .shadow({ radius: 16, color: '#8b5cf660', offsetX: 0, offsetY: 0 })
+        }
+      }
+
+      Text('女性')
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.selectedGender === GenderType.FEMALE ? '#8b5cf6' : '#94a3b8')
+        .margin({ top: 10 })
+
+      Text('敏捷的冒险者')
+        .fontSize(11)
+        .fontColor('#475569')
+        .margin({ top: 2 })
+    }
+    .width(140)
+    .padding({ top: 16, bottom: 16, left: 10, right: 10 })
+    .backgroundColor('#0f172af0')
+    .borderRadius(14)
+    .border({ width: 1, color: this.selectedGender === GenderType.FEMALE ? '#8b5cf640' : '#1e293b' })
+    .shadow({ radius: 12, color: '#00000040', offsetX: 0, offsetY: 4 })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.selectedGender = GenderType.FEMALE;
+      }
+    })
+  }
+
+  @Builder
+  ConfirmButtonView(marginTop: number) {
+    Button('确认选择')
+      .width(200)
+      .height(44)
+      .fontSize(16)
+      .fontWeight(FontWeight.Bold)
+      .fontColor('#ffffff')
+      .backgroundColor(this.selectedGender >= 0 ? '#3b82f6' : '#1e293b')
+      .borderRadius(10)
+      .margin({ top: marginTop })
+      .scale({ x: this.confirmBtnScale, y: this.confirmBtnScale })
+      .shadow(this.selectedGender >= 0 ?
+        { radius: 12, color: '#3b82f640', offsetX: 0, offsetY: 4 } :
+        { radius: 0, color: '#00000000', offsetX: 0, offsetY: 0 })
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down) {
+          this.confirmBtnScale = 0.96;
+        } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+          this.confirmBtnScale = 1.0;
+        }
+      })
+      .onClick(() => {
+        if (this.selectedGender >= 0) {
+          this.confirmSelection();
+        }
+      })
+  }
+
+  @Builder
+  FooterView() {
+    Column() {
+      Text('ICP备案号: 示例ICP备xxxxxxxx号')
+        .fontSize(11)
+        .fontColor('#374151')
+      Text('v1.0.0')
+        .fontSize(10)
+        .fontColor('#1e293b')
+        .margin({ top: 2 })
+    }
+    .alignItems(HorizontalAlign.Center)
   }
 
   build() {
@@ -65,150 +206,82 @@ struct CharacterSelectPage {
           this.startBgAnimation();
         })
 
-      Column() {
-        Text('选择角色')
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#e2e8f0')
-          .textShadow({ radius: 12, color: '#3b82f680', offsetX: 0, offsetY: 0 })
-          .margin({ bottom: 6 })
-
-        Text('选择你的冒险者')
-          .fontSize(13)
-          .fontColor('#64748b')
-          .margin({ bottom: 32 })
-
+      if (this.isLandscape) {
         Row() {
-          // Male character card
           Column() {
-            Stack() {
-              Canvas(this.maleCtx)
-                .width(120)
-                .height(160)
-                .onReady(() => {
-                  this.startCharAnimation();
-                })
+            Text('选择角色')
+              .fontSize(22)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#e2e8f0')
+              .textShadow({ radius: 12, color: '#3b82f680', offsetX: 0, offsetY: 0 })
+              .margin({ bottom: 6 })
 
-              if (this.selectedGender === GenderType.MALE) {
-                Column()
-                  .width(120)
-                  .height(160)
-                  .borderRadius(12)
-                  .border({ width: 2, color: '#3b82f6' })
-                  .shadow({ radius: 16, color: '#3b82f660', offsetX: 0, offsetY: 0 })
-              }
-            }
-
-            Text('男性')
-              .fontSize(15)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(this.selectedGender === GenderType.MALE ? '#3b82f6' : '#94a3b8')
-              .margin({ top: 10 })
-
-            Text('坚韧的探索者')
-              .fontSize(11)
-              .fontColor('#475569')
-              .margin({ top: 2 })
+            Text('选择你的冒险者')
+              .fontSize(12)
+              .fontColor('#64748b')
           }
-          .width(140)
-          .padding({ top: 16, bottom: 16, left: 10, right: 10 })
-          .backgroundColor('#0f172af0')
-          .borderRadius(14)
-          .border({ width: 1, color: this.selectedGender === GenderType.MALE ? '#3b82f640' : '#1e293b' })
-          .shadow({ radius: 12, color: '#00000040', offsetX: 0, offsetY: 4 })
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.selectedGender = GenderType.MALE;
-            }
-          })
+          .justifyContent(FlexAlign.Center)
+          .layoutWeight(3)
+          .height('100%')
+          .padding({ top: 40 })
 
-          // Female character card
           Column() {
-            Stack() {
-              Canvas(this.femaleCtx)
-                .width(120)
-                .height(160)
-
-              if (this.selectedGender === GenderType.FEMALE) {
-                Column()
-                  .width(120)
-                  .height(160)
-                  .borderRadius(12)
-                  .border({ width: 2, color: '#8b5cf6' })
-                  .shadow({ radius: 16, color: '#8b5cf660', offsetX: 0, offsetY: 0 })
+            Row() {
+              this.MaleCardView()
+              Column() {
+                this.FemaleCardView()
               }
+              .margin({ left: 16 })
             }
 
-            Text('女性')
-              .fontSize(15)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(this.selectedGender === GenderType.FEMALE ? '#8b5cf6' : '#94a3b8')
-              .margin({ top: 10 })
-
-            Text('敏捷的冒险者')
-              .fontSize(11)
-              .fontColor('#475569')
-              .margin({ top: 2 })
+            this.ConfirmButtonView(20)
           }
-          .width(140)
-          .padding({ top: 16, bottom: 16, left: 10, right: 10 })
-          .backgroundColor('#0f172af0')
-          .borderRadius(14)
-          .border({ width: 1, color: this.selectedGender === GenderType.FEMALE ? '#8b5cf640' : '#1e293b' })
-          .shadow({ radius: 12, color: '#00000040', offsetX: 0, offsetY: 4 })
-          .margin({ left: 16 })
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.selectedGender = GenderType.FEMALE;
-            }
-          })
+          .layoutWeight(7)
+          .height('100%')
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+          .padding({ top: 20 })
         }
-
-        Button('确认选择')
-          .width(200)
-          .height(44)
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
-          .backgroundColor(this.selectedGender >= 0 ? '#3b82f6' : '#1e293b')
-          .borderRadius(10)
-          .margin({ top: 36 })
-          .scale({ x: this.confirmBtnScale, y: this.confirmBtnScale })
-          .shadow(this.selectedGender >= 0 ?
-            { radius: 12, color: '#3b82f640', offsetX: 0, offsetY: 4 } :
-            { radius: 0, color: '#00000000', offsetX: 0, offsetY: 0 })
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.confirmBtnScale = 0.96;
-            } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-              this.confirmBtnScale = 1.0;
-            }
-          })
-          .onClick(() => {
-            if (this.selectedGender >= 0) {
-              this.confirmSelection();
-            }
-          })
-
-        Blank()
-
+        .width('100%')
+        .height('100%')
+        .alignItems(VerticalAlign.Top)
+      } else {
         Column() {
-          Text('ICP备案号: 示例ICP备xxxxxxxx号')
-            .fontSize(11)
-            .fontColor('#374151')
-          Text('v1.0.0')
-            .fontSize(10)
-            .fontColor('#1e293b')
-            .margin({ top: 2 })
+          Text('选择角色')
+            .fontSize(24)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#e2e8f0')
+            .textShadow({ radius: 12, color: '#3b82f680', offsetX: 0, offsetY: 0 })
+            .margin({ bottom: 6 })
+
+          Text('选择你的冒险者')
+            .fontSize(13)
+            .fontColor('#64748b')
+            .margin({ bottom: 32 })
+
+          Row() {
+            this.MaleCardView()
+            Column() {
+              this.FemaleCardView()
+            }
+            .margin({ left: 16 })
+          }
+
+          this.ConfirmButtonView(36)
+
+          Blank()
+
+          Column() {
+            this.FooterView()
+          }
+          .margin({ bottom: 20 })
         }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.Start)
         .alignItems(HorizontalAlign.Center)
-        .margin({ bottom: 20 })
+        .padding({ top: 60 })
       }
-      .width('100%')
-      .height('100%')
-      .justifyContent(FlexAlign.Start)
-      .alignItems(HorizontalAlign.Center)
-      .padding({ top: 60 })
     }
     .width('100%')
     .height('100%')
