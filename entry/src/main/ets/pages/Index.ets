@@ -4,8 +4,8 @@ import {
   PLAYER_MAX_HP, JOYSTICK_RADIUS, MINIMAP_SIZE,
   COLOR_HP_FULL, COLOR_HP_EMPTY,
   COLOR_JOY_BASE, COLOR_JOY_KNOB,
-  COLOR_BTN_JUMP, COLOR_BTN_ATTACK, COLOR_BTN_DASH,
-  COLOR_XP_ORB, DASH_COOLDOWN
+  COLOR_BTN_JUMP, COLOR_BTN_ATTACK, COLOR_BTN_DASH, COLOR_TOOL_BTN,
+  COLOR_XP_ORB, DASH_COOLDOWN, GenderType, WeaponForm
 } from '../game/GameConstants';
 
 @Entry
@@ -32,6 +32,9 @@ struct Index {
   @State username: string = 'test';
   @State engulfWarning: boolean = false;
   @State dashReady: boolean = true;
+  @State playerGender: GenderType = GenderType.MALE;
+  @State currentWeaponForm: WeaponForm = WeaponForm.BLADE;
+  @State toolReady: boolean = true;
 
   aboutToAppear(): void {
     try {
@@ -43,6 +46,9 @@ struct Index {
         const p = params as Record<string, Object>;
         if (p['username'] !== undefined) {
           this.username = p['username'] as string;
+        }
+        if (p['gender'] !== undefined) {
+          this.playerGender = p['gender'] as GenderType;
         }
       }
     } catch (e) {
@@ -66,6 +72,8 @@ struct Index {
         })
 
       this.MinimapView()
+
+      this.WeaponFormView()
 
       this.TopBarView()
 
@@ -104,6 +112,29 @@ struct Index {
     .border({ width: 1, color: '#334155' })
     .backgroundColor('#0a0a15')
     .shadow({ radius: 8, color: '#00000080', offsetX: 0, offsetY: 2 })
+  }
+
+  @Builder
+  WeaponFormView() {
+    Stack() {
+      Row() {
+        Text(this.gameEngine.getWeaponFormName(this.currentWeaponForm))
+          .fontSize(12)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#ffffff')
+      }
+      .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+      .backgroundColor('#1e293be0')
+      .borderRadius(6)
+      .border({ width: 1, color: '#475569' })
+    }
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.gameEngine.cycleWeaponForm();
+        this.currentWeaponForm = this.gameEngine.getCurrentWeaponForm();
+      }
+    })
+    .position({ x: 10, y: 76 + MINIMAP_SIZE + 14 })
   }
 
   @Builder
@@ -220,6 +251,31 @@ struct Index {
       Row() {
         Stack() {
           Circle()
+            .width(44)
+            .height(44)
+            .fill(this.toolReady ? COLOR_TOOL_BTN : '#4a3520')
+            .opacity(this.toolReady ? 0.85 : 0.5)
+            .shadow({ radius: 6, color: '#f59e0b40', offsetX: 0, offsetY: 2 })
+
+          Text('钻')
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#ffffff')
+        }
+        .width(44)
+        .height(44)
+        .onTouch((event: TouchEvent) => {
+          if (event.type === TouchType.Down && this.toolReady) {
+            this.gameEngine.setInputTool(true);
+            this.toolReady = false;
+            setTimeout(() => {
+              this.toolReady = true;
+            }, 200);
+          }
+        })
+
+        Stack() {
+          Circle()
             .width(50)
             .height(50)
             .fill(COLOR_BTN_JUMP)
@@ -233,6 +289,7 @@ struct Index {
         }
         .width(50)
         .height(50)
+        .margin({ left: 10 })
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down) {
             this.gameEngine.setInputJump(true);
@@ -467,6 +524,7 @@ struct Index {
   private tryInitEngine(): void {
     if (this.gameCanvasReady && this.minimapCanvasReady) {
       this.gameEngine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH);
+      this.gameEngine.setGender(this.playerGender);
       this.gameEngine.setSettings({
         soundEnabled: this.soundEnabled,
         effectsEnabled: this.effectsEnabled

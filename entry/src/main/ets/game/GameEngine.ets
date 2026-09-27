@@ -11,12 +11,17 @@ import {
   MINIMAP_SIZE, FRAME_INTERVAL, MINIMAP_UPDATE_INTERVAL,
   TileType, EnemyType, BiomeType, PlayerState, SlimeState, XpOrb, Particle,
   ChunkData, InputState, GameSettings, AmbientParticle,
+  GenderType, WeaponForm, EvolutionBranch, EvolutionLevel,
+  BossState, ChestState, BossRoom, MaterialDrop, TrapInstance, MechanismInstance,
+  Inventory,
+  WEAPON_FORM_STATS,
   COLOR_BG, COLOR_WALL, COLOR_WALL_EDGE, COLOR_FLOOR, COLOR_FLOOR_VAR,
   COLOR_WATER, COLOR_WATER_LIGHT, COLOR_LAVA, COLOR_LAVA_LIGHT,
   COLOR_CRYSTAL, COLOR_CRYSTAL_GLOW,
   COLOR_MUSHROOM_CAP, COLOR_MUSHROOM_STEM, COLOR_MUSHROOM_GLOW,
   COLOR_GLOW_STONE, COLOR_GLOW, COLOR_PLANT, COLOR_PLANT_LIGHT,
   COLOR_PLAYER_SKIN, COLOR_PLAYER_HAIR, COLOR_PLAYER_BODY, COLOR_PLAYER_BODY_DARK,
+  COLOR_PLAYER_FEMALE_BODY, COLOR_PLAYER_FEMALE_BODY_DARK, COLOR_PLAYER_FEMALE_HAIR,
   COLOR_DRILL_BASE, COLOR_DRILL_TIP,
   COLOR_SLIME_GRAY, COLOR_SLIME_GRAY_LIGHT, COLOR_SLIME_PURPLE, COLOR_SLIME_PURPLE_LIGHT,
   COLOR_SLIME_RED, COLOR_SLIME_RED_LIGHT, COLOR_SLIME_BLUE, COLOR_SLIME_BLUE_LIGHT,
@@ -50,9 +55,16 @@ export class GameEngine {
   private audio: AudioManager = new AudioManager();
   private settings: GameSettings = { soundEnabled: true, effectsEnabled: true };
   private ambientParticles: AmbientParticle[] = [];
+  private playerGender: GenderType = GenderType.MALE;
+  private bosses: BossState[] = [];
+  private activeBoss: BossState | null = null;
+  private bossRoomLocked: boolean = false;
+  private materialDrops: MaterialDrop[] = [];
+  private bossRooms: BossRoom[] = [];
   private input: InputState = {
     joyActive: false, joyDx: 0, joyDy: 0,
-    jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false
+    jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false,
+    toolPressed: false
   };
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number): void {
@@ -72,7 +84,19 @@ export class GameEngine {
       isJumping: false, jumpTimer: 0, jumpHeight: 0, invincibleTimer: 0, animFrame: 0,
       xp: 0, level: 1,
       isEngulfed: false, engulfSlimeIndex: -1, engulfEscapeCount: 0, engulfDamageTimer: 0,
-      isDrilling: false, drillTargetX: 0, drillTargetY: 0, drillHitCount: 0
+      isDrilling: false, drillTargetX: 0, drillTargetY: 0, drillHitCount: 0,
+      gender: this.playerGender,
+      currentWeaponForm: WeaponForm.BLADE,
+      unlockedForms: [WeaponForm.BLADE],
+      evolutionBranch: EvolutionBranch.CRYSTAL,
+      evolutionLevel: EvolutionLevel.BASE,
+      isUsingTool: false,
+      toolCooldown: 0,
+      inventory: {
+        crystalOre: 0, mushroomOre: 0, flameOre: 0, abyssOre: 0, voidOre: 0,
+        coreNormal: 0, coreRare: 0, formCore: 0,
+        hpPotions: 3, gold: 0
+      }
     };
 
     this.cameraX = startX - screenW / 2;
@@ -137,6 +161,50 @@ export class GameEngine {
   setSettings(s: GameSettings): void {
     this.settings = s;
     this.audio.setSettings(s);
+  }
+
+  setGender(g: GenderType): void {
+    this.playerGender = g;
+    if (this.player !== null) {
+      this.player.gender = g;
+    }
+  }
+
+  setInputTool(pressed: boolean): void {
+    this.input.toolPressed = pressed;
+  }
+
+  switchWeaponForm(form: WeaponForm): void {
+    if (this.player === null) return;
+    const forms: WeaponForm[] = this.player.unlockedForms;
+    let found: boolean = false;
+    for (let i: number = 0; i < forms.length; i++) {
+      if (forms[i] === form) { found = true; break; }
+    }
+    if (!found) return;
+    this.player.currentWeaponForm = form;
+  }
+
+  cycleWeaponForm(): void {
+    if (this.player === null) return;
+    const forms: WeaponForm[] = this.player.unlockedForms;
+    if (forms.length <= 1) return;
+    let idx: number = 0;
+    for (let i: number = 0; i < forms.length; i++) {
+      if (forms[i] === this.player.currentWeaponForm) { idx = i; break; }
+    }
+    const nextIdx: number = (idx + 1) % forms.length;
+    this.player.currentWeaponForm = forms[nextIdx];
+  }
+
+  getCurrentWeaponForm(): WeaponForm {
+    if (this.player === null) return WeaponForm.BLADE;
+    return this.player.currentWeaponForm;
+  }
+
+  getWeaponFormName(form: WeaponForm): string {
+    const names: string[] = ['刃', '鞭', '锤', '杖', '双刃', '巨斧'];
+    return names[form];
   }
 
   private chunkKey(cx: number, cy: number): string {
@@ -274,8 +342,10 @@ export class GameEngine {
     }
 
     if (this.input.attackPressed && !p.isAttacking && p.attackTimer <= 0) {
+      const formStats: number[] = WEAPON_FORM_STATS[p.currentWeaponForm];
+      const formDuration: number = formStats[2];
       p.isAttacking = true;
-      p.attackTimer = ATTACK_DURATION;
+      p.attackTimer = formDuration;
       this.input.attackPressed = false;
       this.performAttack(p);
     }
@@ -283,10 +353,34 @@ export class GameEngine {
       p.attackTimer -= dt;
       if (p.attackTimer <= 0) {
         p.isAttacking = false;
-        p.attackTimer = ATTACK_COOLDOWN - ATTACK_DURATION;
+        const formStats: number[] = WEAPON_FORM_STATS[p.currentWeaponForm];
+        p.attackTimer = formStats[3] - formStats[2];
       }
     } else if (p.attackTimer > 0) {
       p.attackTimer -= dt;
+    }
+
+    if (this.input.toolPressed && !p.isUsingTool && p.toolCooldown <= 0 && !p.isDrilling) {
+      this.input.toolPressed = false;
+      const toolX: number = p.x + Math.cos(p.facing) * 20;
+      const toolY: number = p.y + Math.sin(p.facing) * 20;
+      const wallTX: number = Math.floor(toolX / TILE_SIZE);
+      const wallTY: number = Math.floor(toolY / TILE_SIZE);
+      const wallTile: number = this.getTile(wallTX * TILE_SIZE, wallTY * TILE_SIZE);
+      if (wallTile === TileType.WALL) {
+        p.isUsingTool = true;
+        p.isDrilling = true;
+        p.drillTargetX = wallTX;
+        p.drillTargetY = wallTY;
+        p.drillHitCount = 0;
+        p.vx = 0;
+        p.vy = 0;
+        p.toolCooldown = 200;
+      }
+    }
+    if (p.toolCooldown > 0) p.toolCooldown -= dt;
+    if (p.isUsingTool && !p.isDrilling) {
+      p.isUsingTool = false;
     }
 
     if (this.input.dashPressed && !p.isDashing && p.dashCooldown <= 0) {
@@ -399,8 +493,12 @@ export class GameEngine {
       return;
     }
 
-    const attackX: number = p.x + Math.cos(p.facing) * ATTACK_RANGE;
-    const attackY: number = p.y + Math.sin(p.facing) * ATTACK_RANGE;
+    const formStats: number[] = WEAPON_FORM_STATS[p.currentWeaponForm];
+    const formRange: number = formStats[0];
+    const formWidth: number = formStats[1];
+
+    const attackX: number = p.x + Math.cos(p.facing) * formRange;
+    const attackY: number = p.y + Math.sin(p.facing) * formRange;
 
     const wallTX: number = Math.floor(attackX / TILE_SIZE);
     const wallTY: number = Math.floor(attackY / TILE_SIZE);
@@ -420,7 +518,7 @@ export class GameEngine {
       const dx: number = s.x - attackX;
       const dy: number = s.y - attackY;
       const dist: number = Math.sqrt(dx * dx + dy * dy);
-      if (dist < ATTACK_WIDTH + s.size) {
+      if (dist < formWidth + s.size) {
         s.hp--;
         s.hitFlash = 150;
         const knockAngle: number = Math.atan2(dy, dx);
@@ -933,7 +1031,8 @@ export class GameEngine {
 
     if (p.isEngulfed) {
       c.globalAlpha = 0.5 + Math.sin(this.frameCount * 0.2) * 0.3;
-      c.fillStyle = COLOR_PLAYER_BODY;
+      const engulfBodyColor: string = p.gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY : COLOR_PLAYER_BODY;
+      c.fillStyle = engulfBodyColor;
       c.beginPath();
       c.arc(screenX, screenY, half * 0.6, 0, Math.PI * 2);
       c.fill();
@@ -956,18 +1055,26 @@ export class GameEngine {
 
     const bobY: number = Math.sin(p.animFrame) * 1.5;
 
-    c.fillStyle = COLOR_PLAYER_BODY;
+    const bodyColor: string = p.gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY : COLOR_PLAYER_BODY;
+    const bodyDarkColor: string = p.gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY_DARK : COLOR_PLAYER_BODY_DARK;
+    const hairColor: string = p.gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_HAIR : COLOR_PLAYER_HAIR;
+
+    c.fillStyle = bodyColor;
     c.fillRect(screenX - 5, screenY - 2 + bobY, 10, 10);
-    c.fillStyle = COLOR_PLAYER_BODY_DARK;
+    c.fillStyle = bodyDarkColor;
     c.fillRect(screenX - 5, screenY + 4 + bobY, 10, 4);
 
     c.fillStyle = COLOR_PLAYER_SKIN;
     c.fillRect(screenX - 4, screenY - 7 + bobY, 8, 6);
 
-    c.fillStyle = COLOR_PLAYER_HAIR;
+    c.fillStyle = hairColor;
     c.fillRect(screenX - 5, screenY - 9 + bobY, 10, 4);
     c.fillRect(screenX - 6, screenY - 7 + bobY, 2, 3);
     c.fillRect(screenX + 4, screenY - 7 + bobY, 2, 3);
+    if (p.gender === GenderType.FEMALE) {
+      c.fillRect(screenX - 7, screenY - 5 + bobY, 2, 8);
+      c.fillRect(screenX + 5, screenY - 5 + bobY, 2, 8);
+    }
 
     c.fillStyle = '#ffffff';
     c.fillRect(screenX - 2, screenY - 5 + bobY, 2, 2);
@@ -984,9 +1091,9 @@ export class GameEngine {
   }
 
   private renderDrill(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
-    const drillLen: number = p.isAttacking ? 16 : (p.isDrilling ? 14 : 8);
-    const drillOffX: number = Math.cos(p.facing) * (8 + (p.isAttacking || p.isDrilling ? 6 : 0));
-    const drillOffY: number = Math.sin(p.facing) * (8 + (p.isAttacking || p.isDrilling ? 6 : 0));
+    const drillLen: number = p.isDrilling ? 14 : 8;
+    const drillOffX: number = Math.cos(p.facing) * (8 + (p.isDrilling ? 6 : 0));
+    const drillOffY: number = Math.sin(p.facing) * (8 + (p.isDrilling ? 6 : 0));
     const baseX: number = sx + drillOffX;
     const baseY: number = sy + drillOffY + bobY;
 
@@ -1002,7 +1109,7 @@ export class GameEngine {
     c.lineTo(tipX, tipY);
     c.stroke();
 
-    if (p.isAttacking || p.isDrilling) {
+    if (p.isDrilling) {
       c.fillStyle = COLOR_ATTACK_FLASH;
       c.globalAlpha = 0.6;
       c.beginPath();
@@ -1010,6 +1117,98 @@ export class GameEngine {
       c.fill();
       c.globalAlpha = 1.0;
     }
+
+    if (p.isAttacking) {
+      this.renderWeaponAttackEffect(c, sx, sy, p, bobY);
+    }
+  }
+
+  private renderWeaponAttackEffect(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
+    const form: WeaponForm = p.currentWeaponForm;
+    const formStats: number[] = WEAPON_FORM_STATS[form];
+    const range: number = formStats[0];
+    const width: number = formStats[1];
+    const offX: number = Math.cos(p.facing) * range * 0.7;
+    const offY: number = Math.sin(p.facing) * range * 0.7;
+    const cx: number = sx + offX;
+    const cy: number = sy + offY + bobY;
+
+    c.globalAlpha = 0.65;
+
+    if (form === WeaponForm.BLADE) {
+      const arcStart: number = p.facing - 0.8;
+      const arcEnd: number = p.facing + 0.8;
+      c.strokeStyle = '#60a5fa';
+      c.lineWidth = 3;
+      c.beginPath();
+      c.arc(sx, sy + bobY, range * 0.8, arcStart, arcEnd);
+      c.stroke();
+      c.strokeStyle = '#93c5fd';
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.arc(sx, sy + bobY, range * 0.6, arcStart, arcEnd);
+      c.stroke();
+    } else if (form === WeaponForm.WHIP) {
+      const whipLen: number = range * 1.0;
+      const perpX: number = -Math.sin(p.facing);
+      const perpY: number = Math.cos(p.facing);
+      c.strokeStyle = '#a78bfa';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(sx + Math.cos(p.facing) * 8, sy + bobY + Math.sin(p.facing) * 8);
+      const cp1x: number = sx + Math.cos(p.facing) * whipLen * 0.5 + perpX * 12;
+      const cp1y: number = sy + bobY + Math.sin(p.facing) * whipLen * 0.5 + perpY * 12;
+      const endX: number = sx + Math.cos(p.facing) * whipLen;
+      const endY: number = sy + bobY + Math.sin(p.facing) * whipLen;
+      c.quadraticCurveTo(cp1x, cp1y, endX, endY);
+      c.stroke();
+    } else if (form === WeaponForm.HAMMER) {
+      c.fillStyle = '#f97316';
+      c.beginPath();
+      c.arc(cx, cy, width * 0.5, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = '#fdba74';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(cx, cy, width * 0.7, 0, Math.PI * 2);
+      c.stroke();
+    } else if (form === WeaponForm.STAFF) {
+      const boltX: number = sx + Math.cos(p.facing) * range;
+      const boltY: number = sy + bobY + Math.sin(p.facing) * range;
+      c.fillStyle = '#38bdf8';
+      c.beginPath();
+      c.arc(boltX, boltY, 5, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#7dd3fc';
+      c.globalAlpha = 0.4;
+      c.beginPath();
+      c.arc(boltX, boltY, 9, 0, Math.PI * 2);
+      c.fill();
+    } else if (form === WeaponForm.DUAL_BLADES) {
+      const perpX: number = -Math.sin(p.facing);
+      const perpY: number = Math.cos(p.facing);
+      c.strokeStyle = '#fb923c';
+      c.lineWidth = 2.5;
+      for (let side: number = -1; side <= 1; side += 2) {
+        const arcCx: number = sx + perpX * 6 * side;
+        const arcCy: number = sy + bobY + perpY * 6 * side;
+        c.beginPath();
+        c.arc(arcCx, arcCy, range * 0.6, p.facing - 0.6, p.facing + 0.6);
+        c.stroke();
+      }
+    } else if (form === WeaponForm.GREAT_AXE) {
+      c.fillStyle = '#ef4444';
+      c.beginPath();
+      c.arc(sx, sy + bobY, range * 0.9, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = '#fca5a5';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(sx, sy + bobY, range * 1.1, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    c.globalAlpha = 1.0;
   }
 
   private renderEnemies(c: CanvasRenderingContext2D, offX: number, offY: number): void {
@@ -1024,79 +1223,495 @@ export class GameEngine {
         continue;
       }
 
-      const bounce: number = Math.sin(s.bouncePhase) * 2;
-      const halfSize: number = s.size / 2;
+      const sc: number = s.size / 48;
+      const bp: number = s.bouncePhase;
+      const flash: boolean = s.hitFlash > 0;
+      const cx: number = screenX;
+      const cy: number = screenY;
 
-      let baseColor: string = COLOR_SLIME_GRAY;
-      let lightColor: string = COLOR_SLIME_GRAY_LIGHT;
-      switch (s.enemyType) {
-        case EnemyType.GRAY_SLIME: baseColor = COLOR_SLIME_GRAY; lightColor = COLOR_SLIME_GRAY_LIGHT; break;
-        case EnemyType.PURPLE_SLIME: baseColor = COLOR_SLIME_PURPLE; lightColor = COLOR_SLIME_PURPLE_LIGHT; break;
-        case EnemyType.RED_SLIME: baseColor = COLOR_SLIME_RED; lightColor = COLOR_SLIME_RED_LIGHT; break;
-        case EnemyType.BLUE_SLIME: baseColor = COLOR_SLIME_BLUE; lightColor = COLOR_SLIME_BLUE_LIGHT; break;
-        case EnemyType.YELLOW_SLIME: baseColor = COLOR_SLIME_YELLOW; lightColor = COLOR_SLIME_YELLOW_LIGHT; break;
-        case EnemyType.GHOST_SLIME: baseColor = COLOR_SLIME_GHOST; lightColor = COLOR_SLIME_GHOST_LIGHT; break;
-      }
-
-      if (s.hitFlash > 0) {
-        c.globalAlpha = 0.8;
-        c.fillStyle = '#ffffff';
-      } else {
-        c.globalAlpha = s.enemyType === EnemyType.GHOST_SLIME ? 0.5 : 0.9;
-        c.fillStyle = baseColor;
-      }
-
-      if (s.isEngulfing) {
-        const engSize: number = halfSize * 1.4;
+      if (s.enemyType === EnemyType.GRAY_SLIME) {
+        const bounce: number = Math.sin(bp) * 2 * sc;
+        const squash: number = 1 + Math.sin(bp) * 0.08;
+        c.save();
+        c.translate(cx, cy + bounce);
+        c.scale(squash, 1 / squash);
+        c.globalAlpha = 0.2;
+        c.fillStyle = '#000000';
         c.beginPath();
-        c.ellipse(screenX, screenY + bounce, engSize, engSize * 0.9, 0, 0, Math.PI * 2);
+        c.ellipse(0, 12 * sc, 12 * sc, 3 * sc, 0, 0, Math.PI * 2);
         c.fill();
-        c.fillStyle = lightColor;
-        c.globalAlpha = 0.3;
+        if (flash) {
+          c.globalAlpha = 0.9;
+          c.fillStyle = '#ffffff';
+        } else {
+          c.globalAlpha = 0.9;
+          c.fillStyle = COLOR_SLIME_GRAY;
+        }
         c.beginPath();
-        c.ellipse(screenX, screenY + bounce + 2, engSize * 0.6, engSize * 0.4, 0, 0, Math.PI * 2);
+        c.ellipse(0, 0, 14 * sc, 12 * sc, 0, 0, Math.PI * 2);
         c.fill();
-      } else {
+        if (!flash) {
+          c.fillStyle = COLOR_SLIME_GRAY_LIGHT;
+          c.beginPath();
+          c.ellipse(-3 * sc, -4 * sc, 6 * sc, 5 * sc, -0.3, 0, Math.PI * 2);
+          c.fill();
+          c.fillStyle = '#ffffff';
+          c.globalAlpha = 0.4;
+          c.beginPath();
+          c.ellipse(-5 * sc, -6 * sc, 2 * sc, 1.5 * sc, -0.2, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 1.0;
+        c.fillStyle = COLOR_SLIME_EYE;
         c.beginPath();
-        c.ellipse(screenX, screenY + bounce, halfSize, halfSize * 0.8, 0, 0, Math.PI * 2);
+        c.arc(-4 * sc, -1 * sc, 2.5 * sc, 0, Math.PI * 2);
         c.fill();
-
-        c.fillStyle = lightColor;
         c.beginPath();
-        c.ellipse(screenX - 1, screenY - 2 + bounce, halfSize * 0.5, halfSize * 0.4, 0, 0, Math.PI * 2);
+        c.arc(4 * sc, -1 * sc, 2.5 * sc, 0, Math.PI * 2);
         c.fill();
+        if (!flash) {
+          c.fillStyle = COLOR_SLIME_PUPIL;
+          c.beginPath();
+          c.arc(-3.5 * sc, -0.5 * sc, 1.2 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(4.5 * sc, -0.5 * sc, 1.2 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.strokeStyle = COLOR_SLIME_PUPIL;
+          c.lineWidth = 0.8;
+          c.beginPath();
+          c.arc(0, 3 * sc, 2 * sc, 0.1, Math.PI - 0.1);
+          c.stroke();
+        }
+        c.restore();
+      } else if (s.enemyType === EnemyType.PURPLE_SLIME) {
+        const bounce: number = Math.sin(bp * 1.3) * 1.5 * sc;
+        c.save();
+        c.translate(cx, cy + bounce);
+        if (!flash) {
+          c.globalAlpha = 0.12 + Math.sin(this.frameCount * 0.05) * 0.05;
+          c.fillStyle = COLOR_SLIME_PURPLE;
+          c.beginPath();
+          c.ellipse(0, 0, 20 * sc, 18 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 0.25;
+        c.fillStyle = '#000000';
+        c.beginPath();
+        c.ellipse(0, 14 * sc, 13 * sc, 3.5 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        for (let t: number = 0; t < 4; t++) {
+          const angle: number = (t / 4) * Math.PI * 2 + this.frameCount * 0.03;
+          const tx: number = Math.cos(angle) * 16 * sc;
+          const ty: number = Math.sin(angle) * 10 * sc + 4 * sc;
+          if (flash) {
+            c.globalAlpha = 0.9;
+            c.fillStyle = '#ffffff';
+          } else {
+            c.globalAlpha = 0.9;
+            c.fillStyle = COLOR_SLIME_PURPLE;
+          }
+          c.beginPath();
+          c.ellipse(tx, ty, 3 * sc, 2 * sc, angle, 0, Math.PI * 2);
+          c.fill();
+        }
+        if (flash) {
+          c.globalAlpha = 0.9;
+          c.fillStyle = '#ffffff';
+        } else {
+          c.globalAlpha = 0.9;
+          c.fillStyle = COLOR_SLIME_PURPLE;
+        }
+        c.beginPath();
+        c.ellipse(0, 0, 15 * sc, 13 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          c.fillStyle = COLOR_SLIME_PURPLE_LIGHT;
+          c.beginPath();
+          c.ellipse(-3 * sc, -4 * sc, 7 * sc, 5 * sc, -0.3, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 1.0;
+        c.fillStyle = COLOR_SLIME_EYE;
+        c.beginPath();
+        c.arc(-4 * sc, -2 * sc, 2.8 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(4 * sc, -2 * sc, 2.8 * sc, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          c.fillStyle = '#ff0040';
+          c.beginPath();
+          c.arc(-3.5 * sc, -1.5 * sc, 1.5 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(4.5 * sc, -1.5 * sc, 1.5 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.fillStyle = '#1a1a2e';
+          c.beginPath();
+          c.arc(-3.5 * sc, -1.5 * sc, 0.8 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(4.5 * sc, -1.5 * sc, 0.8 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.strokeStyle = '#4c1d95';
+          c.lineWidth = 1.2 * sc;
+          c.beginPath();
+          c.moveTo(-7 * sc, -5 * sc);
+          c.lineTo(-2 * sc, -4 * sc);
+          c.stroke();
+          c.beginPath();
+          c.moveTo(7 * sc, -5 * sc);
+          c.lineTo(2 * sc, -4 * sc);
+          c.stroke();
+          if (s.isEngulfing) {
+            c.fillStyle = '#2d1060';
+            c.beginPath();
+            c.ellipse(0, 5 * sc, 5 * sc, 4 * sc, 0, 0, Math.PI * 2);
+            c.fill();
+          } else {
+            c.fillStyle = '#2d1060';
+            c.beginPath();
+            c.ellipse(0, 5 * sc, 5 * sc, 3 * sc, 0, 0, Math.PI * 2);
+            c.fill();
+          }
+        }
+        c.restore();
+      } else if (s.enemyType === EnemyType.RED_SLIME) {
+        const charge: number = s.isCharging ? Math.abs(Math.sin(this.frameCount * 0.08)) : Math.abs(Math.sin(this.frameCount * 0.04)) * 0.3;
+        c.save();
+        c.translate(cx, cy);
+        if (!flash) {
+          c.globalAlpha = 0.1 + charge * 0.1;
+          c.fillStyle = '#ff4444';
+          c.beginPath();
+          c.ellipse(0, 0, (18 + charge * 2) * sc, (16 + charge * 2) * sc, 0, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 0.25;
+        c.fillStyle = '#000000';
+        c.beginPath();
+        c.ellipse(0, 13 * sc, 12 * sc, 3 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          for (let fi: number = 0; fi < 5; fi++) {
+            const angle: number = -Math.PI * 0.8 + (fi / 4) * Math.PI * 0.6;
+            const len: number = (5 + Math.sin(this.frameCount * 0.1 + fi) * 2) * sc;
+            const sx: number = Math.cos(angle) * 12 * sc;
+            const sy: number = Math.sin(angle) * 10 * sc;
+            const ex: number = sx + Math.cos(angle) * len;
+            const ey: number = sy + Math.sin(angle) * len;
+            c.fillStyle = '#ff6600';
+            c.globalAlpha = 0.7;
+            c.beginPath();
+            c.moveTo(sx - 1.5 * sc, sy);
+            c.lineTo(ex, ey);
+            c.lineTo(sx + 1.5 * sc, sy);
+            c.closePath();
+            c.fill();
+          }
+        }
+        c.globalAlpha = 1.0;
+        if (flash) {
+          c.fillStyle = '#ffffff';
+        } else {
+          c.fillStyle = COLOR_SLIME_RED;
+        }
+        c.beginPath();
+        c.ellipse(1 * sc, 0, 14 * sc, 11 * sc, 0.1, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          c.fillStyle = COLOR_SLIME_RED_LIGHT;
+          c.beginPath();
+          c.ellipse(-2 * sc, -3.5 * sc, 6 * sc, 4 * sc, -0.2, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 1.0;
+        c.fillStyle = COLOR_SLIME_EYE;
+        c.beginPath();
+        c.arc(-3.5 * sc, -1.5 * sc, 2.2 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(4 * sc, -1.5 * sc, 2.2 * sc, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          c.fillStyle = '#ffcc00';
+          c.beginPath();
+          c.arc(-3 * sc, -1 * sc, 1.2 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(4.5 * sc, -1 * sc, 1.2 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.fillStyle = '#1a1a2e';
+          c.beginPath();
+          c.arc(-3 * sc, -1 * sc, 0.6 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(4.5 * sc, -1 * sc, 0.6 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.strokeStyle = '#7f1d1d';
+          c.lineWidth = 1 * sc;
+          c.beginPath();
+          c.moveTo(-3 * sc, 4 * sc);
+          c.lineTo(-1 * sc, 3 * sc);
+          c.lineTo(1 * sc, 4 * sc);
+          c.lineTo(3 * sc, 3 * sc);
+          c.stroke();
+        }
+        c.restore();
+      } else if (s.enemyType === EnemyType.BLUE_SLIME) {
+        const bounce: number = Math.sin(bp * 0.8) * 1.5 * sc;
+        c.save();
+        c.translate(cx, cy + bounce);
+        if (!flash) {
+          for (let d: number = 0; d < 5; d++) {
+            const angle: number = (d / 5) * Math.PI * 2 + this.frameCount * 0.02;
+            const dist: number = (16 + Math.sin(this.frameCount * 0.03 + d * 2) * 3) * sc;
+            const dx: number = Math.cos(angle) * dist;
+            const dy: number = Math.sin(angle) * dist * 0.7 - 2.5 * sc;
+            c.fillStyle = COLOR_SLIME_BLUE_LIGHT;
+            c.globalAlpha = 0.4 + Math.sin(this.frameCount * 0.04 + d) * 0.2;
+            c.beginPath();
+            c.arc(dx, dy, 1.3 * sc, 0, Math.PI * 2);
+            c.fill();
+          }
+        }
+        c.globalAlpha = 0.2;
+        c.fillStyle = '#000000';
+        c.beginPath();
+        c.ellipse(0, 13 * sc, 12 * sc, 3 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        if (flash) {
+          c.globalAlpha = 0.9;
+          c.fillStyle = '#ffffff';
+        } else {
+          c.globalAlpha = 0.75;
+          c.fillStyle = COLOR_SLIME_BLUE;
+        }
+        c.beginPath();
+        c.ellipse(0, 0, 14 * sc, 12 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          c.globalAlpha = 0.3;
+          c.fillStyle = COLOR_SLIME_BLUE_LIGHT;
+          const rippleOff: number = Math.sin(this.frameCount * 0.04) * 1.5 * sc;
+          c.beginPath();
+          c.ellipse(0, rippleOff, 10 * sc, 7 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+          c.strokeStyle = '#93c5fd';
+          c.lineWidth = 0.8 * sc;
+          c.globalAlpha = 0.4;
+          for (let w: number = 0; w < 2; w++) {
+            const wy: number = (-2 + w * 5) * sc;
+            const woff: number = Math.sin(this.frameCount * 0.05 + w) * 2 * sc;
+            c.beginPath();
+            c.moveTo(-7 * sc, wy + woff);
+            c.quadraticCurveTo(0, wy - woff - 1.5 * sc, 7 * sc, wy + woff);
+            c.stroke();
+          }
+        }
+        c.globalAlpha = 1.0;
+        c.fillStyle = COLOR_SLIME_EYE;
+        c.beginPath();
+        c.arc(-3.5 * sc, -1 * sc, 2.5 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(3.5 * sc, -1 * sc, 2.5 * sc, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          c.fillStyle = '#1e40af';
+          c.beginPath();
+          c.arc(-3 * sc, -0.5 * sc, 1.2 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(4 * sc, -0.5 * sc, 1.2 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.strokeStyle = '#1e3a5f';
+          c.lineWidth = 0.8;
+          c.beginPath();
+          c.arc(0, 2.5 * sc, 2.5 * sc, 0.2, Math.PI - 0.2);
+          c.stroke();
+        }
+        c.restore();
+      } else if (s.enemyType === EnemyType.YELLOW_SLIME) {
+        const bounce: number = Math.abs(Math.sin(bp * 1.1)) * 3 * sc;
+        c.save();
+        c.translate(cx, cy - bounce);
+        if (!flash) {
+          c.globalAlpha = 0.08 + Math.sin(this.frameCount * 0.04) * 0.03;
+          c.fillStyle = COLOR_SLIME_YELLOW_LIGHT;
+          c.beginPath();
+          c.ellipse(0, 0, 20 * sc, 18 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+          for (let sp: number = 0; sp < 6; sp++) {
+            const angle: number = (sp / 6) * Math.PI * 2 + this.frameCount * 0.03;
+            const dist: number = (14 + Math.sin(this.frameCount * 0.05 + sp * 3) * 4) * sc;
+            const sx: number = Math.cos(angle) * dist;
+            const sy: number = Math.sin(angle) * dist * 0.6;
+            const sparkSize: number = (0.8 + Math.sin(this.frameCount * 0.08 + sp * 2) * 0.5) * sc;
+            c.fillStyle = COLOR_SLIME_YELLOW_LIGHT;
+            c.globalAlpha = 0.5 + Math.sin(this.frameCount * 0.06 + sp) * 0.3;
+            c.beginPath();
+            c.moveTo(sx, sy - sparkSize * 2);
+            c.lineTo(sx + sparkSize * 0.5, sy - sparkSize * 0.5);
+            c.lineTo(sx + sparkSize * 2, sy);
+            c.lineTo(sx + sparkSize * 0.5, sy + sparkSize * 0.5);
+            c.lineTo(sx, sy + sparkSize * 2);
+            c.lineTo(sx - sparkSize * 0.5, sy + sparkSize * 0.5);
+            c.lineTo(sx - sparkSize * 2, sy);
+            c.lineTo(sx - sparkSize * 0.5, sy - sparkSize * 0.5);
+            c.closePath();
+            c.fill();
+          }
+        }
+        c.globalAlpha = 0.15;
+        c.fillStyle = '#000000';
+        c.beginPath();
+        c.ellipse(0, (13 + bounce / sc) * sc, 11 * sc, 2.5 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        if (flash) {
+          c.globalAlpha = 0.9;
+          c.fillStyle = '#ffffff';
+        } else {
+          c.globalAlpha = 0.9;
+          c.fillStyle = COLOR_SLIME_YELLOW;
+        }
+        c.beginPath();
+        c.ellipse(0, 0, 12 * sc, 10 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          c.fillStyle = COLOR_SLIME_YELLOW_LIGHT;
+          c.beginPath();
+          c.ellipse(-2.5 * sc, -3.5 * sc, 5.5 * sc, 4 * sc, -0.2, 0, Math.PI * 2);
+          c.fill();
+          c.fillStyle = '#ffffff';
+          c.globalAlpha = 0.5;
+          c.beginPath();
+          c.ellipse(-4 * sc, -5.5 * sc, 2 * sc, 1.5 * sc, -0.2, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 1.0;
+        c.fillStyle = COLOR_SLIME_EYE;
+        c.beginPath();
+        c.arc(-3 * sc, -0.5 * sc, 2.2 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(3 * sc, -0.5 * sc, 2.2 * sc, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          c.fillStyle = '#92400e';
+          c.beginPath();
+          c.arc(-2.5 * sc, 0, 1 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(3.5 * sc, 0, 1 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.strokeStyle = '#92400e';
+          c.lineWidth = 0.8;
+          c.beginPath();
+          c.arc(0, 2.5 * sc, 3 * sc, 0.1, Math.PI - 0.1);
+          c.stroke();
+          c.fillStyle = '#f59e0b';
+          c.globalAlpha = 0.3;
+          c.beginPath();
+          c.ellipse(-6 * sc, 2 * sc, 2 * sc, 1.2 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.ellipse(6 * sc, 2 * sc, 2 * sc, 1.2 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.restore();
+      } else if (s.enemyType === EnemyType.GHOST_SLIME) {
+        const float: number = Math.sin(bp * 0.5) * 3 * sc;
+        const phase: number = Math.sin(this.frameCount * 0.05) * 0.15;
+        c.save();
+        c.translate(cx, cy + float);
+        if (!flash) {
+          c.globalAlpha = 0.06 + Math.sin(this.frameCount * 0.04) * 0.03;
+          c.fillStyle = COLOR_SLIME_GHOST;
+          c.beginPath();
+          c.ellipse(0, 0, 22 * sc, 20 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+          for (let w: number = 0; w < 4; w++) {
+            const wAngle: number = (w / 4) * Math.PI * 2 + this.frameCount * 0.02;
+            const wDist: number = (10 + Math.sin(this.frameCount * 0.03 + w * 2) * 5) * sc;
+            const wx: number = Math.cos(wAngle) * wDist;
+            const wy: number = Math.sin(wAngle) * wDist * 0.5 + 5 * sc;
+            c.fillStyle = COLOR_SLIME_GHOST_LIGHT;
+            c.globalAlpha = 0.15 + Math.sin(this.frameCount * 0.05 + w) * 0.1;
+            c.beginPath();
+            c.ellipse(wx, wy, 2.5 * sc, 1.5 * sc, wAngle, 0, Math.PI * 2);
+            c.fill();
+          }
+        }
+        const bodyAlpha: number = flash ? 0.9 : (0.45 + phase);
+        c.globalAlpha = bodyAlpha;
+        if (flash) {
+          c.fillStyle = '#ffffff';
+        } else {
+          c.fillStyle = COLOR_SLIME_GHOST;
+        }
+        c.beginPath();
+        c.moveTo(-12 * sc, 4 * sc);
+        c.quadraticCurveTo(-13 * sc, -10 * sc, 0, -12 * sc);
+        c.quadraticCurveTo(13 * sc, -10 * sc, 12 * sc, 4 * sc);
+        const wv1: number = Math.sin(this.frameCount * 0.06) * 1.5 * sc;
+        const wv2: number = Math.sin(this.frameCount * 0.06 + 1) * 1.5 * sc;
+        const wv3: number = Math.sin(this.frameCount * 0.06 + 2) * 1.5 * sc;
+        c.quadraticCurveTo(10 * sc, 10 * sc + wv1, 6 * sc, 8 * sc);
+        c.quadraticCurveTo(3 * sc, 12 * sc + wv2, 0, 9 * sc);
+        c.quadraticCurveTo(-3 * sc, 12 * sc + wv3, -6 * sc, 8 * sc);
+        c.quadraticCurveTo(-10 * sc, 10 * sc + wv1, -12 * sc, 4 * sc);
+        c.closePath();
+        c.fill();
+        if (!flash) {
+          c.fillStyle = COLOR_SLIME_GHOST_LIGHT;
+          c.globalAlpha = 0.2;
+          c.beginPath();
+          c.ellipse(0, -2 * sc, 7 * sc, 6 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = flash ? 0.9 : 0.8;
+        c.fillStyle = flash ? '#ffffff' : '#e2e8f0';
+        c.beginPath();
+        c.ellipse(-4 * sc, -3 * sc, 2.5 * sc, 3 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.ellipse(4 * sc, -3 * sc, 2.5 * sc, 3 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          c.fillStyle = '#1e293b';
+          c.globalAlpha = 0.9;
+          c.beginPath();
+          c.ellipse(-4 * sc, -2.5 * sc, 1.2 * sc, 1.5 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.ellipse(4 * sc, -2.5 * sc, 1.2 * sc, 1.5 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+          c.fillStyle = '#1e293b';
+          c.globalAlpha = 0.6;
+          c.beginPath();
+          c.ellipse(0, 3 * sc, 2.5 * sc, (2 + Math.sin(this.frameCount * 0.04)) * sc, 0, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.restore();
       }
 
       c.globalAlpha = 1.0;
-      c.fillStyle = COLOR_SLIME_EYE;
-      c.beginPath();
-      c.arc(screenX - 3, screenY - 2 + bounce, 2, 0, Math.PI * 2);
-      c.fill();
-      c.beginPath();
-      c.arc(screenX + 3, screenY - 2 + bounce, 2, 0, Math.PI * 2);
-      c.fill();
-
-      c.fillStyle = COLOR_SLIME_PUPIL;
-      c.beginPath();
-      c.arc(screenX - 2.5, screenY - 1.5 + bounce, 1, 0, Math.PI * 2);
-      c.fill();
-      c.beginPath();
-      c.arc(screenX + 3.5, screenY - 1.5 + bounce, 1, 0, Math.PI * 2);
-      c.fill();
-
-      if (s.isCharging) {
+      if (s.isCharging && s.enemyType !== EnemyType.RED_SLIME) {
+        const halfSize: number = s.size / 2;
         c.globalAlpha = 0.4;
         c.fillStyle = COLOR_SLIME_RED;
         c.beginPath();
-        c.arc(screenX, screenY + bounce, halfSize + 6, 0, Math.PI * 2);
+        c.arc(screenX, screenY, halfSize + 6, 0, Math.PI * 2);
         c.fill();
         c.globalAlpha = 1.0;
       }
 
       if (s.hp < s.maxHp) {
-        const barW: number = halfSize * 2;
+        const barW: number = s.size;
         const barH: number = 3;
-        const barY: number = screenY - halfSize - 6 + bounce;
+        const barY: number = screenY - s.size / 2 - 6;
         c.fillStyle = '#374151';
         c.fillRect(screenX - barW / 2, barY, barW, barH);
         c.fillStyle = '#ef4444';
