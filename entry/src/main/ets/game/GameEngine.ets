@@ -395,6 +395,31 @@ export class GameEngine {
       }
     }
 
+    // === Transform Form Override ===
+    if (p.isTransformed) {
+      this.updateTransformMovement(p, dt, moveX, moveY);
+      // Handle transform attack
+      if (this.input.attackPressed) {
+        this.input.attackPressed = false;
+        this.handleTransformAttack(p);
+      }
+      // Handle jump for applicable forms
+      if (this.input.jumpPressed && p.transformForm !== TransformForm.IRON_MAN) {
+        this.input.jumpPressed = false;
+        if (p.transformForm === TransformForm.SLIME) {
+          p.isJumping = true;
+          p.jumpTimer = 400; // Higher jump for slime
+        } else {
+          p.isJumping = true;
+          p.jumpTimer = 300;
+        }
+      }
+      // Skip normal movement/attack — transform handles it
+      // Still need collision, enemy contact, etc.
+      this.applyTransformCollision(p);
+      return;
+    }
+
     if (p.isDrilling) {
       this.updateDrilling(p, dt);
       return;
@@ -1013,7 +1038,12 @@ export class GameEngine {
         const cdy: number = p.y - s.y;
         const cdist: number = Math.sqrt(cdx * cdx + cdy * cdy);
         if (cdist < PLAYER_SIZE / 2 + s.size / 2) {
-          p.hp -= SLIME_DAMAGE;
+          let incomingDamage: number = SLIME_DAMAGE;
+          if (p.isTransformed) {
+            const reduction: number = TRANSFORM_DAMAGE_REDUCTION[p.transformForm as number];
+            incomingDamage = Math.max(1, Math.floor(incomingDamage * (1 - reduction)));
+          }
+          p.hp -= incomingDamage;
           if (p.hp < 0) p.hp = 0;
           p.invincibleTimer = INVINCIBLE_DURATION;
           const knockAngle: number = Math.atan2(cdy, cdx);
@@ -1133,6 +1163,10 @@ export class GameEngine {
           }
           if (dist < trap.size) {
             if (p.invincibleTimer <= 0) {
+              // Iron Man hovers — immune to ground traps and terrain
+              if (p.isTransformed && p.transformForm === TransformForm.IRON_MAN) {
+                // Skip trap damage for Iron Man
+              } else {
               p.hp -= trap.damage;
               p.invincibleTimer = INVINCIBLE_DURATION;
               this.shakeTimer = 150;
@@ -1148,6 +1182,7 @@ export class GameEngine {
                 p.x += (Math.random() - 0.5) * 120;
                 p.y += (Math.random() - 0.5) * 120;
               }
+              } // end else (non-Iron-Man)
             }
           }
           if (trap.timer <= 0) {
@@ -3864,5 +3899,232 @@ export class GameEngine {
   getUnlockedForms(): number[] {
     if (this.player === null) return [0];
     return this.player.unlockedForms.slice();
+  }
+
+  // === Transform Form Movement & Combat Methods ===
+
+  private updateTransformMovement(p: PlayerState, dt: number, moveX: number, moveY: number): void {
+    const form: TransformForm = p.transformForm;
+    const speed: number = TRANSFORM_SPEEDS[form as number];
+
+    if (form === TransformForm.IRON_MAN) {
+      // Flight: direct movement in all directions, no gravity
+      p.vx = moveX * speed;
+      p.vy = moveY * speed;
+    } else if (form === TransformForm.GHOST) {
+      // Ghost: normal movement but no wall collision
+      p.vx = moveX * speed;
+      p.vy = moveY * speed;
+    } else if (form === TransformForm.SLIME) {
+      // Slime: normal movement with higher speed
+      if (p.isDashing) {
+        p.dashTimer -= dt;
+        if (p.dashTimer <= 0) p.isDashing = false;
+        else {
+          p.vx = p.dashDirX * DASH_SPEED;
+          p.vy = p.dashDirY * DASH_SPEED;
+        }
+      } else {
+        p.vx = moveX * speed;
+        p.vy = moveY * speed;
+      }
+    } else {
+      // ARMOR: slower, heavy feel
+      if (p.isDashing) {
+        p.dashTimer -= dt;
+        if (p.dashTimer <= 0) p.isDashing = false;
+        else {
+          p.vx = p.dashDirX * DASH_SPEED * 1.5;
+          p.vy = p.dashDirY * DASH_SPEED * 1.5;
+          // Dash damage to enemies
+          this.checkTransformDashDamage(p);
+        }
+      } else {
+        p.vx = moveX * speed;
+        p.vy = moveY * speed;
+      }
+    }
+
+    // Facing direction
+    if (Math.abs(moveX) > 0.1 || Math.abs(moveY) > 0.1) {
+      p.facing = Math.atan2(moveY, moveX);
+    }
+
+    // Jump timer
+    if (p.isJumping) {
+      p.jumpTimer -= dt;
+      if (form === TransformForm.SLIME) {
+        p.jumpHeight = Math.sin((1 - p.jumpTimer / 400) * Math.PI) * 16;
+      } else {
+        p.jumpHeight = Math.sin((1 - p.jumpTimer / 300) * Math.PI) * 8;
+      }
+      if (p.jumpTimer <= 0) {
+        p.isJumping = false;
+        p.jumpHeight = 0;
+      }
+    }
+  }
+
+  private applyTransformCollision(p: PlayerState): void {
+    const newX: number = p.x + p.vx;
+    const newY: number = p.y + p.vy;
+
+    if (p.transformForm === TransformForm.GHOST) {
+      // Ghost: no wall collision — phase through everything
+      p.x = newX;
+      p.y = newY;
+    } else if (p.transformForm === TransformForm.IRON_MAN) {
+      // Iron Man: wall collision but ignore terrain damage
+      if (!this.checkPlayerCollision(newX, p.y)) {
+        p.x = newX;
+      }
+      if (!this.checkPlayerCollision(p.x, newY)) {
+        p.y = newY;
+      }
+    } else if (p.transformForm === TransformForm.SLIME) {
+      // Slime: wall bounce
+      if (!this.checkPlayerCollision(newX, p.y)) {
+        p.x = newX;
+      } else {
+        p.vx = -p.vx; // Bounce off wall
+      }
+      if (!this.checkPlayerCollision(p.x, newY)) {
+        p.y = newY;
+      } else {
+        p.vy = -p.vy;
+      }
+    } else {
+      // ARMOR: normal collision
+      if (!this.checkPlayerCollision(newX, p.y)) {
+        p.x = newX;
+      }
+      if (!this.checkPlayerCollision(p.x, newY)) {
+        p.y = newY;
+      }
+    }
+  }
+
+  private handleTransformAttack(p: PlayerState): void {
+    const form: TransformForm = p.transformForm;
+    const formIndex: number = form as number;
+    const cost: number = TRANSFORM_ATTACK_COSTS[formIndex];
+    const cooldown: number = TRANSFORM_ATTACK_COOLDOWNS[formIndex];
+
+    if (p.transformFormAttackCooldown > 0) return;
+    if (p.transformEnergy < cost) return;
+
+    p.transformEnergy -= cost;
+    p.transformFormAttackCooldown = cooldown;
+    p.isAttacking = true;
+    p.attackTimer = ATTACK_DURATION;
+
+    const cosF: number = Math.cos(p.facing);
+    const sinF: number = Math.sin(p.facing);
+
+    if (form === TransformForm.SLIME) {
+      // Split Shot: 3 small slimes shoot outward
+      for (let i: number = -1; i <= 1; i++) {
+        const spreadAngle: number = p.facing + i * 0.3;
+        const sx: number = Math.cos(spreadAngle);
+        const sy: number = Math.sin(spreadAngle);
+        // Spawn projectile-like particles that damage enemies
+        for (let d: number = 0; d < 80; d += 8) {
+          const px: number = p.x + sx * d;
+          const py: number = p.y + sy * d;
+          this.damageEnemiesAt(px, py, 10, 2);
+        }
+        if (this.settings.effectsEnabled) {
+          for (let d: number = 0; d < 60; d += 12) {
+            this.spawnParticle(p.x + sx * d, p.y + sy * d,
+              sx * 0.5, sy * 0.5, 300, COLOR_TRANSFORM_SLIME, 4);
+          }
+        }
+      }
+    } else if (form === TransformForm.GHOST) {
+      // Soul Shockwave: expanding ring
+      if (this.settings.effectsEnabled) {
+        for (let a: number = 0; a < Math.PI * 2; a += 0.3) {
+          this.spawnParticle(p.x + Math.cos(a) * 20, p.y + Math.sin(a) * 20,
+            Math.cos(a) * 2, Math.sin(a) * 2, 400, COLOR_TRANSFORM_GHOST, 3);
+        }
+      }
+      this.damageEnemiesInRadius(p.x, p.y, 80, 3);
+    } else if (form === TransformForm.ARMOR) {
+      // Rider Kick: charge forward 60px
+      const chargeDist: number = 60;
+      for (let d: number = 0; d < chargeDist; d += 6) {
+        const cx: number = p.x + cosF * d;
+        const cy: number = p.y + sinF * d;
+        this.damageEnemiesAt(cx, cy, 12, 5);
+      }
+      // Move player forward
+      p.x += cosF * chargeDist;
+      p.y += sinF * chargeDist;
+      if (this.settings.effectsEnabled) {
+        for (let d: number = 0; d < chargeDist; d += 10) {
+          this.spawnParticle(p.x - cosF * d, p.y - sinF * d,
+            (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 400, COLOR_TRANSFORM_ARMOR_ACCENT, 4);
+        }
+      }
+      this.shakeTimer = 150;
+    } else if (form === TransformForm.IRON_MAN) {
+      // Repulsor Beam: projectile traveling 150px
+      const beamLen: number = 150;
+      for (let d: number = 0; d < beamLen; d += 6) {
+        const bx: number = p.x + cosF * d;
+        const by: number = p.y + sinF * d;
+        this.damageEnemiesAt(bx, by, 8, 3);
+      }
+      if (this.settings.effectsEnabled) {
+        for (let d: number = 0; d < beamLen; d += 10) {
+          this.spawnParticle(p.x + cosF * d, p.y + sinF * d,
+            cosF * 0.3 + (Math.random() - 0.5), sinF * 0.3 + (Math.random() - 0.5),
+            250, COLOR_TRANSFORM_IRON_GOLD, 3);
+        }
+      }
+    }
+  }
+
+  private damageEnemiesAt(x: number, y: number, radius: number, damage: number): void {
+    for (let i: number = 0; i < this.enemies.length; i++) {
+      const s: SlimeState = this.enemies[i];
+      if (!s.active) continue;
+      const dx: number = s.x - x;
+      const dy: number = s.y - y;
+      if (dx * dx + dy * dy < radius * radius) {
+        s.hp -= damage;
+        s.hitFlash = 200;
+        if (this.settings.effectsEnabled) {
+          this.spawnParticle(s.x, s.y, 0, -1, 300, COLOR_DAMAGE_PARTICLE, 3);
+        }
+      }
+    }
+  }
+
+  private damageEnemiesInRadius(cx: number, cy: number, radius: number, damage: number): void {
+    this.damageEnemiesAt(cx, cy, radius, damage);
+    // Also damage bosses
+    if (this.activeBoss !== null && this.activeBoss.active && !this.activeBoss.defeated) {
+      const dx: number = this.activeBoss.x - cx;
+      const dy: number = this.activeBoss.y - cy;
+      if (dx * dx + dy * dy < radius * radius) {
+        this.activeBoss.hp -= damage;
+        this.activeBoss.hitFlash = 200;
+      }
+    }
+  }
+
+  private checkTransformDashDamage(p: PlayerState): void {
+    // Armor dash: damage enemies in path
+    for (let i: number = 0; i < this.enemies.length; i++) {
+      const s: SlimeState = this.enemies[i];
+      if (!s.active) continue;
+      const dx: number = s.x - p.x;
+      const dy: number = s.y - p.y;
+      if (dx * dx + dy * dy < 30 * 30) {
+        s.hp -= 1;
+        s.hitFlash = 200;
+      }
+    }
   }
 }
