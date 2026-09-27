@@ -77,11 +77,12 @@ import { MechanismSystem, MechanismBridge } from './systems/MechanismSystem';
 import { ChunkLoadSystem } from './systems/ChunkLoadSystem';
 import { DamageSystem, DamageBridge } from './systems/DamageSystem';
 import { XpLevelSystem } from './systems/XpLevelSystem';
+import { ChestSystem, ChestBridge } from './systems/ChestSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
 
-export class GameEngine extends GameContext implements MovementBridge, TransformBridge, BossBridge, MechanismBridge, DamageBridge {
+export class GameEngine extends GameContext implements MovementBridge, TransformBridge, BossBridge, MechanismBridge, DamageBridge, ChestBridge {
   private movementSystem: PlayerMovementSystem | null = null;
   private combatSystem: PlayerCombatSystem | null = null;
   private transformSystem: TransformSystem | null = null;
@@ -92,6 +93,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   private chunkLoadSystem: ChunkLoadSystem | null = null;
   private damageSystem: DamageSystem | null = null;
   private xpLevelSystem: XpLevelSystem | null = null;
+  private chestSystem: ChestSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -180,6 +182,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.chunkLoadSystem = new ChunkLoadSystem(this);
     this.damageSystem = new DamageSystem(this, this);
     this.xpLevelSystem = new XpLevelSystem(this);
+    this.chestSystem = new ChestSystem(this, this);
     this.startLoop();
   }
 
@@ -4197,13 +4200,11 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   // ==================== Chest System ====================
 
   private updateChestAnims(dt: number): void {
-    for (let i: number = 0; i < this.chests.length; i++) {
-      const chest: ChestState = this.chests[i];
-      if (chest.openAnim > 0) {
-        chest.openAnim -= dt;
-        if (chest.openAnim < 0) chest.openAnim = 0;
-      }
-    }
+    this.chestSystem!.updateAnims(dt);
+  }
+
+  private checkChestInteraction(): void {
+    this.chestSystem!.checkInteraction();
   }
 
   private renderChests(c: CanvasRenderingContext2D, offX: number, offY: number): void {
@@ -4284,100 +4285,6 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
         const lift: number = Math.min(chest.openAnim / 200, 1) * 6;
         c.fillRect(sx - halfSize, sy - halfSize - lift - 3, CHEST_SIZE, 3);
       }
-    }
-  }
-
-  private checkChestInteraction(): void {
-    if (this.player === null) return;
-    const p: PlayerState = this.player;
-
-    for (let i: number = 0; i < this.chests.length; i++) {
-      const chest: ChestState = this.chests[i];
-      if (!chest.active || chest.opened) continue;
-
-      const dx: number = chest.x - p.x;
-      const dy: number = chest.y - p.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < CHEST_INTERACT_RANGE) {
-        // Boss chest: auto-open on spawn (already handled by boss death)
-        // Elite chest: only if guardian defeated
-        if (chest.chestType === ChestType.ELITE && !chest.guardianDefeated) continue;
-        this.openChest(chest);
-      }
-    }
-  }
-
-  private openChest(chest: ChestState): void {
-    if (this.player === null) return;
-    const p: PlayerState = this.player;
-
-    chest.opened = true;
-    chest.openAnim = 500;
-
-    // Spawn light pillar particles
-    if (this.settings.effectsEnabled) {
-      this.particleMgr.magic(chest.x, chest.y, COLOR_CHEST_GLOW);
-    }
-
-    // Generate loot based on chest type
-    if (chest.chestType === ChestType.NORMAL) {
-      // Normal: 1-2 core_normal, 1-2 hp potions, small gold
-      const coreCount: number = 1 + Math.floor(Math.random() * 2);
-      const potionCount: number = 1 + Math.floor(Math.random() * 2);
-      const goldCount: number = 5 + Math.floor(Math.random() * 10);
-      p.inventory.coreNormal += coreCount;
-      p.inventory.hpPotions += potionCount;
-      p.inventory.gold += goldCount;
-      this.spawnLootText(chest.x, chest.y, '+' + coreCount + ' Core');
-    } else if (chest.chestType === ChestType.ELITE) {
-      // Elite: 1 core_rare, 1 form_core, 2-3 hp potions
-      const potionCount: number = 2 + Math.floor(Math.random() * 2);
-      p.inventory.coreRare += 1;
-      p.inventory.formCore += 1;
-      p.inventory.hpPotions += potionCount;
-      p.inventory.gold += 20;
-      this.spawnLootText(chest.x, chest.y, '+Rare Core +Form Core');
-    } else if (chest.chestType === ChestType.BOSS) {
-      // Boss: 2-3 boss ore, 1-2 core_rare, chance form_core
-      const oreCount: number = 2 + Math.floor(Math.random() * 2);
-      const rareCount: number = 1 + Math.floor(Math.random() * 2);
-      // Add boss-specific ore based on nearest boss type
-      this.addBossOre(p, oreCount);
-      p.inventory.coreRare += rareCount;
-      if (Math.random() < 0.5) {
-        p.inventory.formCore += 1;
-      }
-      p.inventory.gold += 50;
-      this.spawnLootText(chest.x, chest.y, '+Boss Loot!');
-    }
-
-    this.autoSave();
-  }
-
-  private addBossOre(p: PlayerState, count: number): void {
-    // Determine which boss ore to add based on player's current biome
-    const biome: BiomeType = this.worldGen.getBiome(p.x, p.y);
-    if (biome === BiomeType.CRYSTAL) {
-      p.inventory.crystalOre += count;
-    } else if (biome === BiomeType.MUSHROOM) {
-      p.inventory.mushroomOre += count;
-    } else if (biome === BiomeType.LAVA) {
-      p.inventory.flameOre += count;
-    } else if (biome === BiomeType.WATER) {
-      p.inventory.abyssOre += count;
-    } else if (biome === BiomeType.SHADOW) {
-      p.inventory.voidOre += count;
-    } else {
-      // Default to crystal ore if in normal biome
-      p.inventory.crystalOre += count;
-    }
-  }
-
-  private spawnLootText(x: number, y: number, text: string): void {
-    // Spawn floating text particle to show loot pickup
-    if (this.settings.effectsEnabled) {
-      this.particleMgr.sparks(x, y - 10, '#ffd700', 5);
     }
   }
 
