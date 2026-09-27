@@ -66,72 +66,14 @@ import { ParticleManager, ParticleEmitter, EmitterConfig, EmitterMode, ParticleS
   createBloodConfig, createMagicConfig, createSmokeConfig } from './ParticleSystem';
 import { PhysicsEngine, PhysicsBody, createBody, vec2Distance, vec2Normalize, vec2 } from './PhysicsEngine';
 import { TileBatchRenderer, SpriteBatch, GlowBatchRenderer } from './SpriteBatch';
-
-interface ChunkCacheEntry {
-  key: string;
-  poolIndex: number;
-  isShadow: boolean;
-}
+import { GameContext, ChunkCacheEntry } from './GameContext';
+import { PlayerMovementSystem, MovementBridge } from './systems/PlayerMovementSystem';
 
 const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
 const CACHE_PADDING: number = 16;
 
-export class GameEngine {
-  private ctx: CanvasRenderingContext2D | null = null;
-  private minimapCtx: CanvasRenderingContext2D | null = null;
-  private cacheCtxs: CanvasRenderingContext2D[] = [];
-  private chunkPixelSize: number = CHUNK_SIZE * TILE_SIZE;
-  private cacheEntryPool: (ChunkCacheEntry | null)[] = [];
-  private activeChunkCaches: Map<string, ChunkCacheEntry> = new Map();
-  private freePoolIndices: number[] = [];
-  private lastCacheIsShadow: boolean = false;
-  private worldGen: WorldGenerator = new WorldGenerator();
-  private chunks: Map<string, ChunkData> = new Map();
-  private player: PlayerState | null = null;
-  private enemies: SlimeState[] = [];
-  private xpOrbs: XpOrb[] = [];
-  private particles: Particle[] = [];
-  private cameraX: number = 0;
-  private cameraY: number = 0;
-  private screenW: number = 0;
-  private screenH: number = 0;
-  private gameLoopId: number = -1;
-  private frameCount: number = 0;
-  private shakeX: number = 0;
-  private shakeY: number = 0;
-  private shakeTimer: number = 0;
-  private damageFlashTimer: number = 0;
-  private audio: AudioManager = new AudioManager();
-  private settings: GameSettings = { soundEnabled: true, effectsEnabled: true };
-  private ambientParticles: AmbientParticle[] = [];
-  private playerGender: GenderType = GenderType.MALE;
-  private bosses: BossState[] = [];
-  private activeBoss: BossState | null = null;
-  private bossRoomLocked: boolean = false;
-  private materialDrops: MaterialDrop[] = [];
-  private bossRooms: BossRoom[] = [];
-  private chests: ChestState[] = [];
-  private traps: TrapInstance[] = [];
-  private mechanisms: MechanismInstance[] = [];
-  private secretRooms: SecretRoom[] = [];
-  private teleportCooldown: number = 0;
-  private transformCoreDrops: TransformCoreDrop[] = [];
-  private transformUnlockNotifyTimer: number = 0;
-  private transformUnlockNotifyForm: TransformForm = TransformForm.NONE;
-  private transformAnimIsRevert: boolean = false;
-  private particleMgr: ParticleManager = new ParticleManager();
-  private physics: PhysicsEngine = new PhysicsEngine();
-  private tileBatch: TileBatchRenderer = new TileBatchRenderer(TILE_SIZE);
-  private glowBatch: GlowBatchRenderer = new GlowBatchRenderer();
-  private input: InputState = {
-    joyActive: false, joyDx: 0, joyDy: 0,
-    jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false,
-    toolPressed: false
-  };
-  private state: GameState = GameState.PLAYING;
-  private onStateChange: ((state: GameState) => void) | null = null;
-  private onSave: (() => void) | null = null;
-  private context: Object | null = null;
+export class GameEngine extends GameContext implements MovementBridge {
+  private movementSystem: PlayerMovementSystem | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -210,6 +152,7 @@ export class GameEngine {
     }
 
     this.initAmbientParticles();
+    this.movementSystem = new PlayerMovementSystem(this, this);
     this.startLoop();
   }
 
@@ -325,110 +268,6 @@ export class GameEngine {
   getWeaponFormName(form: WeaponForm): string {
     const names: string[] = ['刃', '鞭', '锤', '杖', '双刃', '巨斧'];
     return names[form];
-  }
-
-  private chunkKey(cx: number, cy: number): string {
-    return cx + ',' + cy;
-  }
-
-  private loadChunksAround(tileX: number, tileY: number): void {
-    const pcx: number = Math.floor(tileX / CHUNK_SIZE);
-    const pcy: number = Math.floor(tileY / CHUNK_SIZE);
-    for (let dy: number = -CHUNK_LOAD_RADIUS; dy <= CHUNK_LOAD_RADIUS; dy++) {
-      for (let dx: number = -CHUNK_LOAD_RADIUS; dx <= CHUNK_LOAD_RADIUS; dx++) {
-        const cx: number = pcx + dx;
-        const cy: number = pcy + dy;
-        const key: string = this.chunkKey(cx, cy);
-        if (!this.chunks.has(key)) {
-          const chunk: ChunkData = this.worldGen.generateChunk(cx, cy);
-          this.chunks.set(key, chunk);
-          for (let i: number = 0; i < chunk.enemies.length; i++) {
-            this.enemies.push(chunk.enemies[i]);
-          }
-          for (let i: number = 0; i < chunk.traps.length; i++) {
-            this.traps.push(chunk.traps[i]);
-          }
-          for (let i: number = 0; i < chunk.mechanisms.length; i++) {
-            this.mechanisms.push(chunk.mechanisms[i]);
-          }
-          for (let i: number = 0; i < chunk.secretRooms.length; i++) {
-            this.secretRooms.push(chunk.secretRooms[i]);
-          }
-          // Extract boss data
-          for (let i: number = 0; i < chunk.bosses.length; i++) {
-            this.bosses.push(chunk.bosses[i]);
-          }
-          // Extract chest data
-          for (let i: number = 0; i < chunk.chests.length; i++) {
-            this.chests.push(chunk.chests[i]);
-          }
-        }
-      }
-    }
-    // Sync boss rooms from WorldGenerator
-    const wgRooms: BossRoom[] = this.worldGen.getBossRooms();
-    for (let i: number = 0; i < wgRooms.length; i++) {
-      const wgRoom: BossRoom = wgRooms[i];
-      let found: boolean = false;
-      for (let j: number = 0; j < this.bossRooms.length; j++) {
-        if (this.bossRooms[j].chunkX === wgRoom.chunkX && this.bossRooms[j].chunkY === wgRoom.chunkY) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        this.bossRooms.push({
-          chunkX: wgRoom.chunkX, chunkY: wgRoom.chunkY,
-          bossType: wgRoom.bossType,
-          entered: false, defeated: false, chestSpawned: false
-        });
-      }
-    }
-  }
-
-  getTile(worldX: number, worldY: number): number {
-    const tx: number = Math.floor(worldX / TILE_SIZE);
-    const ty: number = Math.floor(worldY / TILE_SIZE);
-    const cx: number = Math.floor(tx / CHUNK_SIZE);
-    const cy: number = Math.floor(ty / CHUNK_SIZE);
-    const key: string = this.chunkKey(cx, cy);
-    const chunk: ChunkData | undefined = this.chunks.get(key);
-    if (chunk === undefined) return TileType.WALL;
-    const lx: number = tx - cx * CHUNK_SIZE;
-    const ly: number = ty - cy * CHUNK_SIZE;
-    return chunk.tiles[ly][lx];
-  }
-
-  setTile(worldX: number, worldY: number, tileType: number): void {
-    const tx: number = Math.floor(worldX / TILE_SIZE);
-    const ty: number = Math.floor(worldY / TILE_SIZE);
-    const cx: number = Math.floor(tx / CHUNK_SIZE);
-    const cy: number = Math.floor(ty / CHUNK_SIZE);
-    const key: string = this.chunkKey(cx, cy);
-    const chunk: ChunkData | undefined = this.chunks.get(key);
-    if (chunk === undefined) return;
-    const lx: number = tx - cx * CHUNK_SIZE;
-    const ly: number = ty - cy * CHUNK_SIZE;
-    chunk.tiles[ly][lx] = tileType;
-    this.invalidateChunkCache(key);
-  }
-
-  private invalidateChunkCache(key: string): void {
-    const entry: ChunkCacheEntry | undefined = this.activeChunkCaches.get(key);
-    if (entry !== undefined) {
-      this.cacheEntryPool[entry.poolIndex] = null;
-      this.freePoolIndices.push(entry.poolIndex);
-      this.activeChunkCaches.delete(key);
-    }
-  }
-
-  private invalidateAllChunkCaches(): void {
-    this.activeChunkCaches.clear();
-    this.cacheEntryPool = new Array(this.cacheCtxs.length).fill(null);
-    this.freePoolIndices = [];
-    for (let i: number = 0; i < this.cacheCtxs.length; i++) {
-      this.freePoolIndices.push(i);
-    }
   }
 
   private buildChunkCache(cx: number, cy: number): void {
@@ -677,10 +516,6 @@ export class GameEngine {
     c.fill();
   }
 
-  private isWalkable(tile: number): boolean {
-    return tile !== TileType.WALL && tile !== TileType.VOID;
-  }
-
   private update(dt: number): void {
     if (this.player === null) return;
     if (this.state !== GameState.PLAYING) return;
@@ -690,7 +525,7 @@ export class GameEngine {
     const pty: number = Math.floor(p.y / TILE_SIZE);
     this.loadChunksAround(ptx, pty);
 
-    this.updatePlayer(p, dt);
+    this.movementSystem!.update(dt);
     // === Transform System Update ===
     this.updateTransformSystem(p, dt);
     this.updateEnemies(dt);
@@ -720,238 +555,6 @@ export class GameEngine {
     // Auto-save interval
     if (this.frameCount > 0 && this.frameCount % AUTO_SAVE_INTERVAL === 0) {
       this.autoSave();
-    }
-  }
-
-  private updatePlayer(p: PlayerState, dt: number): void {
-    if (p.isEngulfed) {
-      this.updateEngulfedPlayer(p, dt);
-      return;
-    }
-
-    let moveX: number = 0;
-    let moveY: number = 0;
-
-    if (this.input.joyActive) {
-      const len: number = Math.sqrt(this.input.joyDx * this.input.joyDx + this.input.joyDy * this.input.joyDy);
-      if (len > 0.1) {
-        moveX = this.input.joyDx / len;
-        moveY = this.input.joyDy / len;
-        p.facing = Math.atan2(this.input.joyDy, this.input.joyDx);
-      }
-    }
-
-    // === Transform Form Override ===
-    if (p.isTransformed) {
-      this.updateTransformMovement(p, dt, moveX, moveY);
-      // Handle transform attack
-      if (this.input.attackPressed) {
-        this.input.attackPressed = false;
-        this.handleTransformAttack(p);
-      }
-      // Handle jump for applicable forms
-      if (this.input.jumpPressed && p.transformForm !== TransformForm.IRON_MAN) {
-        this.input.jumpPressed = false;
-        if (p.transformForm === TransformForm.SLIME) {
-          p.isJumping = true;
-          p.jumpTimer = 400; // Higher jump for slime
-        } else {
-          p.isJumping = true;
-          p.jumpTimer = 300;
-        }
-      }
-      // Skip normal movement/attack — transform handles it
-      // Still need collision, enemy contact, etc.
-      this.applyTransformCollision(p);
-      return;
-    }
-
-    if (p.isDrilling) {
-      // Allow joystick movement to cancel drilling
-      if (this.input.joyActive) {
-        const dLen: number = Math.sqrt(this.input.joyDx * this.input.joyDx + this.input.joyDy * this.input.joyDy);
-        if (dLen > 0.3) {
-          p.isDrilling = false;
-          p.isUsingTool = false;
-          p.drillHitCount = 0;
-        }
-      }
-      if (p.isDrilling) {
-        this.updateDrilling(p, dt);
-        return;
-      }
-    }
-
-    if (p.isDashing) {
-      p.dashTimer -= dt;
-      if (p.dashTimer <= 0) {
-        p.isDashing = false;
-      } else {
-        p.vx = p.dashDirX * DASH_SPEED;
-        p.vy = p.dashDirY * DASH_SPEED;
-        if (this.settings.effectsEnabled && this.frameCount % 3 === 0) {
-          this.spawnParticle(p.x, p.y + PLAYER_SIZE / 2, 0, 0, 200, COLOR_PLAYER_BODY, 4);
-        }
-      }
-    } else {
-      p.vx = moveX * PLAYER_SPEED;
-      p.vy = moveY * PLAYER_SPEED;
-    }
-
-    const newX: number = p.x + p.vx;
-    const newY: number = p.y + p.vy;
-    if (!this.checkPlayerCollision(newX, p.y)) {
-      p.x = newX;
-    }
-    if (!this.checkPlayerCollision(p.x, newY)) {
-      p.y = newY;
-    }
-
-    if (this.input.jumpPressed && !p.isJumping) {
-      p.isJumping = true;
-      p.jumpTimer = 300;
-      this.input.jumpPressed = false;
-      this.audio.playJump();
-    }
-    if (p.isJumping) {
-      p.jumpTimer -= dt;
-      const progress: number = 1.0 - (p.jumpTimer / 300);
-      p.jumpHeight = Math.sin(progress * Math.PI) * 12;
-      if (p.jumpTimer <= 0) {
-        p.isJumping = false;
-        p.jumpHeight = 0;
-      }
-    }
-
-    if (this.input.attackPressed && !p.isAttacking && p.attackTimer <= 0) {
-      const formStats: number[] = WEAPON_FORM_STATS[p.currentWeaponForm];
-      const formDuration: number = formStats[2];
-      p.isAttacking = true;
-      p.attackTimer = formDuration;
-      this.input.attackPressed = false;
-      this.performAttack(p);
-    }
-    if (p.isAttacking) {
-      p.attackTimer -= dt;
-      if (p.attackTimer <= 0) {
-        p.isAttacking = false;
-        const formStats: number[] = WEAPON_FORM_STATS[p.currentWeaponForm];
-        p.attackTimer = formStats[3] - formStats[2];
-      }
-    } else if (p.attackTimer > 0) {
-      p.attackTimer -= dt;
-    }
-
-    if (this.input.toolPressed && !p.isUsingTool && p.toolCooldown <= 0 && !p.isDrilling) {
-      this.input.toolPressed = false;
-      // Search for nearest wall in facing direction (3-tile radius)
-      const cosF: number = Math.cos(p.facing);
-      const sinF: number = Math.sin(p.facing);
-      let bestTX: number = -1;
-      let bestTY: number = -1;
-      let bestDist: number = 9999;
-      for (let r: number = 1; r <= 3; r++) {
-        const checkX: number = p.x + cosF * TILE_SIZE * r;
-        const checkY: number = p.y + sinF * TILE_SIZE * r;
-        const ctx: number = Math.floor(checkX / TILE_SIZE);
-        const cty: number = Math.floor(checkY / TILE_SIZE);
-        // Also check adjacent tiles for forgiveness
-        for (let ox: number = -1; ox <= 1; ox++) {
-          for (let oy: number = -1; oy <= 1; oy++) {
-            const ttx: number = ctx + ox;
-            const tty: number = cty + oy;
-            if (this.getTile(ttx * TILE_SIZE, tty * TILE_SIZE) === TileType.WALL) {
-              const dx: number = (ttx * TILE_SIZE + TILE_SIZE / 2) - p.x;
-              const dy: number = (tty * TILE_SIZE + TILE_SIZE / 2) - p.y;
-              const dist: number = dx * dx + dy * dy;
-              if (dist < bestDist) {
-                bestDist = dist;
-                bestTX = ttx;
-                bestTY = tty;
-              }
-            }
-          }
-        }
-      }
-      if (bestTX >= 0) {
-        p.isUsingTool = true;
-        p.isDrilling = true;
-        p.drillTargetX = bestTX;
-        p.drillTargetY = bestTY;
-        p.drillHitCount = 0;
-        p.vx = 0;
-        p.vy = 0;
-        p.toolCooldown = 200;
-      }
-    }
-    if (p.toolCooldown > 0) p.toolCooldown -= dt;
-    if (p.isUsingTool && !p.isDrilling) {
-      p.isUsingTool = false;
-    }
-
-    if (this.input.dashPressed && !p.isDashing && p.dashCooldown <= 0) {
-      p.isDashing = true;
-      p.dashTimer = DASH_DURATION;
-      p.dashCooldown = DASH_COOLDOWN;
-      p.invincibleTimer = DASH_DURATION;
-      const dx: number = Math.cos(p.facing);
-      const dy: number = Math.sin(p.facing);
-      p.dashDirX = dx;
-      p.dashDirY = dy;
-      this.input.dashPressed = false;
-      this.audio.playDash();
-    }
-    if (p.dashCooldown > 0) p.dashCooldown -= dt;
-    if (p.invincibleTimer > 0) p.invincibleTimer -= dt;
-
-    if (Math.abs(p.vx) > 0.1 || Math.abs(p.vy) > 0.1) {
-      p.animFrame += 0.15;
-    }
-  }
-
-  private updateDrilling(p: PlayerState, dt: number): void {
-    const wallWorldX: number = p.drillTargetX * TILE_SIZE + TILE_SIZE / 2;
-    const wallWorldY: number = p.drillTargetY * TILE_SIZE + TILE_SIZE / 2;
-    p.facing = Math.atan2(wallWorldY - p.y, wallWorldX - p.x);
-
-    // Cancel drill if player moves too far away
-    const distToWall: number = Math.sqrt((p.x - wallWorldX) * (p.x - wallWorldX) + (p.y - wallWorldY) * (p.y - wallWorldY));
-    if (distToWall > TILE_SIZE * 2.5) {
-      p.isDrilling = false;
-      p.drillHitCount = 0;
-      return;
-    }
-
-    // Auto-progress: accumulate drill time in ms
-    p.drillHitCount += dt;
-
-    // Spawn drill particles continuously
-    if (this.settings.effectsEnabled && this.frameCount % 3 === 0) {
-      const angle: number = Math.random() * Math.PI * 2;
-      this.spawnParticle(wallWorldX, wallWorldY,
-        Math.cos(angle) * 1.5, Math.sin(angle) * 1.5, 200, COLOR_DRILL_PARTICLE, 2);
-    }
-
-    // Play drill hit sound every ~300ms (every 19 frames at 16ms/frame)
-    if (this.frameCount % 19 === 0) {
-      this.audio.playDrillHit();
-    }
-
-    // Break wall after DRILL_BREAK_HITS * 300ms of continuous drilling
-    const breakTime: number = DRILL_BREAK_HITS * 300;
-    if (p.drillHitCount >= breakTime) {
-      this.setTile(wallWorldX, wallWorldY, TileType.BROKEN_WALL);
-      this.audio.playWallBreak();
-      if (this.settings.effectsEnabled) {
-        for (let k: number = 0; k < 8; k++) {
-          const angle: number = Math.random() * Math.PI * 2;
-          const speed: number = 1 + Math.random() * 3;
-          this.spawnParticle(wallWorldX, wallWorldY,
-            Math.cos(angle) * speed, Math.sin(angle) * speed, 400, COLOR_WALL, 4);
-        }
-      }
-      p.isDrilling = false;
-      p.drillHitCount = 0;
     }
   }
 
@@ -1110,51 +713,6 @@ export class GameEngine {
 
   getTransformUnlockNotify(): TransformUnlockNotify {
     return { active: this.transformUnlockNotifyTimer > 0, form: this.transformUnlockNotifyForm } as TransformUnlockNotify;
-  }
-
-  private updateEngulfedPlayer(p: PlayerState, dt: number): void {
-    p.engulfDamageTimer -= dt;
-    if (p.engulfDamageTimer <= 0) {
-      p.hp -= SLIME_DAMAGE;
-      if (p.hp < 0) p.hp = 0;
-      p.engulfDamageTimer = ENGULF_DAMAGE_INTERVAL;
-      this.damageFlashTimer = 200;
-      this.audio.playPlayerDamage();
-      this.shakeTimer = 100;
-    }
-
-    if (p.engulfEscapeCount >= ENGULF_ESCAPE_ATTACKS) {
-      p.isEngulfed = false;
-      if (p.engulfSlimeIndex >= 0 && p.engulfSlimeIndex < this.enemies.length) {
-        const s: SlimeState = this.enemies[p.engulfSlimeIndex];
-        s.isEngulfing = false;
-        s.engulfedPlayer = false;
-        const angle: number = Math.random() * Math.PI * 2;
-        p.x = s.x + Math.cos(angle) * 20;
-        p.y = s.y + Math.sin(angle) * 20;
-      }
-      p.engulfSlimeIndex = -1;
-      p.engulfEscapeCount = 0;
-      p.invincibleTimer = INVINCIBLE_DURATION;
-    }
-  }
-
-  private checkPlayerCollision(x: number, y: number): boolean {
-    // Ghost form phases through walls
-    if (this.player !== null && this.player.isTransformed &&
-        this.player.transformForm === TransformForm.GHOST) {
-      return false;
-    }
-    const halfSize: number = PLAYER_SIZE / 2;
-    const cornersX: number[] = [x - halfSize, x + halfSize];
-    const cornersY: number[] = [y - halfSize, y + halfSize];
-    for (let i: number = 0; i < 2; i++) {
-      for (let j: number = 0; j < 2; j++) {
-        const tile: number = this.getTile(cornersX[i], cornersY[j]);
-        if (!this.isWalkable(tile)) return true;
-      }
-    }
-    return false;
   }
 
   private performAttack(p: PlayerState): void {
@@ -1645,7 +1203,7 @@ export class GameEngine {
       }
     }
 
-    this.checkBreakableWalls(p);
+    this.movementSystem!.checkBreakableWalls(p);
   }
 
   private checkMechanismLinks(mech: MechanismInstance): void {
@@ -1655,37 +1213,6 @@ export class GameEngine {
         const linkedMech: MechanismInstance = this.mechanisms[other.linkedIndex];
         if (linkedMech === mech) {
           other.active = mech.active;
-        }
-      }
-    }
-  }
-
-  private checkBreakableWalls(p: PlayerState): void {
-    if (!p.isDrilling) return;
-    const wallTX: number = p.drillTargetX;
-    const wallTY: number = p.drillTargetY;
-    const wallWorldX: number = wallTX * TILE_SIZE + TILE_SIZE / 2;
-    const wallWorldY: number = wallTY * TILE_SIZE + TILE_SIZE / 2;
-
-    for (let i: number = 0; i < this.secretRooms.length; i++) {
-      const room: SecretRoom = this.secretRooms[i];
-      if (room.revealed) continue;
-      const roomWX: number = (room.chunkX * CHUNK_SIZE + room.wallTileX) * TILE_SIZE + TILE_SIZE / 2;
-      const roomWY: number = (room.chunkY * CHUNK_SIZE + room.wallTileY) * TILE_SIZE + TILE_SIZE / 2;
-      const dx: number = wallWorldX - roomWX;
-      const dy: number = wallWorldY - roomWY;
-      if (Math.abs(dx) < TILE_SIZE && Math.abs(dy) < TILE_SIZE) {
-        room.revealed = true;
-        this.setTile(roomWX, roomWY, TileType.FLOOR);
-        this.audio.playWallBreak();
-        this.shakeTimer = 200;
-        if (this.settings.effectsEnabled) {
-          for (let k: number = 0; k < 12; k++) {
-            const angle: number = Math.random() * Math.PI * 2;
-            const speed: number = 1 + Math.random() * 3;
-            this.spawnParticle(roomWX, roomWY,
-              Math.cos(angle) * speed, Math.sin(angle) * speed, 600, COLOR_BREAKABLE_WALL, 4);
-          }
         }
       }
     }
@@ -2035,24 +1562,6 @@ export class GameEngine {
         if (this.materialDrops[i].active) active.push(this.materialDrops[i]);
       }
       this.materialDrops = active;
-    }
-  }
-
-  private spawnParticle(x: number, y: number, vx: number, vy: number, life: number, color: string, size: number): void {
-    this.particles.push({ x: x, y: y, vx: vx, vy: vy, life: life, maxLife: life, color: color, size: size });
-  }
-
-  private updateParticles(dt: number): void {
-    for (let i: number = this.particles.length - 1; i >= 0; i--) {
-      const pt: Particle = this.particles[i];
-      pt.x += pt.vx;
-      pt.y += pt.vy;
-      pt.vx *= 0.95;
-      pt.vy *= 0.95;
-      pt.life -= dt;
-      if (pt.life <= 0) {
-        this.particles.splice(i, 1);
-      }
     }
   }
 
@@ -5934,35 +5443,31 @@ export class GameEngine {
     const newY: number = p.y + p.vy;
 
     if (p.transformForm === TransformForm.GHOST) {
-      // Ghost: no wall collision — phase through everything
       p.x = newX;
       p.y = newY;
     } else if (p.transformForm === TransformForm.IRON_MAN) {
-      // Iron Man: wall collision but ignore terrain damage
-      if (!this.checkPlayerCollision(newX, p.y)) {
+      if (!this.movementSystem!.checkPlayerCollision(newX, p.y)) {
         p.x = newX;
       }
-      if (!this.checkPlayerCollision(p.x, newY)) {
+      if (!this.movementSystem!.checkPlayerCollision(p.x, newY)) {
         p.y = newY;
       }
     } else if (p.transformForm === TransformForm.SLIME) {
-      // Slime: wall bounce
-      if (!this.checkPlayerCollision(newX, p.y)) {
+      if (!this.movementSystem!.checkPlayerCollision(newX, p.y)) {
         p.x = newX;
       } else {
-        p.vx = -p.vx; // Bounce off wall
+        p.vx = -p.vx;
       }
-      if (!this.checkPlayerCollision(p.x, newY)) {
+      if (!this.movementSystem!.checkPlayerCollision(p.x, newY)) {
         p.y = newY;
       } else {
         p.vy = -p.vy;
       }
     } else {
-      // ARMOR: normal collision
-      if (!this.checkPlayerCollision(newX, p.y)) {
+      if (!this.movementSystem!.checkPlayerCollision(newX, p.y)) {
         p.x = newX;
       }
-      if (!this.checkPlayerCollision(p.x, newY)) {
+      if (!this.movementSystem!.checkPlayerCollision(p.x, newY)) {
         p.y = newY;
       }
     }
