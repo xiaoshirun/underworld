@@ -84,6 +84,7 @@ import { SaveLoadSystem, SaveLoadBridge } from './systems/SaveLoadSystem';
 import { TileRenderer } from './renderers/TileRenderer';
 import { PlayerRenderer } from './renderers/PlayerRenderer';
 import { EnemyRenderer } from './renderers/EnemyRenderer';
+import { BossRenderer } from './renderers/BossRenderer';
 
 export class GameEngine extends GameContext implements MovementBridge, TransformBridge, BossBridge, MechanismBridge, DamageBridge, ChestBridge, SaveLoadBridge {
   private movementSystem: PlayerMovementSystem | null = null;
@@ -103,6 +104,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   private tileRenderer: TileRenderer | null = null;
   private playerRenderer: PlayerRenderer | null = null;
   private enemyRenderer: EnemyRenderer | null = null;
+  private bossRenderer: BossRenderer | null = null;
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
     cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
@@ -198,6 +200,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.tileRenderer = new TileRenderer(this);
     this.playerRenderer = new PlayerRenderer(this);
     this.enemyRenderer = new EnemyRenderer(this);
+    this.bossRenderer = new BossRenderer(this);
     this.startLoop();
   }
 
@@ -501,14 +504,13 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.renderTraps(c, offX, offY);
     this.renderMechanisms(c, offX, offY);
     this.renderChests(c, offX, offY);
-    this.renderBosses(c, offX, offY);
-    this.renderMaterialDrops(c, offX, offY);
+    this.bossRenderer!.render(c, offX, offY);
     this.playerRenderer!.render(c, offX, offY, p);
     this.renderParticles(c, offX, offY);
     this.particleMgr.render(c, offX, offY);
     this.renderAmbientParticles(c);
     this.renderVignette(c, p);
-    this.renderBossHPBar(c);
+    this.bossRenderer!.renderHPBar(c);
 
     if (this.frameCount % MINIMAP_UPDATE_INTERVAL === 0) {
       this.renderMinimap();
@@ -1312,268 +1314,6 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   }
 
   // ==================== Boss Rendering ====================
-
-  private renderBosses(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    for (let i: number = 0; i < this.bosses.length; i++) {
-      const boss: BossState = this.bosses[i];
-      if (!boss.active || boss.defeated) continue;
-
-      const screenX: number = boss.x + offX;
-      const screenY: number = boss.y + offY;
-
-      if (screenX < -60 || screenX > this.screenW + 60 || screenY < -60 || screenY > this.screenH + 60) {
-        continue;
-      }
-
-      const bossColor: string = this.getBossColor(boss.bossType);
-      const halfSize: number = boss.size / 2;
-      const pulse: number = Math.sin(this.frameCount * 0.05) * 2;
-
-      // Hit flash
-      if (boss.hitFlash > 0) {
-        c.globalAlpha = 0.5 + 0.5 * Math.sin(boss.hitFlash * 0.05);
-        c.fillStyle = '#ffffff';
-        c.fillRect(screenX - halfSize - 2, screenY - halfSize - 2, boss.size + 4, boss.size + 4);
-      }
-
-      c.globalAlpha = 1.0;
-
-      // Boss body based on type
-      if (boss.bossType === BossType.CRYSTAL_GUARDIAN) {
-        // Crystal shape - diamond
-        c.fillStyle = bossColor;
-        c.beginPath();
-        c.moveTo(screenX, screenY - halfSize - pulse);
-        c.lineTo(screenX + halfSize + pulse, screenY);
-        c.lineTo(screenX, screenY + halfSize + pulse);
-        c.lineTo(screenX - halfSize - pulse, screenY);
-        c.closePath();
-        c.fill();
-        // Inner glow
-        c.fillStyle = '#67e8f9';
-        c.globalAlpha = 0.5 + 0.3 * Math.sin(this.frameCount * 0.08);
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize * 0.4, 0, Math.PI * 2);
-        c.fill();
-        c.globalAlpha = 1.0;
-        // Eyes
-        c.fillStyle = '#ffffff';
-        c.fillRect(screenX - 6, screenY - 4, 4, 6);
-        c.fillRect(screenX + 3, screenY - 4, 4, 6);
-      } else if (boss.bossType === BossType.MUSHROOM_KING) {
-        // Mushroom cap (dome) + stem
-        c.fillStyle = bossColor;
-        c.beginPath();
-        c.arc(screenX, screenY - 4, halfSize + pulse, Math.PI, 0);
-        c.closePath();
-        c.fill();
-        // Spots on cap
-        c.fillStyle = '#ff9ec4';
-        c.beginPath();
-        c.arc(screenX - 8, screenY - 12, 4, 0, Math.PI * 2);
-        c.fill();
-        c.beginPath();
-        c.arc(screenX + 6, screenY - 16, 3, 0, Math.PI * 2);
-        c.fill();
-        // Stem
-        c.fillStyle = COLOR_MUSHROOM_STEM;
-        c.fillRect(screenX - 8, screenY - 4, 16, halfSize);
-        // Eyes
-        c.fillStyle = '#ffffff';
-        c.fillRect(screenX - 5, screenY + 2, 4, 5);
-        c.fillRect(screenX + 2, screenY + 2, 4, 5);
-      } else if (boss.bossType === BossType.LAVA_BEAST) {
-        // Rough rocky body
-        c.fillStyle = bossColor;
-        c.fillRect(screenX - halfSize, screenY - halfSize, boss.size, boss.size);
-        // Lava cracks
-        c.strokeStyle = '#ffd700';
-        c.lineWidth = 2;
-        c.globalAlpha = 0.6 + 0.4 * Math.sin(this.frameCount * 0.1);
-        c.beginPath();
-        c.moveTo(screenX - 10, screenY - 12);
-        c.lineTo(screenX - 2, screenY + 4);
-        c.lineTo(screenX + 8, screenY - 6);
-        c.moveTo(screenX + 4, screenY + 2);
-        c.lineTo(screenX - 6, screenY + 14);
-        c.stroke();
-        c.globalAlpha = 1.0;
-        c.lineWidth = 1;
-        // Eyes
-        c.fillStyle = '#ffd700';
-        c.fillRect(screenX - 7, screenY - 6, 5, 5);
-        c.fillRect(screenX + 3, screenY - 6, 5, 5);
-      } else if (boss.bossType === BossType.ABYSS_SIREN) {
-        // Flowing water form
-        c.fillStyle = bossColor;
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize + pulse, 0, Math.PI * 2);
-        c.fill();
-        // Water tendrils
-        c.strokeStyle = COLOR_WATER_LIGHT;
-        c.lineWidth = 3;
-        c.globalAlpha = 0.6;
-        for (let t: number = 0; t < 4; t++) {
-          const angle: number = (t / 4) * Math.PI * 2 + this.frameCount * 0.03;
-          const ex: number = screenX + Math.cos(angle) * (halfSize + 10);
-          const ey: number = screenY + Math.sin(angle) * (halfSize + 10);
-          c.beginPath();
-          c.moveTo(screenX + Math.cos(angle) * halfSize * 0.5, screenY + Math.sin(angle) * halfSize * 0.5);
-          c.quadraticCurveTo(
-            screenX + Math.cos(angle + 0.5) * halfSize,
-            screenY + Math.sin(angle + 0.5) * halfSize,
-            ex, ey
-          );
-          c.stroke();
-        }
-        c.globalAlpha = 1.0;
-        c.lineWidth = 1;
-        // Eyes
-        c.fillStyle = '#ffffff';
-        c.beginPath();
-        c.arc(screenX - 6, screenY - 3, 4, 0, Math.PI * 2);
-        c.fill();
-        c.beginPath();
-        c.arc(screenX + 6, screenY - 3, 4, 0, Math.PI * 2);
-        c.fill();
-      } else if (boss.bossType === BossType.VOID_RIFT) {
-        // Void portal - swirling dark mass
-        c.fillStyle = bossColor;
-        c.globalAlpha = 0.8;
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize + pulse + 4, 0, Math.PI * 2);
-        c.fill();
-        // Inner void
-        c.fillStyle = '#0d0d1a';
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize * 0.5, 0, Math.PI * 2);
-        c.fill();
-        // Swirl effect
-        c.strokeStyle = '#a855f7';
-        c.lineWidth = 2;
-        c.globalAlpha = 0.5;
-        const spin: number = this.frameCount * 0.04;
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize * 0.7, spin, spin + Math.PI * 1.2);
-        c.stroke();
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize * 0.9, spin + Math.PI, spin + Math.PI * 2.2);
-        c.stroke();
-        c.globalAlpha = 1.0;
-        c.lineWidth = 1;
-      }
-
-      // Phase 2 indicator - pulsing aura
-      if (boss.phase === BossPhase.PHASE_2) {
-        c.strokeStyle = bossColor;
-        c.lineWidth = 2;
-        c.globalAlpha = 0.3 + 0.2 * Math.sin(this.frameCount * 0.1);
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize + 8 + pulse, 0, Math.PI * 2);
-        c.stroke();
-        c.globalAlpha = 1.0;
-        c.lineWidth = 1;
-      }
-    }
-    c.globalAlpha = 1.0;
-  }
-
-  private renderMaterialDrops(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    for (let i: number = 0; i < this.materialDrops.length; i++) {
-      const drop: MaterialDrop = this.materialDrops[i];
-      if (!drop.active) continue;
-
-      const screenX: number = drop.x + offX;
-      const screenY: number = drop.y + offY;
-
-      if (screenX < -20 || screenX > this.screenW + 20 || screenY < -20 || screenY > this.screenH + 20) {
-        continue;
-      }
-
-      const bob: number = Math.sin(this.frameCount * 0.06 + drop.bobPhase) * 3;
-      const drawY: number = screenY + bob;
-
-      let color: string = '#ffffff';
-      if (drop.type === MaterialType.CRYSTAL_ORE) color = COLOR_CRYSTAL;
-      else if (drop.type === MaterialType.MUSHROOM_ORE) color = COLOR_MUSHROOM_CAP;
-      else if (drop.type === MaterialType.FLAME_ORE) color = COLOR_LAVA_LIGHT;
-      else if (drop.type === MaterialType.ABYSS_ORE) color = COLOR_BOSS_ABYSS;
-      else if (drop.type === MaterialType.VOID_ORE) color = COLOR_BOSS_VOID;
-      else if (drop.type === MaterialType.CORE_NORMAL) color = '#c0c0c0';
-      else if (drop.type === MaterialType.CORE_RARE) color = '#ffd700';
-      else if (drop.type === MaterialType.FORM_CORE) color = '#e879f9';
-
-      // Glow
-      c.globalAlpha = 0.3;
-      c.fillStyle = color;
-      c.beginPath();
-      c.arc(screenX, drawY, 8, 0, Math.PI * 2);
-      c.fill();
-
-      // Item
-      c.globalAlpha = 1.0;
-      c.fillStyle = color;
-      c.fillRect(screenX - 4, drawY - 4, 8, 8);
-      c.strokeStyle = '#ffffff';
-      c.lineWidth = 1;
-      c.strokeRect(screenX - 4, drawY - 4, 8, 8);
-    }
-    c.globalAlpha = 1.0;
-  }
-
-  private renderBossHPBar(c: CanvasRenderingContext2D): void {
-    // Show HP bar for active boss
-    const boss: BossState | null = this.activeBoss;
-    if (boss === null || boss.defeated) {
-      // Also check for any active optional boss
-      for (let i: number = 0; i < this.bosses.length; i++) {
-        if (this.bosses[i].active && !this.bosses[i].defeated) {
-          this.drawBossHPBar(c, this.bosses[i]);
-          return;
-        }
-      }
-      return;
-    }
-    this.drawBossHPBar(c, boss);
-  }
-
-  private drawBossHPBar(c: CanvasRenderingContext2D, boss: BossState): void {
-    const barW: number = 200;
-    const barH: number = 12;
-    const barX: number = (this.screenW - barW) / 2;
-    const barY: number = 20;
-    const hpRatio: number = Math.max(0, boss.hp / boss.maxHp);
-
-    // Background
-    c.fillStyle = COLOR_BOSS_HP_BG;
-    c.globalAlpha = 0.8;
-    c.fillRect(barX - 2, barY - 2, barW + 4, barH + 4);
-
-    // HP bar
-    c.fillStyle = COLOR_BOSS_HP_BAR;
-    c.globalAlpha = 1.0;
-    c.fillRect(barX, barY, barW * hpRatio, barH);
-
-    // Border
-    c.strokeStyle = '#ffffff';
-    c.lineWidth = 1;
-    c.globalAlpha = 0.5;
-    c.strokeRect(barX - 2, barY - 2, barW + 4, barH + 4);
-
-    // Boss name
-    c.globalAlpha = 1.0;
-    c.fillStyle = '#ffffff';
-    c.font = '10px sans-serif';
-    c.textAlign = 'center';
-    let name: string = 'Boss';
-    if (boss.bossType === BossType.CRYSTAL_GUARDIAN) name = 'Crystal Guardian';
-    else if (boss.bossType === BossType.MUSHROOM_KING) name = 'Mushroom King';
-    else if (boss.bossType === BossType.LAVA_BEAST) name = 'Lava Beast';
-    else if (boss.bossType === BossType.ABYSS_SIREN) name = 'Abyss Siren';
-    else if (boss.bossType === BossType.VOID_RIFT) name = 'Void Rift';
-    if (boss.phase === BossPhase.PHASE_2) name += ' [Enraged]';
-    c.fillText(name, this.screenW / 2, barY - 6);
-  }
 
   // ==================== Chest System ====================
 
