@@ -48,7 +48,14 @@ import {
   COLOR_BOSS_CRYSTAL, COLOR_BOSS_MUSHROOM, COLOR_BOSS_LAVA, COLOR_BOSS_ABYSS, COLOR_BOSS_VOID,
   COLOR_BOSS_HP_BAR, COLOR_BOSS_HP_BG,
   COLOR_CHEST_NORMAL, COLOR_CHEST_ELITE, COLOR_CHEST_BOSS, COLOR_CHEST_GLOW,
-  COLOR_SHADOW_FLOOR, COLOR_SHADOW_WALL, COLOR_SHADOW_PARTICLE
+  COLOR_SHADOW_FLOOR, COLOR_SHADOW_WALL, COLOR_SHADOW_PARTICLE,
+  TransformForm, TRANSFORM_MAX_ENERGY, TRANSFORM_COOLDOWN, TRANSFORM_PASSIVE_REGEN,
+  TRANSFORM_DRAIN_RATES, TRANSFORM_SPEEDS, TRANSFORM_ATTACK_COSTS, TRANSFORM_ATTACK_COOLDOWNS,
+  TRANSFORM_DAMAGE_REDUCTION, TRANSFORM_ENERGY_KILL_SLIME, TRANSFORM_ENERGY_KILL_ELITE,
+  TRANSFORM_ENERGY_KILL_BOSS, TRANSFORM_ENERGY_XP_ORB, TRANSFORM_ACTIVATE_ANIM, TRANSFORM_REVERT_ANIM,
+  COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_SLIME_DARK, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_GHOST_DARK,
+  COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_ARMOR_ACCENT, COLOR_TRANSFORM_IRON_RED, COLOR_TRANSFORM_IRON_GOLD,
+  COLOR_TRANSFORM_ENERGY_BG, COLOR_TRANSFORM_BTN_LOCKED, COLOR_TRANSFORM_BTN_READY, COLOR_TRANSFORM_FLASH,
 } from './GameConstants';
 import { WorldGenerator } from './WorldGenerator';
 import { AudioManager } from './AudioManager';
@@ -85,6 +92,9 @@ export class GameEngine {
   private mechanisms: MechanismInstance[] = [];
   private secretRooms: SecretRoom[] = [];
   private teleportCooldown: number = 0;
+  private transformCoreDrops: { dropIndex: number; form: TransformForm }[] = [];
+  private transformUnlockNotifyTimer: number = 0;
+  private transformUnlockNotifyForm: TransformForm = TransformForm.NONE;
   private input: InputState = {
     joyActive: false, joyDx: 0, joyDy: 0,
     jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false,
@@ -119,8 +129,19 @@ export class GameEngine {
       inventory: {
         crystalOre: 0, mushroomOre: 0, flameOre: 0, abyssOre: 0, voidOre: 0,
         coreNormal: 0, coreRare: 0, formCore: 0,
-        hpPotions: 3, gold: 0
-      }
+        hpPotions: 3, gold: 0,
+        transformCoreSlime: 0, transformCoreArmor: 0,
+        transformCoreIronMan: 0, transformCoreGhost: 0
+      },
+      isTransformed: false,
+      transformForm: TransformForm.NONE,
+      transformEnergy: TRANSFORM_MAX_ENERGY,
+      transformMaxEnergy: TRANSFORM_MAX_ENERGY,
+      transformCooldown: 0,
+      unlockedTransforms: [],
+      savedWeaponForm: WeaponForm.BLADE,
+      transformAnimTimer: 0,
+      transformFormAttackCooldown: 0
     };
 
     this.cameraX = startX - screenW / 2;
@@ -1379,6 +1400,33 @@ export class GameEngine {
       bobPhase: Math.random() * Math.PI * 2,
       active: true
     });
+
+    // Drop transform core (first defeat only — check if player already has it)
+    const transformDrop: TransformForm = this.getTransformCoreForBoss(boss.bossType);
+    if (transformDrop !== TransformForm.NONE) {
+      const alreadyHas: boolean = this.player !== null &&
+        this.player.unlockedTransforms.indexOf(transformDrop) !== -1;
+      if (!alreadyHas) {
+        this.materialDrops.push({
+          x: boss.x + (Math.random() - 0.5) * 30,
+          y: boss.y + (Math.random() - 0.5) * 30,
+          type: MaterialType.FORM_CORE, count: 1,
+          bobPhase: Math.random() * Math.PI * 2,
+          active: true
+        });
+        // Mark which transform core via extraData — use a separate tracking mechanism
+        // Store transform form in a parallel array indexed by drop
+        this.transformCoreDrops.push({ dropIndex: this.materialDrops.length - 1, form: transformDrop });
+      }
+    }
+  }
+
+  private getTransformCoreForBoss(bossType: BossType): TransformForm {
+    if (bossType === BossType.MUSHROOM_KING) return TransformForm.SLIME;
+    if (bossType === BossType.CRYSTAL_GUARDIAN) return TransformForm.ARMOR;
+    if (bossType === BossType.LAVA_BEAST) return TransformForm.IRON_MAN;
+    if (bossType === BossType.VOID_RIFT) return TransformForm.GHOST;
+    return TransformForm.NONE;
   }
 
   private collectMaterialDrops(p: PlayerState): void {
@@ -1402,6 +1450,20 @@ export class GameEngine {
         else if (drop.type === MaterialType.CORE_NORMAL) p.inventory.coreNormal += drop.count;
         else if (drop.type === MaterialType.CORE_RARE) p.inventory.coreRare += drop.count;
         else if (drop.type === MaterialType.FORM_CORE) p.inventory.formCore += drop.count;
+
+        // Check if this is a transform core drop
+        for (let t: number = 0; t < this.transformCoreDrops.length; t++) {
+          if (this.transformCoreDrops[t].dropIndex === i) {
+            const form: TransformForm = this.transformCoreDrops[t].form;
+            if (p.unlockedTransforms.indexOf(form) === -1) {
+              p.unlockedTransforms.push(form);
+              this.transformUnlockNotifyTimer = 3000;
+              this.transformUnlockNotifyForm = form;
+            }
+            this.transformCoreDrops.splice(t, 1);
+            break;
+          }
+        }
 
         this.audio.playXpCollect();
         if (this.settings.effectsEnabled) {
