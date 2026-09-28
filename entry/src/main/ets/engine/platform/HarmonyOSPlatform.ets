@@ -84,8 +84,8 @@ export class HarmonyOSPlatform {
     if (!HarmonyOSPlatform.appContext) return new ArrayBuffer(0);
     try {
       const mgr = HarmonyOSPlatform.appContext.resourceManager;
-      const buffer: ArrayBuffer = await mgr.getRawFileContent(path);
-      return buffer;
+      const rawData = await mgr.getRawFileContent(path);
+      return rawData.buffer as ArrayBuffer;
     } catch (e) {
       console.error('[Platform] loadRawFile failed: ' + path);
       return new ArrayBuffer(0);

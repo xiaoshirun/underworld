@@ -693,15 +693,15 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
 
   // === Transform Form Movement & Combat Methods ===
 
-  private updateTransformMovement(p: PlayerState, dt: number, moveX: number, moveY: number): void {
+  updateTransformMovement(p: PlayerState, dt: number, moveX: number, moveY: number): void {
     this.transformSystem!.updateMovement(p, dt, moveX, moveY);
   }
 
-  private applyTransformCollision(p: PlayerState): void {
+  applyTransformCollision(p: PlayerState): void {
     this.transformSystem!.applyCollision(p);
   }
 
-  private handleTransformAttack(p: PlayerState): void {
+  handleTransformAttack(p: PlayerState): void {
     this.transformSystem!.handleAttack(p);
   }
 
