@@ -43,11 +43,11 @@ export class HarmonyOSPlatform {
   private static appContext: common.UIAbilityContext | null = null;
 
   static setContext(context: common.UIAbilityContext): void {
-    this.appContext = context;
+    HarmonyOSPlatform.appContext = context;
   }
 
   static getContext(): common.UIAbilityContext | null {
-    return this.appContext;
+    return HarmonyOSPlatform.appContext;
   }
 
   static now(): number {
@@ -59,9 +59,9 @@ export class HarmonyOSPlatform {
   }
 
   static async saveData(key: string, value: string): Promise<void> {
-    if (!this.appContext) return;
+    if (!HarmonyOSPlatform.appContext) return;
     try {
-      const pref = await preferences.getPreferences(this.appContext, 'engine_prefs');
+      const pref = await preferences.getPreferences(HarmonyOSPlatform.appContext, 'engine_prefs');
       await pref.put(key, value);
       await pref.flush();
     } catch (e) {
@@ -70,9 +70,9 @@ export class HarmonyOSPlatform {
   }
 
   static async loadData(key: string): Promise<string | null> {
-    if (!this.appContext) return null;
+    if (!HarmonyOSPlatform.appContext) return null;
     try {
-      const pref = await preferences.getPreferences(this.appContext, 'engine_prefs');
+      const pref = await preferences.getPreferences(HarmonyOSPlatform.appContext, 'engine_prefs');
       const value: string = await pref.get(key, '') as string;
       return value.length > 0 ? value : null;
     } catch (e) {
@@ -81,9 +81,9 @@ export class HarmonyOSPlatform {
   }
 
   static async loadRawFile(path: string): Promise<ArrayBuffer> {
-    if (!this.appContext) return new ArrayBuffer(0);
+    if (!HarmonyOSPlatform.appContext) return new ArrayBuffer(0);
     try {
-      const mgr: resourceManager.ResourceManager = this.appContext.resourceManager;
+      const mgr = HarmonyOSPlatform.appContext.resourceManager;
       const buffer: ArrayBuffer = await mgr.getRawFileContent(path);
       return buffer;
     } catch (e) {

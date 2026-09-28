@@ -398,7 +398,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     return { active: this.transformUnlockNotifyTimer > 0, form: this.transformUnlockNotifyForm } as TransformUnlockNotify;
   }
 
-  private performAttack(p: PlayerState): void {
+  performAttack(p: PlayerState): void {
     this.combatSystem!.performAttack(p);
   }
 
@@ -705,6 +705,22 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.transformSystem!.handleAttack(p);
   }
 
+  activateTransform(form: TransformForm): void {
+    this.transformSystem!.activate(form);
+  }
+
+  deactivateTransform(): void {
+    this.transformSystem!.deactivate();
+  }
+
+  onEnemyDeath(s: SlimeState): void {
+    this.combatSystem!.onEnemyDeath(s);
+  }
+
+  checkPlayerCollision(x: number, y: number): boolean {
+    return this.movementSystem!.checkPlayerCollision(x, y);
+  }
+
 
   // ==================== State Machine ====================
 
@@ -724,7 +740,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.onSave = cb;
   }
 
-  private setState(newState: GameState): void {
+  setState(newState: GameState): void {
     this.state = newState;
     if (this.onStateChange) {
       this.onStateChange(newState);
@@ -785,7 +801,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.frameCount = 0;
     this.setState(GameState.PLAYING);
     if (this.ctx && this.minimapCtx) {
-      this.init(this.ctx, this.minimapCtx, this.screenW, this.screenH, this.cacheCtxs, this.context);
+      this.init(this.ctx, this.minimapCtx, this.screenW, this.screenH, this.cacheCtxs, this.context ?? undefined);
     }
   }
 
