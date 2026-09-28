@@ -3,11 +3,40 @@ import { preferences } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
 import { resourceManager } from '@kit.LocalizationKit';
 
+export interface ScreenSize {
+  width: number;
+  height: number;
+}
+
 export interface AudioRendererAdapter {
   write(pcmData: ArrayBuffer): void;
   start(): void;
   stop(): void;
   release(): void;
+}
+
+class AudioRendererImpl implements AudioRendererAdapter {
+  private renderer: audio.AudioRenderer;
+
+  constructor(renderer: audio.AudioRenderer) {
+    this.renderer = renderer;
+  }
+
+  write(pcmData: ArrayBuffer): void {
+    // AudioRenderer uses callback model; write is handled via on('writeData')
+  }
+
+  start(): void {
+    this.renderer.start().catch((): void => {});
+  }
+
+  stop(): void {
+    this.renderer.stop().catch((): void => {});
+  }
+
+  release(): void {
+    this.renderer.release().catch((): void => {});
+  }
 }
 
 export class HarmonyOSPlatform {
@@ -25,8 +54,8 @@ export class HarmonyOSPlatform {
     return Date.now();
   }
 
-  static getScreenSize(): { width: number; height: number } {
-    return { width: 960, height: 540 };
+  static getScreenSize(): ScreenSize {
+    return { width: 960, height: 540 } as ScreenSize;
   }
 
   static async saveData(key: string, value: string): Promise<void> {
@@ -91,20 +120,7 @@ export class HarmonyOSPlatform {
           rendererFlags: 0
         }
       });
-      return {
-        write(pcmData: ArrayBuffer): void {
-          // AudioRenderer uses callback model; write is handled via on('writeData')
-        },
-        start(): void {
-          renderer.start().catch((): void => {});
-        },
-        stop(): void {
-          renderer.stop().catch((): void => {});
-        },
-        release(): void {
-          renderer.release().catch((): void => {});
-        }
-      };
+      return new AudioRendererImpl(renderer);
     } catch (e) {
       console.error('[Platform] createAudioRenderer failed');
       return null;

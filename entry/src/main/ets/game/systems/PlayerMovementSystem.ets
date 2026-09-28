@@ -28,7 +28,7 @@ export class PlayerMovementSystem {
   }
 
   update(dt: number): void {
-    const p: PlayerState = this.g.player;
+    const p: PlayerState | null = this.g.player;
     if (p === null) return;
 
     if (p.isEngulfed) {

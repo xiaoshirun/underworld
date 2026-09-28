@@ -11,6 +11,12 @@ export interface DrawCommand {
   strokeColor: string;
 }
 
+export interface DrawStats {
+  draws: number;
+  stateChanges: number;
+  commands: number;
+}
+
 export enum DrawType {
   RECT = 0,
   FILLED_RECT = 1,
@@ -263,12 +269,12 @@ export class TileBatchRenderer {
     this.batch.flush(c);
   }
 
-  getStats(): { draws: number; stateChanges: number; commands: number } {
+  getStats(): DrawStats {
     return {
       draws: this.batch.getDrawCount(),
       stateChanges: this.batch.getStateChanges(),
       commands: this.batch.getCommandCount()
-    };
+    } as DrawStats;
   }
 }
 

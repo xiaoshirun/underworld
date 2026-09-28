@@ -19,8 +19,8 @@ export class MainMenuScene extends Scene {
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    const w: number = ctx.canvas.width;
-    const h: number = ctx.canvas.height;
+    const w: number = this.canvasWidth;
+    const h: number = this.canvasHeight;
 
     ctx.fillStyle = '#08080f';
     ctx.fillRect(0, 0, w, h);

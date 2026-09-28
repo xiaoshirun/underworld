@@ -1,7 +1,7 @@
 export { Entity, EntityPool, getIndex, getGeneration, makeEntity } from './core/Entity';
 export { World } from './core/World';
 export { System } from './core/System';
-export { Engine, EngineConfig } from './core/Engine';
+export { Engine, EngineConfig, SceneDefinition } from './core/Engine';
 export { Scene } from './scene/Scene';
 export { SceneManager, Transition } from './scene/SceneManager';
 export { ResourceManager, ResourceType } from './resource/ResourceManager';

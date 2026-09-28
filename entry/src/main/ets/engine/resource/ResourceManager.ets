@@ -1,3 +1,9 @@
+export interface LoadEntry {
+  key: string;
+  type: ResourceType;
+  loader: () => Promise<Object>;
+}
+
 export enum ResourceType {
   TEXTURE = 'texture',
   AUDIO = 'audio',
@@ -49,7 +55,7 @@ export class ResourceManager {
     }
   }
 
-  async loadAll(entries: { key: string; type: ResourceType; loader: () => Promise<Object> }[]): Promise<void> {
+  async loadAll(entries: LoadEntry[]): Promise<void> {
     const promises: Promise<Object | null>[] = [];
     for (const entry of entries) {
       promises.push(this.load(entry.key, entry.type, entry.loader));

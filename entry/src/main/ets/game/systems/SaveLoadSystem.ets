@@ -3,6 +3,8 @@ import {
   PlayerState, ChunkData, SaveData,
 } from '../GameConstants';
 import { GameContext } from '../GameContext';
+import { SaveManager } from '../SaveManager';
+import { common } from '@kit.AbilityKit';
 
 export interface SaveLoadBridge {
   onSave: (() => void) | null;
@@ -136,9 +138,8 @@ export class SaveLoadSystem {
   async autoSave(): Promise<void> {
     if (!this.g.context || !this.g.player) return;
     try {
-      const { SaveManager } = await import('../SaveManager');
       const data: SaveData = this.getSaveData();
-      await SaveManager.save(this.g.context as any, data);
+      await SaveManager.save(this.g.context as common.UIAbilityContext, data);
       if (this.bridge.onSave) {
         this.bridge.onSave();
       }

@@ -1,5 +1,7 @@
 export abstract class Scene {
   readonly name: string;
+  canvasWidth: number = 960;
+  canvasHeight: number = 540;
 
   constructor(name: string) {
     this.name = name;

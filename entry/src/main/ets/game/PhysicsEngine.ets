@@ -43,6 +43,16 @@ export interface TileCollisionResult {
   grounded: boolean;
 }
 
+interface TileCollisionXResult {
+  hitLeft: boolean;
+  hitRight: boolean;
+}
+
+interface TileCollisionYResult {
+  hitTop: boolean;
+  hitBottom: boolean;
+}
+
 export function vec2(x: number, y: number): Vec2 {
   return { x: x, y: y };
 }
@@ -244,7 +254,7 @@ export class PhysicsEngine {
     body: PhysicsBody,
     getTile: (wx: number, wy: number) => number,
     isSolid: (tile: number) => boolean
-  ): { hitLeft: boolean; hitRight: boolean } {
+  ): TileCollisionXResult {
     let hitLeft: boolean = false;
     let hitRight: boolean = false;
 
@@ -274,14 +284,14 @@ export class PhysicsEngine {
       }
     }
 
-    return { hitLeft: hitLeft, hitRight: hitRight };
+    return { hitLeft: hitLeft, hitRight: hitRight } as TileCollisionXResult;
   }
 
   private resolveTileCollisionY(
     body: PhysicsBody,
     getTile: (wx: number, wy: number) => number,
     isSolid: (tile: number) => boolean
-  ): { hitTop: boolean; hitBottom: boolean } {
+  ): TileCollisionYResult {
     let hitTop: boolean = false;
     let hitBottom: boolean = false;
 
@@ -311,7 +321,7 @@ export class PhysicsEngine {
       }
     }
 
-    return { hitTop: hitTop, hitBottom: hitBottom };
+    return { hitTop: hitTop, hitBottom: hitBottom } as TileCollisionYResult;
   }
 
   checkEntityCollision(a: PhysicsBody, b: PhysicsBody): CollisionResult {

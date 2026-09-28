@@ -607,10 +607,6 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     }
   }
 
-    mc.lineWidth = 1;
-    mc.strokeRect(0, 0, size, size);
-  }
-
   // ==================== Boss Rendering ====================
 
   // ==================== Chest System ====================
@@ -652,7 +648,6 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
 
   getEvoOreHave(): number {
     return this.evolutionSystem!.getEvoOreHave();
-  }
   }
 
   getEvoOreNeed(): number {

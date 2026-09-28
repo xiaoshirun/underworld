@@ -12,6 +12,8 @@ interface SceneEntry {
 }
 
 export class SceneManager {
+  canvasWidth: number = 960;
+  canvasHeight: number = 540;
   private registry: Map<string, SceneEntry> = new Map();
   private stack: Scene[] = [];
   private transitioning: boolean = false;
@@ -131,6 +133,8 @@ export class SceneManager {
       entry.instance = entry.factory();
     }
     const scene: Scene = entry.instance;
+    scene.canvasWidth = this.canvasWidth;
+    scene.canvasHeight = this.canvasHeight;
     this.stack.push(scene);
     if (!entry.loaded) {
       const result: void | Promise<void> = scene.onLoad();
@@ -158,8 +162,8 @@ export class SceneManager {
     const progress: number = this.transitionDuration > 0
       ? Math.min(1.0, this.transitionProgress / this.transitionDuration)
       : 1.0;
-    const canvasWidth: number = ctx.canvas.width;
-    const canvasHeight: number = ctx.canvas.height;
+    const canvasWidth: number = this.canvasWidth;
+    const canvasHeight: number = this.canvasHeight;
 
     switch (this.transitionType) {
       case 'fade':

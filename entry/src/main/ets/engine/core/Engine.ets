@@ -5,12 +5,17 @@ import { ResourceManager } from '../resource/ResourceManager';
 import { HarmonyOSPlatform } from '../platform/HarmonyOSPlatform';
 import { common } from '@kit.AbilityKit';
 
+export interface SceneDefinition {
+  name: string;
+  factory: () => Scene;
+}
+
 export interface EngineConfig {
   canvas: CanvasRenderingContext2D;
   screenWidth: number;
   screenHeight: number;
   targetFPS?: number;
-  scenes: { name: string; factory: () => Scene }[];
+  scenes: SceneDefinition[];
   entryScene: string;
   appContext?: common.UIAbilityContext;
 }
@@ -34,6 +39,8 @@ export class Engine {
     engine.canvas = config.canvas;
     engine.screenWidth = config.screenWidth;
     engine.screenHeight = config.screenHeight;
+    engine.scenes.canvasWidth = config.screenWidth;
+    engine.scenes.canvasHeight = config.screenHeight;
     engine.targetFPS = config.targetFPS ?? 60;
 
     if (config.appContext) {
@@ -96,6 +103,12 @@ export class Engine {
     const clampedDt: number = Math.min(dt, 50);
 
     this.scenes.update(clampedDt);
+
+    const currentScene: Scene | null = this.scenes.current();
+    if (currentScene) {
+      currentScene.canvasWidth = this.screenWidth;
+      currentScene.canvasHeight = this.screenHeight;
+    }
 
     this.canvas.clearRect(0, 0, this.screenWidth, this.screenHeight);
     this.scenes.render(this.canvas);

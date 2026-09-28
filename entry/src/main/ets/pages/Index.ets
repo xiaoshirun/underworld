@@ -2,7 +2,7 @@ import { display, router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { GameEngine } from '../game/GameEngine';
 import { SaveManager } from '../game/SaveManager';
-import { Engine } from '../engine/core/Engine';
+import { Engine, SceneDefinition } from '../engine/core/Engine';
 import { GameScene } from '../game/GameScene';
 import { MainMenuScene } from '../game/MainMenuScene';
 import { Scene } from '../engine/scene/Scene';
@@ -1134,14 +1134,15 @@ struct Index {
       });
 
       const ge = this.gameEngine;
+      const sceneDefs: SceneDefinition[] = [
+        { name: 'main-menu', factory: (): Scene => new MainMenuScene() } as SceneDefinition,
+        { name: 'game', factory: (): Scene => { this.gameScene = new GameScene(ge); return this.gameScene; } } as SceneDefinition,
+      ];
       Engine.init({
         canvas: this.gameCtx,
         screenWidth: this.screenW,
         screenHeight: this.screenH,
-        scenes: [
-          { name: 'main-menu', factory: (): Scene => new MainMenuScene() },
-          { name: 'game', factory: (): Scene => { this.gameScene = new GameScene(ge); return this.gameScene; } },
-        ],
+        scenes: sceneDefs,
         entryScene: 'game',
         appContext: ctx,
       }).then((engine: Engine) => {

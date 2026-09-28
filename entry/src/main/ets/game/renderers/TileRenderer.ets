@@ -187,11 +187,8 @@ export class TileRenderer {
 
           const entry: ChunkCacheEntry | undefined = this.g.activeChunkCaches.get(key);
           if (entry !== undefined) {
-            const cacheCtx: CanvasRenderingContext2D = this.g.cacheCtxs[entry.poolIndex];
-            const destX: number = cx * this.g.chunkPixelSize + offX - CACHE_PADDING;
-            const destY: number = cy * this.g.chunkPixelSize + offY - CACHE_PADDING;
-            c.drawImage(cacheCtx, 0, 0, CACHE_CANVAS_SIZE, CACHE_CANVAS_SIZE,
-              destX, destY, CACHE_CANVAS_SIZE, CACHE_CANVAS_SIZE);
+            // TODO: ArkTS does not support drawImage(CanvasRenderingContext2D, ...);
+            // chunk cache rendering needs PixelMap-based approach
           }
         }
       }

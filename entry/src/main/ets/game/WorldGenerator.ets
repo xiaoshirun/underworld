@@ -13,6 +13,12 @@ import {
   PASSAGE_GUARDIAN_AGGRO, OPTIONAL_CHALLENGE_AGGRO
 } from './GameConstants';
 
+interface EntitySpawnResult {
+  enemies: SlimeState[];
+  traps: TrapInstance[];
+  mechanisms: MechanismInstance[];
+}
+
 function chunkHash(cx: number, cy: number): number {
   let h: number = (cx * 374761393 + cy * 668265263) | 0;
   h = ((h ^ (h >> 13)) * 1274126177) | 0;
@@ -202,8 +208,7 @@ export class WorldGenerator {
   }
 
   private generateEntities(cx: number, cy: number, tiles: number[][], size: number,
-    biome: BiomeType, distFromOrigin: number):
-    { enemies: SlimeState[], traps: TrapInstance[], mechanisms: MechanismInstance[] } {
+    biome: BiomeType, distFromOrigin: number): EntitySpawnResult {
     const enemies: SlimeState[] = [];
     const traps: TrapInstance[] = [];
     const mechanisms: MechanismInstance[] = [];
@@ -354,7 +359,7 @@ export class WorldGenerator {
         }
       }
     }
-    return { enemies: enemies, traps: traps, mechanisms: mechanisms };
+    return { enemies: enemies, traps: traps, mechanisms: mechanisms } as EntitySpawnResult;
   }
 
   private generateSecretRooms(cx: number, cy: number, tiles: number[][], biome: BiomeType, distFromOrigin: number): SecretRoom[] {
