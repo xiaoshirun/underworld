@@ -1,6 +1,6 @@
 import { Scene, BaseContext, World, Entity, SystemContext } from '@qiuyu/engine';
 import { AudioManager } from './AudioManager';
-import { GameSettings, CHUNK_SIZE, TILE_SIZE, TileType } from './GameConstants';
+import { GameSettings, CHUNK_SIZE, TILE_SIZE } from './GameConstants';
 import { WorldGenerator } from './WorldGenerator';
 import { PlayerFactory } from './factories/PlayerFactory';
 import { CameraComponent } from './components/CameraComponent';
@@ -40,6 +40,7 @@ export class GameScene extends Scene {
   private audio: AudioManager;
   private settings: GameSettings;
   private saveLoadSystem: SaveLoadSystem;
+  private evolutionSystem: EvolutionSystem;
   private tileRenderer: TileRenderer = new TileRenderer();
   private effectRenderer: EffectRenderer = new EffectRenderer();
   private enemyRenderer: EnemyRenderer = new EnemyRenderer();
@@ -47,7 +48,9 @@ export class GameScene extends Scene {
   private playerRenderer: PlayerRenderer = new PlayerRenderer();
   private uiRenderer: UIRenderer = new UIRenderer();
 
-  constructor(audio: AudioManager, settings: GameSettings) {
+  private playerGender: number = 0;
+
+  constructor(audio: AudioManager, settings: GameSettings, harmonyContext: Object | null = null) {
     super();
     this.audio = audio;
     this.settings = settings;
@@ -57,15 +60,10 @@ export class GameScene extends Scene {
     const worldGen: WorldGenerator = new WorldGenerator();
     this.world.worldGen = worldGen;
 
-    // Clear spawn area so player isn't stuck in walls
+    // Create singleton entities
     const startX: number = CHUNK_SIZE * TILE_SIZE / 2;
     const startY: number = CHUNK_SIZE * TILE_SIZE / 2;
-    const spawnRadius: number = 3;
-    const spawnTX: number = Math.floor(startX / TILE_SIZE);
-    const spawnTY: number = Math.floor(startY / TILE_SIZE);
-    // Note: spawn area clearing will be handled by ChunkLoadSystem on first update
 
-    // Create singleton entities
     this.world.addEntity(PlayerFactory.create(startX, startY));
 
     const cameraEntity: Entity = new Entity("camera");
@@ -90,11 +88,13 @@ export class GameScene extends Scene {
     this.world.addSystem(new MaterialDropSystem());
     this.world.addSystem(new XpLevelSystem());
     this.world.addSystem(new DamageSystem());
-    this.world.addSystem(new EvolutionSystem());
+    this.evolutionSystem = new EvolutionSystem();
+    this.world.addSystem(this.evolutionSystem);
     this.world.addSystem(new CameraSystem());
     this.world.addSystem(new ParticleSystem());
     this.world.addSystem(new AmbientParticleSystem());
     this.saveLoadSystem = new SaveLoadSystem();
+    this.saveLoadSystem.harmonyContext = harmonyContext;
     this.world.addSystem(this.saveLoadSystem);
     this.world.addSystem(new CleanupSystem());
 
@@ -167,6 +167,14 @@ export class GameScene extends Scene {
   }
 
   setPlayerGender(gender: number): void {
-    // Stored for renderers that need gender info
+    this.playerGender = gender;
+  }
+
+  getPlayerGender(): number {
+    return this.playerGender;
+  }
+
+  getEvolutionSystem(): EvolutionSystem {
+    return this.evolutionSystem;
   }
 }

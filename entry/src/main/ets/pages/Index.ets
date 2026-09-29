@@ -1,10 +1,10 @@
 import { display, router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
-import { Engine, Entity, HealthComponent } from '@qiuyu/engine';
+import { Engine, Entity, HealthComponent, SystemContext, World } from '@qiuyu/engine';
 import { GameScene } from '../game/GameScene';
 import { AudioManager } from '../game/AudioManager';
 import { SaveManager } from '../game/SaveManager';
-import { EvolutionSystem } from '../game/systems/EvolutionSystem';
+import { SaveLoadSystem } from '../game/systems/SaveLoadSystem';
 import {
   PLAYER_MAX_HP, JOYSTICK_RADIUS, MINIMAP_SIZE,
   COLOR_HP_FULL, COLOR_HP_EMPTY,
@@ -15,7 +15,7 @@ import {
   TransformForm, TRANSFORM_MAX_ENERGY,
   COLOR_TRANSFORM_BTN_LOCKED, COLOR_TRANSFORM_BTN_READY, COLOR_TRANSFORM_ENERGY_BG,
   COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_IRON_GOLD,
-  GameState, LEVEL_UP_XP,
+  GameState, LEVEL_UP_XP, SaveData,
 } from '../game/GameConstants';
 
 // Components
@@ -34,7 +34,6 @@ struct Index {
   private gameScene: GameScene | null = null;
   private audio: AudioManager = new AudioManager();
   private settings: { soundEnabled: boolean; effectsEnabled: boolean } = { soundEnabled: true, effectsEnabled: true };
-  private evolutionSystem: EvolutionSystem = new EvolutionSystem();
   private gameCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private minimapCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private gameCanvasReady: boolean = false;
@@ -91,10 +90,11 @@ struct Index {
   @State deathChunks: number = 0;
   private branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
   private weaponFormNames: string[] = ['刃', '鞭', '锤', '杖', '双刃', '巨斧'];
+  private monitorIntervalId: number = -1;
 
   aboutToAppear(): void {
     try {
-      const displayInfo = display.getDefaultDisplaySync();
+      const displayInfo: display.DisplayInfo = display.getDefaultDisplaySync();
       const pxW: number = displayInfo.width;
       const pxH: number = displayInfo.height;
       const vpW: number = px2vp(pxW);
@@ -106,9 +106,9 @@ struct Index {
         this.screenW = vpH;
         this.screenH = vpW;
       }
-      const params = router.getParams();
+      const params: Object | null = router.getParams();
       if (params !== null && params !== undefined) {
-        const p = params as Record<string, Object>;
+        const p: Record<string, Object> = params as Record<string, Object>;
         if (p['username'] !== undefined) {
           this.username = p['username'] as string;
         }
@@ -123,6 +123,9 @@ struct Index {
   }
 
   aboutToDisappear(): void {
+    if (this.monitorIntervalId !== -1) {
+      clearInterval(this.monitorIntervalId);
+    }
     this.engine.stop();
     this.audio.destroy();
   }
@@ -870,7 +873,7 @@ struct Index {
                 this.evoBranch = index;
                 const player: Entity | null = this.getPlayerEntity();
                 if (player !== null) {
-                  this.evoOreHave = this.evolutionSystem.getEvoOreHaveForBranch(player, index);
+                  this.evoOreHave = this.gameScene!.getEvolutionSystem().getEvoOreHaveForBranch(player, index);
                 }
               }
             })
@@ -971,7 +974,7 @@ struct Index {
             if (event.type === TouchType.Down && this.canEvolveNow()) {
               const player: Entity | null = this.getPlayerEntity();
               if (player !== null) {
-                if (this.evolutionSystem.tryEvolveWeapon(player)) {
+                if (this.gameScene!.getEvolutionSystem().tryEvolveWeapon(player)) {
                   this.refreshEvoState();
                 }
               }
@@ -1028,7 +1031,7 @@ struct Index {
                 if (event.type === TouchType.Down && this.evoFormCore >= FORM_UNLOCK_COST) {
                   const player: Entity | null = this.getPlayerEntity();
                   if (player !== null) {
-                    this.evolutionSystem.unlockWeaponForm(player, formIndex as WeaponForm);
+                    this.gameScene!.getEvolutionSystem().unlockWeaponForm(player, formIndex as WeaponForm);
                     this.refreshEvoState();
                   }
                 }
@@ -1077,9 +1080,9 @@ struct Index {
     const player: Entity | null = this.getPlayerEntity();
     if (player === null) return;
 
-    this.evoBranch = this.evolutionSystem.getEvoBranch(player);
-    this.evoLevel = this.evolutionSystem.getEvoLevel(player);
-    this.evoOreHave = this.evolutionSystem.getEvoOreHave(player);
+    this.evoBranch = this.gameScene!.getEvolutionSystem().getEvoBranch(player);
+    this.evoLevel = this.gameScene!.getEvolutionSystem().getEvoLevel(player);
+    this.evoOreHave = this.gameScene!.getEvolutionSystem().getEvoOreHave(player);
 
     const evo: EvolutionComponent | null = player.getComponent<EvolutionComponent>("evolution");
     if (evo !== null) {
@@ -1114,7 +1117,8 @@ struct Index {
 
   private tryInitEngine(): void {
     if (this.gameCanvasReady && this.minimapCanvasReady) {
-      this.gameScene = new GameScene(this.audio, this.settings);
+      const harmonyCtx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+      this.gameScene = new GameScene(this.audio, this.settings, harmonyCtx);
       this.gameScene.setPlayerGender(this.playerGender);
       this.engine.sceneManager.pushScene(this.gameScene);
       this.engine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH);
@@ -1126,7 +1130,7 @@ struct Index {
 
   private handleJoystickTouch(event: TouchEvent): void {
     if (event.type === TouchType.Down) {
-      const touch = event.touches[0];
+      const touch: Touch = event.touches[0];
       this.joyCenterX = touch.x;
       this.joyCenterY = touch.y;
       this.joyActive = true;
@@ -1134,7 +1138,7 @@ struct Index {
       this.joyKnobY = 0;
       this.engine.setInputJoy(true, 0, 0);
     } else if (event.type === TouchType.Move && this.joyActive) {
-      const touch = event.touches[0];
+      const touch: Touch = event.touches[0];
       let dx: number = touch.x - this.joyCenterX;
       let dy: number = touch.y - this.joyCenterY;
       const dist: number = Math.sqrt(dx * dx + dy * dy);
@@ -1154,9 +1158,9 @@ struct Index {
   }
 
   private startStatusMonitor(): void {
-    setInterval(() => {
+    this.monitorIntervalId = setInterval(() => {
       if (this.gameScene === null) return;
-      const world = this.gameScene.getWorld();
+      const world: World = this.gameScene.getWorld();
 
       // Game state
       const gsEntity: Entity | null = world.findEntityByTag("gameState");
@@ -1213,7 +1217,7 @@ struct Index {
 
       const inv: InventoryComponent | null = player.getComponent<InventoryComponent>("inventory");
       if (inv !== null) {
-        const branchOre: number = this.evolutionSystem.getEvoOreHave(player);
+        const branchOre: number = this.gameScene!.getEvolutionSystem().getEvoOreHave(player);
         if (branchOre !== this.invOre) {
           this.invOre = branchOre;
         }
@@ -1498,14 +1502,14 @@ struct Index {
           .borderRadius(8)
           .margin({ bottom: 12 })
           .onClick(async () => {
-            const ctx = getContext(this) as common.UIAbilityContext;
-            const data = await SaveManager.load(ctx);
+            const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+            const data: SaveData | null = await SaveManager.load(ctx);
             if (data && this.gameScene !== null) {
-              const world = this.gameScene.getWorld();
+              const world: World = this.gameScene.getWorld();
               const player: Entity | null = world.findEntityByTag("player");
               if (player !== null) {
-                const saveSystem = this.gameScene.getSaveLoadSystem();
-                const sysCtx = this.buildSystemContext();
+                const saveSystem: SaveLoadSystem = this.gameScene.getSaveLoadSystem();
+                const sysCtx: SystemContext = this.buildSystemContext();
                 saveSystem.applySaveData(player, data, sysCtx);
                 this.showPauseMenu = false;
                 this.resumeGame();
@@ -1577,7 +1581,7 @@ struct Index {
           .borderRadius(8)
           .margin({ bottom: 12 })
           .onClick(async () => {
-            const ctx = getContext(this) as common.UIAbilityContext;
+            const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
             await SaveManager.deleteSave(ctx);
             this.showGameOver = false;
             this.restartGame();
@@ -1593,14 +1597,14 @@ struct Index {
           .borderRadius(8)
           .margin({ bottom: 12 })
           .onClick(async () => {
-            const ctx = getContext(this) as common.UIAbilityContext;
-            const data = await SaveManager.load(ctx);
+            const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+            const data: SaveData | null = await SaveManager.load(ctx);
             if (data && this.gameScene !== null) {
-              const world = this.gameScene.getWorld();
+              const world: World = this.gameScene.getWorld();
               const player: Entity | null = world.findEntityByTag("player");
               if (player !== null) {
-                const saveSystem = this.gameScene.getSaveLoadSystem();
-                const sysCtx = this.buildSystemContext();
+                const saveSystem: SaveLoadSystem = this.gameScene.getSaveLoadSystem();
+                const sysCtx: SystemContext = this.buildSystemContext();
                 saveSystem.applySaveData(player, data, sysCtx);
                 this.showGameOver = false;
                 this.resumeGame();
@@ -1675,11 +1679,11 @@ struct Index {
     this.currentWeaponForm = forms[nextIdx] as WeaponForm;
   }
 
-  private buildSystemContext(): Object {
+  private buildSystemContext(): SystemContext {
     if (this.gameScene === null) {
-      return {} as Object;
+      throw new Error('GameScene not initialized');
     }
-    const world = this.gameScene.getWorld();
+    const world: World = this.gameScene.getWorld();
     return {
       world: world,
       ctx: this.gameCtx,
@@ -1694,7 +1698,7 @@ struct Index {
       settings: this.settings as Object,
       frameCount: this.engine.getFrameCount(),
       dt: 0
-    } as Object;
+    };
   }
 
   private pauseGame(): void {
@@ -1730,7 +1734,8 @@ struct Index {
   private restartGame(): void {
     if (this.gameScene === null) return;
 
-    const newScene: GameScene = new GameScene(this.audio, this.settings);
+    const harmonyCtx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+    const newScene: GameScene = new GameScene(this.audio, this.settings, harmonyCtx);
     newScene.setPlayerGender(this.playerGender);
     this.engine.sceneManager.replaceScene(newScene);
     this.gameScene = newScene;
