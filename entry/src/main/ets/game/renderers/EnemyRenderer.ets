@@ -1,45 +1,50 @@
+import { World, Entity, PositionComponent, HealthComponent } from '@qiuyu/engine';
 import {
-  EnemyType, SlimeState, XpOrb,
+  EnemyType,
   XP_ORB_SIZE,
   COLOR_SLIME_GRAY, COLOR_SLIME_GRAY_LIGHT, COLOR_SLIME_PURPLE, COLOR_SLIME_PURPLE_LIGHT,
   COLOR_SLIME_RED, COLOR_SLIME_RED_LIGHT, COLOR_SLIME_BLUE, COLOR_SLIME_BLUE_LIGHT,
   COLOR_SLIME_YELLOW, COLOR_SLIME_YELLOW_LIGHT, COLOR_SLIME_GHOST, COLOR_SLIME_GHOST_LIGHT,
   COLOR_SLIME_PUPIL,
   COLOR_XP_ORB, COLOR_XP_GLOW,
+  GameSettings,
 } from '../GameConstants';
-import { GameContext } from '../GameContext';
+import { EnemyAIComponent } from '../components/EnemyAIComponent';
+import { XpPickupComponent } from '../components/XpPickupComponent';
 
 export class EnemyRenderer {
-  private g: GameContext;
-
-  constructor(g: GameContext) {
-    this.g = g;
+  render(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number, screenW: number, screenH: number, settings: GameSettings, frameCount: number): void {
+    const offX: number = -cameraX;
+    const offY: number = -cameraY;
+    this.renderEnemies(world, ctx, offX, offY, screenW, screenH, frameCount);
+    this.renderXpOrbs(world, ctx, offX, offY, screenW, screenH, frameCount);
   }
 
-  render(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    this.renderEnemies(c, offX, offY);
-    this.renderXpOrbs(c, offX, offY);
-  }
+  private renderEnemies(world: World, c: CanvasRenderingContext2D, offX: number, offY: number, screenW: number, screenH: number, frameCount: number): void {
+    const enemies: Entity[] = world.queryWithTag('enemy');
+    for (let i: number = 0; i < enemies.length; i++) {
+      const entity: Entity = enemies[i];
+      if (!entity.active) continue;
 
-  private renderEnemies(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    for (let i: number = 0; i < this.g.enemies.length; i++) {
-      const s: SlimeState = this.g.enemies[i];
-      if (!s.active) continue;
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>('Position');
+      const health: HealthComponent | null = entity.getComponent<HealthComponent>('Health');
+      const ai: EnemyAIComponent | null = entity.getComponent<EnemyAIComponent>('enemyAI');
+      if (pos === null || health === null || ai === null) continue;
 
-      const screenX: number = s.x + offX;
-      const screenY: number = s.y + offY;
+      const screenX: number = pos.x + offX;
+      const screenY: number = pos.y + offY;
 
-      if (screenX < -50 || screenX > this.g.screenW + 50 || screenY < -50 || screenY > this.g.screenH + 50) {
+      if (screenX < -50 || screenX > screenW + 50 || screenY < -50 || screenY > screenH + 50) {
         continue;
       }
 
-      const sc: number = s.size / 48;
-      const bp: number = s.bouncePhase;
-      const flash: boolean = s.hitFlash > 0;
+      const sc: number = ai.size / 48;
+      const bp: number = ai.bouncePhase;
+      const flash: boolean = ai.hitFlash > 0;
       const cx: number = screenX;
       const cy: number = screenY;
 
-      if (s.enemyType === EnemyType.GRAY_SLIME) {
+      if (ai.enemyType === EnemyType.GRAY_SLIME) {
         const bounce: number = Math.sin(bp) * 3 * sc;
         const squash: number = 1 + Math.sin(bp) * 0.12;
         c.save();
@@ -113,12 +118,12 @@ export class EnemyRenderer {
           c.stroke();
         }
         c.restore();
-      } else if (s.enemyType === EnemyType.PURPLE_SLIME) {
+      } else if (ai.enemyType === EnemyType.PURPLE_SLIME) {
         const bounce: number = Math.sin(bp * 1.3) * 1.5 * sc;
         c.save();
         c.translate(cx, cy + bounce);
         if (!flash) {
-          c.globalAlpha = 0.12 + Math.sin(this.g.frameCount * 0.05) * 0.05;
+          c.globalAlpha = 0.12 + Math.sin(frameCount * 0.05) * 0.05;
           c.fillStyle = COLOR_SLIME_PURPLE;
           c.beginPath();
           c.ellipse(0, 0, 20 * sc, 18 * sc, 0, 0, Math.PI * 2);
@@ -130,7 +135,7 @@ export class EnemyRenderer {
         c.ellipse(0, 14 * sc, 13 * sc, 3.5 * sc, 0, 0, Math.PI * 2);
         c.fill();
         for (let t: number = 0; t < 4; t++) {
-          const angle: number = (t / 4) * Math.PI * 2 + this.g.frameCount * 0.03;
+          const angle: number = (t / 4) * Math.PI * 2 + frameCount * 0.03;
           const tx: number = Math.cos(angle) * 16 * sc;
           const ty: number = Math.sin(angle) * 10 * sc + 4 * sc;
           if (flash) {
@@ -163,7 +168,7 @@ export class EnemyRenderer {
           c.beginPath();
           c.ellipse(-3 * sc, -4 * sc, 7 * sc, 5 * sc, -0.3, 0, Math.PI * 2);
           c.fill();
-          const dripPhase: number = (this.g.frameCount * 0.03) % 1;
+          const dripPhase: number = (frameCount * 0.03) % 1;
           for (let d: number = 0; d < 3; d++) {
             const dx: number = (-6 + d * 6) * sc;
             const dy: number = 10 * sc + dripPhase * 8 * sc;
@@ -215,7 +220,7 @@ export class EnemyRenderer {
           c.moveTo(8 * sc, -6 * sc);
           c.lineTo(2 * sc, -4.5 * sc);
           c.stroke();
-          if (s.isEngulfing) {
+          if (ai.isEngulfing) {
             c.fillStyle = '#2d1060';
             c.beginPath();
             c.ellipse(0, 5 * sc, 6 * sc, 5 * sc, 0, 0, Math.PI * 2);
@@ -232,8 +237,8 @@ export class EnemyRenderer {
           }
         }
         c.restore();
-      } else if (s.enemyType === EnemyType.RED_SLIME) {
-        const charge: number = s.isCharging ? Math.abs(Math.sin(this.g.frameCount * 0.08)) : Math.abs(Math.sin(this.g.frameCount * 0.04)) * 0.3;
+      } else if (ai.enemyType === EnemyType.RED_SLIME) {
+        const charge: number = ai.isCharging ? Math.abs(Math.sin(frameCount * 0.08)) : Math.abs(Math.sin(frameCount * 0.04)) * 0.3;
         c.save();
         c.translate(cx, cy);
         if (!flash) {
@@ -251,7 +256,7 @@ export class EnemyRenderer {
         if (!flash) {
           for (let fi: number = 0; fi < 7; fi++) {
             const angle: number = -Math.PI * 0.8 + (fi / 6) * Math.PI * 0.6;
-            const flicker: number = Math.sin(this.g.frameCount * 0.12 + fi * 1.5) * 3;
+            const flicker: number = Math.sin(frameCount * 0.12 + fi * 1.5) * 3;
             const len: number = (6 + flicker + charge * 3) * sc;
             const sx: number = Math.cos(angle) * 12 * sc;
             const sy: number = Math.sin(angle) * 10 * sc;
@@ -339,18 +344,18 @@ export class EnemyRenderer {
           c.stroke();
         }
         c.restore();
-      } else if (s.enemyType === EnemyType.BLUE_SLIME) {
+      } else if (ai.enemyType === EnemyType.BLUE_SLIME) {
         const bounce: number = Math.sin(bp * 0.8) * 1.5 * sc;
         c.save();
         c.translate(cx, cy + bounce);
         if (!flash) {
           for (let d: number = 0; d < 6; d++) {
-            const angle: number = (d / 6) * Math.PI * 2 + this.g.frameCount * 0.02;
-            const dist: number = (16 + Math.sin(this.g.frameCount * 0.03 + d * 2) * 3) * sc;
+            const angle: number = (d / 6) * Math.PI * 2 + frameCount * 0.02;
+            const dist: number = (16 + Math.sin(frameCount * 0.03 + d * 2) * 3) * sc;
             const dx: number = Math.cos(angle) * dist;
             const dy: number = Math.sin(angle) * dist * 0.7 - 2.5 * sc;
             c.fillStyle = COLOR_SLIME_BLUE_LIGHT;
-            c.globalAlpha = 0.4 + Math.sin(this.g.frameCount * 0.04 + d) * 0.2;
+            c.globalAlpha = 0.4 + Math.sin(frameCount * 0.04 + d) * 0.2;
             c.beginPath();
             c.moveTo(dx, dy - 2 * sc);
             c.lineTo(dx + 1 * sc, dy - 0.5 * sc);
@@ -389,7 +394,7 @@ export class EnemyRenderer {
           c.fill();
           c.globalAlpha = 0.3;
           c.fillStyle = COLOR_SLIME_BLUE_LIGHT;
-          const rippleOff: number = Math.sin(this.g.frameCount * 0.04) * 1.5 * sc;
+          const rippleOff: number = Math.sin(frameCount * 0.04) * 1.5 * sc;
           c.beginPath();
           c.ellipse(0, rippleOff, 10 * sc, 7 * sc, 0, 0, Math.PI * 2);
           c.fill();
@@ -403,7 +408,7 @@ export class EnemyRenderer {
           c.globalAlpha = 0.4;
           for (let w: number = 0; w < 3; w++) {
             const wy: number = (-3 + w * 4) * sc;
-            const woff: number = Math.sin(this.g.frameCount * 0.05 + w) * 2 * sc;
+            const woff: number = Math.sin(frameCount * 0.05 + w) * 2 * sc;
             c.beginPath();
             c.moveTo(-8 * sc, wy + woff);
             c.quadraticCurveTo(0, wy - woff - 1.5 * sc, 8 * sc, wy + woff);
@@ -440,24 +445,24 @@ export class EnemyRenderer {
           c.stroke();
         }
         c.restore();
-      } else if (s.enemyType === EnemyType.YELLOW_SLIME) {
+      } else if (ai.enemyType === EnemyType.YELLOW_SLIME) {
         const bounce: number = Math.abs(Math.sin(bp * 1.1)) * 4 * sc;
         c.save();
         c.translate(cx, cy - bounce);
         if (!flash) {
-          c.globalAlpha = 0.08 + Math.sin(this.g.frameCount * 0.04) * 0.03;
+          c.globalAlpha = 0.08 + Math.sin(frameCount * 0.04) * 0.03;
           c.fillStyle = COLOR_SLIME_YELLOW_LIGHT;
           c.beginPath();
           c.ellipse(0, 0, 20 * sc, 18 * sc, 0, 0, Math.PI * 2);
           c.fill();
           for (let sp: number = 0; sp < 8; sp++) {
-            const angle: number = (sp / 8) * Math.PI * 2 + this.g.frameCount * 0.04;
-            const dist: number = (14 + Math.sin(this.g.frameCount * 0.06 + sp * 3) * 4) * sc;
+            const angle: number = (sp / 8) * Math.PI * 2 + frameCount * 0.04;
+            const dist: number = (14 + Math.sin(frameCount * 0.06 + sp * 3) * 4) * sc;
             const sx: number = Math.cos(angle) * dist;
             const sy: number = Math.sin(angle) * dist * 0.6;
-            const sparkSize: number = (1 + Math.sin(this.g.frameCount * 0.1 + sp * 2) * 0.6) * sc;
+            const sparkSize: number = (1 + Math.sin(frameCount * 0.1 + sp * 2) * 0.6) * sc;
             c.fillStyle = sp % 2 === 0 ? COLOR_SLIME_YELLOW_LIGHT : '#ffffff';
-            c.globalAlpha = 0.6 + Math.sin(this.g.frameCount * 0.08 + sp) * 0.3;
+            c.globalAlpha = 0.6 + Math.sin(frameCount * 0.08 + sp) * 0.3;
             c.beginPath();
             c.moveTo(sx, sy - sparkSize * 2);
             c.lineTo(sx + sparkSize * 0.4, sy - sparkSize * 0.4);
@@ -557,31 +562,31 @@ export class EnemyRenderer {
           c.fill();
         }
         c.restore();
-      } else if (s.enemyType === EnemyType.GHOST_SLIME) {
+      } else if (ai.enemyType === EnemyType.GHOST_SLIME) {
         const float: number = Math.sin(bp * 0.5) * 4 * sc;
-        const phase: number = Math.sin(this.g.frameCount * 0.05) * 0.15;
+        const phase: number = Math.sin(frameCount * 0.05) * 0.15;
         c.save();
         c.translate(cx, cy + float);
         if (!flash) {
-          c.globalAlpha = 0.06 + Math.sin(this.g.frameCount * 0.04) * 0.03;
+          c.globalAlpha = 0.06 + Math.sin(frameCount * 0.04) * 0.03;
           c.fillStyle = COLOR_SLIME_GHOST;
           c.beginPath();
           c.ellipse(0, 0, 22 * sc, 20 * sc, 0, 0, Math.PI * 2);
           c.fill();
           for (let w: number = 0; w < 5; w++) {
-            const wAngle: number = (w / 5) * Math.PI * 2 + this.g.frameCount * 0.02;
-            const wDist: number = (10 + Math.sin(this.g.frameCount * 0.03 + w * 2) * 5) * sc;
+            const wAngle: number = (w / 5) * Math.PI * 2 + frameCount * 0.02;
+            const wDist: number = (10 + Math.sin(frameCount * 0.03 + w * 2) * 5) * sc;
             const wx: number = Math.cos(wAngle) * wDist;
             const wy: number = Math.sin(wAngle) * wDist * 0.5 + 5 * sc;
             c.fillStyle = COLOR_SLIME_GHOST_LIGHT;
-            c.globalAlpha = 0.15 + Math.sin(this.g.frameCount * 0.05 + w) * 0.1;
+            c.globalAlpha = 0.15 + Math.sin(frameCount * 0.05 + w) * 0.1;
             c.beginPath();
             c.ellipse(wx, wy, 2.5 * sc, 1.5 * sc, wAngle, 0, Math.PI * 2);
             c.fill();
           }
           for (let trail: number = 0; trail < 3; trail++) {
             const ty: number = 8 * sc + trail * 4 * sc;
-            const tx: number = Math.sin(this.g.frameCount * 0.04 + trail * 2) * 3 * sc;
+            const tx: number = Math.sin(frameCount * 0.04 + trail * 2) * 3 * sc;
             c.fillStyle = COLOR_SLIME_GHOST;
             c.globalAlpha = 0.1 * (1 - trail * 0.3);
             c.beginPath();
@@ -601,9 +606,9 @@ export class EnemyRenderer {
           c.moveTo(-12 * sc, 4 * sc);
           c.quadraticCurveTo(-13 * sc, -10 * sc, 0, -12 * sc);
           c.quadraticCurveTo(13 * sc, -10 * sc, 12 * sc, 4 * sc);
-          const wv1: number = Math.sin(this.g.frameCount * 0.06) * 1.5 * sc;
-          const wv2: number = Math.sin(this.g.frameCount * 0.06 + 1) * 1.5 * sc;
-          const wv3: number = Math.sin(this.g.frameCount * 0.06 + 2) * 1.5 * sc;
+          const wv1: number = Math.sin(frameCount * 0.06) * 1.5 * sc;
+          const wv2: number = Math.sin(frameCount * 0.06 + 1) * 1.5 * sc;
+          const wv3: number = Math.sin(frameCount * 0.06 + 2) * 1.5 * sc;
           c.quadraticCurveTo(10 * sc, 10 * sc + wv1, 6 * sc, 8 * sc);
           c.quadraticCurveTo(3 * sc, 12 * sc + wv2, 0, 9 * sc);
           c.quadraticCurveTo(-3 * sc, 12 * sc + wv3, -6 * sc, 8 * sc);
@@ -661,15 +666,15 @@ export class EnemyRenderer {
           c.fillStyle = '#1e293b';
           c.globalAlpha = 0.6;
           c.beginPath();
-          c.ellipse(0, 3 * sc, 3 * sc, (2.5 + Math.sin(this.g.frameCount * 0.04)) * sc, 0, 0, Math.PI * 2);
+          c.ellipse(0, 3 * sc, 3 * sc, (2.5 + Math.sin(frameCount * 0.04)) * sc, 0, 0, Math.PI * 2);
           c.fill();
         }
         c.restore();
       }
 
       c.globalAlpha = 1.0;
-      if (s.isCharging && s.enemyType !== EnemyType.RED_SLIME) {
-        const halfSize: number = s.size / 2;
+      if (ai.isCharging && ai.enemyType !== EnemyType.RED_SLIME) {
+        const halfSize: number = ai.size / 2;
         c.globalAlpha = 0.4;
         c.fillStyle = COLOR_SLIME_RED;
         c.beginPath();
@@ -678,31 +683,36 @@ export class EnemyRenderer {
         c.globalAlpha = 1.0;
       }
 
-      if (s.hp < s.maxHp) {
-        const barW: number = s.size;
+      if (health.current < health.max) {
+        const barW: number = ai.size;
         const barH: number = 3;
-        const barY: number = screenY - s.size / 2 - 6;
+        const barY: number = screenY - ai.size / 2 - 6;
         c.fillStyle = '#374151';
         c.fillRect(screenX - barW / 2, barY, barW, barH);
         c.fillStyle = '#ef4444';
-        c.fillRect(screenX - barW / 2, barY, barW * (s.hp / s.maxHp), barH);
+        c.fillRect(screenX - barW / 2, barY, barW * (health.current / health.max), barH);
       }
     }
   }
 
-  private renderXpOrbs(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    for (let i: number = 0; i < this.g.xpOrbs.length; i++) {
-      const orb: XpOrb = this.g.xpOrbs[i];
-      if (!orb.active) continue;
+  private renderXpOrbs(world: World, c: CanvasRenderingContext2D, offX: number, offY: number, screenW: number, screenH: number, frameCount: number): void {
+    const orbs: Entity[] = world.queryWithTag('xpOrb');
+    for (let i: number = 0; i < orbs.length; i++) {
+      const entity: Entity = orbs[i];
+      if (!entity.active) continue;
 
-      const screenX: number = orb.x + offX;
-      const screenY: number = orb.y + offY;
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>('Position');
+      const pickup: XpPickupComponent | null = entity.getComponent<XpPickupComponent>('xpPickup');
+      if (pos === null || pickup === null) continue;
 
-      if (screenX < -20 || screenX > this.g.screenW + 20 || screenY < -20 || screenY > this.g.screenH + 20) {
+      const screenX: number = pos.x + offX;
+      const screenY: number = pos.y + offY;
+
+      if (screenX < -20 || screenX > screenW + 20 || screenY < -20 || screenY > screenH + 20) {
         continue;
       }
 
-      const bob: number = Math.sin(orb.bobPhase) * 2;
+      const bob: number = Math.sin(pickup.magnetPhase) * 2;
 
       c.globalAlpha = 0.2;
       c.fillStyle = COLOR_XP_GLOW;

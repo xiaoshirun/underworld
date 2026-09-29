@@ -1,44 +1,62 @@
+import { World, Entity, PositionComponent, HealthComponent } from '@qiuyu/engine';
 import {
-  BossState, BossType, BossPhase, MaterialDrop, MaterialType,
+  BossType, BossPhase, MaterialType,
+  BOSS_SIZE,
   COLOR_MUSHROOM_STEM, COLOR_WATER_LIGHT,
   COLOR_CRYSTAL, COLOR_MUSHROOM_CAP, COLOR_LAVA_LIGHT,
   COLOR_BOSS_ABYSS, COLOR_BOSS_VOID,
   COLOR_BOSS_HP_BAR, COLOR_BOSS_HP_BG,
+  GameSettings,
 } from '../GameConstants';
-import { GameContext } from '../GameContext';
+import { BossAIComponent } from '../components/BossAIComponent';
+import { MaterialPickupComponent } from '../components/MaterialPickupComponent';
+import { TransformCorePickupComponent } from '../components/TransformCorePickupComponent';
+
+function getBossColor(bossType: number): string {
+  if (bossType === BossType.CRYSTAL_GUARDIAN) return '#00ced1';
+  if (bossType === BossType.MUSHROOM_KING) return '#cd3278';
+  if (bossType === BossType.LAVA_BEAST) return '#ff4500';
+  if (bossType === BossType.ABYSS_SIREN) return '#4169e1';
+  if (bossType === BossType.VOID_RIFT) return '#6b21a8';
+  return '#ffffff';
+}
 
 export class BossRenderer {
-  private g: GameContext;
-
-  constructor(g: GameContext) {
-    this.g = g;
+  render(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number, screenW: number, screenH: number, settings: GameSettings, frameCount: number): void {
+    const offX: number = -cameraX;
+    const offY: number = -cameraY;
+    this.renderBosses(world, ctx, offX, offY, screenW, screenH, frameCount);
+    this.renderMaterialDrops(world, ctx, offX, offY, screenW, screenH, frameCount);
   }
 
-  render(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    this.renderBosses(c, offX, offY);
-    this.renderMaterialDrops(c, offX, offY);
+  renderHPBar(world: World, c: CanvasRenderingContext2D, screenW: number, screenH: number, frameCount: number): void {
+    this.renderBossHPBar(world, c, screenW, screenH, frameCount);
   }
 
-  renderHPBar(c: CanvasRenderingContext2D): void {
-    this.renderBossHPBar(c);
-  }
+  private renderBosses(world: World, c: CanvasRenderingContext2D, offX: number, offY: number, screenW: number, screenH: number, frameCount: number): void {
+    const bosses: Entity[] = world.queryWithTag('boss');
+    for (let i: number = 0; i < bosses.length; i++) {
+      const entity: Entity = bosses[i];
+      if (!entity.active) continue;
 
-  private renderBosses(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    for (let i: number = 0; i < this.g.bosses.length; i++) {
-      const boss: BossState = this.g.bosses[i];
-      if (!boss.active || boss.defeated) continue;
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>('Position');
+      const health: HealthComponent | null = entity.getComponent<HealthComponent>('Health');
+      const ai: BossAIComponent | null = entity.getComponent<BossAIComponent>('bossAI');
+      if (pos === null || health === null || ai === null) continue;
+      if (ai.defeated) continue;
 
-      const screenX: number = boss.x + offX;
-      const screenY: number = boss.y + offY;
+      const screenX: number = pos.x + offX;
+      const screenY: number = pos.y + offY;
 
-      if (screenX < -80 || screenX > this.g.screenW + 80 || screenY < -80 || screenY > this.g.screenH + 80) {
+      if (screenX < -80 || screenX > screenW + 80 || screenY < -80 || screenY > screenH + 80) {
         continue;
       }
 
-      const bossColor: string = this.g.getBossColor(boss.bossType);
-      const halfSize: number = boss.size / 2;
-      const pulse: number = Math.sin(this.g.frameCount * 0.05) * 2;
-      const t: number = this.g.frameCount;
+      const bossColor: string = getBossColor(ai.bossType);
+      const halfSize: number = BOSS_SIZE / 2;
+      const pulse: number = Math.sin(frameCount * 0.05) * 2;
+      const t: number = frameCount;
+      const hitFlash: number = ai.extraData.length > 0 ? ai.extraData[0] : 0;
 
       // Ground shadow for all bosses
       c.globalAlpha = 0.2;
@@ -48,8 +66,8 @@ export class BossRenderer {
       c.fill();
       c.globalAlpha = 1.0;
 
-      if (boss.hitFlash > 0) {
-        c.globalAlpha = 0.5 + 0.5 * Math.sin(boss.hitFlash * 0.05);
+      if (hitFlash > 0) {
+        c.globalAlpha = 0.5 + 0.5 * Math.sin(hitFlash * 0.05);
         c.fillStyle = '#ffffff';
         c.beginPath();
         c.arc(screenX, screenY, halfSize + 4, 0, Math.PI * 2);
@@ -57,20 +75,20 @@ export class BossRenderer {
         c.globalAlpha = 1.0;
       }
 
-      if (boss.bossType === BossType.CRYSTAL_GUARDIAN) {
-        this.renderCrystalGuardian(c, screenX, screenY, halfSize, pulse, bossColor, boss, t);
-      } else if (boss.bossType === BossType.MUSHROOM_KING) {
-        this.renderMushroomKing(c, screenX, screenY, halfSize, pulse, bossColor, boss, t);
-      } else if (boss.bossType === BossType.LAVA_BEAST) {
-        this.renderLavaBeast(c, screenX, screenY, halfSize, pulse, bossColor, boss, t);
-      } else if (boss.bossType === BossType.ABYSS_SIREN) {
-        this.renderAbyssSiren(c, screenX, screenY, halfSize, pulse, bossColor, boss, t);
-      } else if (boss.bossType === BossType.VOID_RIFT) {
-        this.renderVoidRift(c, screenX, screenY, halfSize, pulse, bossColor, boss, t);
+      if (ai.bossType === BossType.CRYSTAL_GUARDIAN) {
+        this.renderCrystalGuardian(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
+      } else if (ai.bossType === BossType.MUSHROOM_KING) {
+        this.renderMushroomKing(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
+      } else if (ai.bossType === BossType.LAVA_BEAST) {
+        this.renderLavaBeast(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
+      } else if (ai.bossType === BossType.ABYSS_SIREN) {
+        this.renderAbyssSiren(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
+      } else if (ai.bossType === BossType.VOID_RIFT) {
+        this.renderVoidRift(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
       }
 
       // Phase 2 aura
-      if (boss.phase === BossPhase.PHASE_2) {
+      if (ai.phase === BossPhase.PHASE_2) {
         this.renderPhase2Aura(c, screenX, screenY, halfSize, pulse, bossColor, t);
       }
     }
@@ -78,7 +96,7 @@ export class BossRenderer {
   }
 
   private renderCrystalGuardian(c: CanvasRenderingContext2D, sx: number, sy: number,
-    hs: number, pulse: number, color: string, boss: BossState, t: number): void {
+    hs: number, pulse: number, color: string, ai: BossAIComponent, t: number): void {
     // Outer refraction glow
     c.globalAlpha = 0.12 + Math.sin(t * 0.04) * 0.05;
     c.fillStyle = '#67e8f9';
@@ -187,7 +205,7 @@ export class BossRenderer {
   }
 
   private renderMushroomKing(c: CanvasRenderingContext2D, sx: number, sy: number,
-    hs: number, pulse: number, color: string, boss: BossState, t: number): void {
+    hs: number, pulse: number, color: string, ai: BossAIComponent, t: number): void {
     // Spore particles floating upward
     for (let sp: number = 0; sp < 4; sp++) {
       const spY: number = sy - hs - 8 - ((t * 0.4 + sp * 12) % 30);
@@ -300,7 +318,8 @@ export class BossRenderer {
   }
 
   private renderLavaBeast(c: CanvasRenderingContext2D, sx: number, sy: number,
-    hs: number, pulse: number, color: string, boss: BossState, t: number): void {
+    hs: number, pulse: number, color: string, ai: BossAIComponent, t: number): void {
+    const bSize: number = BOSS_SIZE;
     // Heat distortion aura
     c.globalAlpha = 0.08 + Math.sin(t * 0.06) * 0.04;
     c.fillStyle = '#ff4400';
@@ -311,7 +330,7 @@ export class BossRenderer {
     // Main body - dark rock
     c.globalAlpha = 1.0;
     c.fillStyle = '#3a1500';
-    c.fillRect(sx - hs, sy - hs, boss_size(boss), boss_size(boss));
+    c.fillRect(sx - hs, sy - hs, bSize, bSize);
 
     // Rock texture overlay
     c.fillStyle = '#2a0e00';
@@ -376,8 +395,8 @@ export class BossRenderer {
     // Top edge glow
     c.fillStyle = '#ff4400';
     c.globalAlpha = 0.3 + Math.sin(t * 0.07) * 0.1;
-    c.fillRect(sx - hs, sy - hs, boss_size(boss), 2);
-    c.fillRect(sx - hs, sy - hs, 2, boss_size(boss));
+    c.fillRect(sx - hs, sy - hs, bSize, 2);
+    c.fillRect(sx - hs, sy - hs, 2, bSize);
 
     // Eyes - glowing yellow
     c.globalAlpha = 1.0;
@@ -409,7 +428,7 @@ export class BossRenderer {
   }
 
   private renderAbyssSiren(c: CanvasRenderingContext2D, sx: number, sy: number,
-    hs: number, pulse: number, color: string, boss: BossState, t: number): void {
+    hs: number, pulse: number, color: string, ai: BossAIComponent, t: number): void {
     // Deep water aura
     c.globalAlpha = 0.1;
     c.fillStyle = COLOR_WATER_LIGHT;
@@ -551,7 +570,7 @@ export class BossRenderer {
   }
 
   private renderVoidRift(c: CanvasRenderingContext2D, sx: number, sy: number,
-    hs: number, pulse: number, color: string, boss: BossState, t: number): void {
+    hs: number, pulse: number, color: string, ai: BossAIComponent, t: number): void {
     // Outer distortion field
     c.globalAlpha = 0.06;
     c.fillStyle = '#7c3aed';
@@ -677,137 +696,187 @@ export class BossRenderer {
     c.lineWidth = 1;
   }
 
-  private renderMaterialDrops(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    for (let i: number = 0; i < this.g.materialDrops.length; i++) {
-      const drop: MaterialDrop = this.g.materialDrops[i];
-      if (!drop.active) continue;
+  private renderMaterialDrops(world: World, c: CanvasRenderingContext2D, offX: number, offY: number, screenW: number, screenH: number, frameCount: number): void {
+    const t: number = frameCount;
 
-      const screenX: number = drop.x + offX;
-      const screenY: number = drop.y + offY;
+    // Render materialDrop entities
+    const matEntities: Entity[] = world.queryWithTag('materialDrop');
+    for (let i: number = 0; i < matEntities.length; i++) {
+      const entity: Entity = matEntities[i];
+      if (!entity.active) continue;
 
-      if (screenX < -20 || screenX > this.g.screenW + 20 || screenY < -20 || screenY > this.g.screenH + 20) {
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>('Position');
+      const pickup: MaterialPickupComponent | null = entity.getComponent<MaterialPickupComponent>('materialPickup');
+      if (pos === null || pickup === null) continue;
+
+      const screenX: number = pos.x + offX;
+      const screenY: number = pos.y + offY;
+
+      if (screenX < -20 || screenX > screenW + 20 || screenY < -20 || screenY > screenH + 20) {
         continue;
       }
 
-      const bob: number = Math.sin(this.g.frameCount * 0.06 + drop.bobPhase) * 3;
+      const bob: number = Math.sin(t * 0.06 + pickup.bobPhase) * 3;
       const drawY: number = screenY + bob;
-      const t: number = this.g.frameCount;
 
-      let color: string = '#ffffff';
-      if (drop.type === MaterialType.CRYSTAL_ORE) color = COLOR_CRYSTAL;
-      else if (drop.type === MaterialType.MUSHROOM_ORE) color = COLOR_MUSHROOM_CAP;
-      else if (drop.type === MaterialType.FLAME_ORE) color = COLOR_LAVA_LIGHT;
-      else if (drop.type === MaterialType.ABYSS_ORE) color = COLOR_BOSS_ABYSS;
-      else if (drop.type === MaterialType.VOID_ORE) color = COLOR_BOSS_VOID;
-      else if (drop.type === MaterialType.CORE_NORMAL) color = '#c0c0c0';
-      else if (drop.type === MaterialType.CORE_RARE) color = '#ffd700';
-      else if (drop.type === MaterialType.FORM_CORE) color = '#e879f9';
-
-      const isCore: boolean = drop.type === MaterialType.CORE_NORMAL ||
-        drop.type === MaterialType.CORE_RARE || drop.type === MaterialType.FORM_CORE;
-
-      // Outer glow
-      c.globalAlpha = 0.25 + Math.sin(t * 0.08 + drop.bobPhase) * 0.1;
-      c.fillStyle = color;
-      c.beginPath();
-      c.arc(screenX, drawY, 10, 0, Math.PI * 2);
-      c.fill();
-
-      if (isCore) {
-        // Core drops: round with inner glow and ring
-        c.globalAlpha = 0.9;
-        c.fillStyle = color;
-        c.beginPath();
-        c.arc(screenX, drawY, 5, 0, Math.PI * 2);
-        c.fill();
-
-        // Inner highlight
-        c.fillStyle = '#ffffff';
-        c.globalAlpha = 0.4;
-        c.beginPath();
-        c.arc(screenX - 1.5, drawY - 1.5, 2, 0, Math.PI * 2);
-        c.fill();
-
-        // Orbiting ring
-        c.strokeStyle = color;
-        c.lineWidth = 1;
-        c.globalAlpha = 0.5;
-        const ringAng: number = t * 0.06 + drop.bobPhase;
-        c.beginPath();
-        c.ellipse(screenX, drawY, 7, 3, ringAng, 0, Math.PI * 2);
-        c.stroke();
-
-        // Sparkle
-        c.fillStyle = '#ffffff';
-        c.globalAlpha = 0.5 + Math.sin(t * 0.12 + drop.bobPhase) * 0.3;
-        const spAng: number = t * 0.05 + drop.bobPhase;
-        const spX: number = screenX + Math.cos(spAng) * 6;
-        const spY: number = drawY + Math.sin(spAng) * 3;
-        c.fillRect(spX - 0.5, spY - 0.5, 1, 1);
-      } else {
-        // Ore drops: diamond/crystal shape
-        c.globalAlpha = 0.9;
-        c.fillStyle = color;
-        c.beginPath();
-        c.moveTo(screenX, drawY - 5);
-        c.lineTo(screenX + 4, drawY);
-        c.lineTo(screenX, drawY + 5);
-        c.lineTo(screenX - 4, drawY);
-        c.closePath();
-        c.fill();
-
-        // Crystal edge highlight
-        c.fillStyle = '#ffffff';
-        c.globalAlpha = 0.3;
-        c.beginPath();
-        c.moveTo(screenX, drawY - 5);
-        c.lineTo(screenX + 4, drawY);
-        c.lineTo(screenX, drawY);
-        c.closePath();
-        c.fill();
-
-        // Outline
-        c.strokeStyle = '#ffffff';
-        c.lineWidth = 0.8;
-        c.globalAlpha = 0.5;
-        c.beginPath();
-        c.moveTo(screenX, drawY - 5);
-        c.lineTo(screenX + 4, drawY);
-        c.lineTo(screenX, drawY + 5);
-        c.lineTo(screenX - 4, drawY);
-        c.closePath();
-        c.stroke();
-
-        // Sparkle
-        c.fillStyle = '#ffffff';
-        c.globalAlpha = 0.4 + Math.sin(t * 0.1 + drop.bobPhase * 2) * 0.3;
-        c.fillRect(screenX - 1, drawY - 6, 1, 1);
-      }
+      this.drawMaterialDrop(c, screenX, drawY, pickup.materialType, pickup.bobPhase, t);
     }
+
+    // Render transformCore entities
+    const coreEntities: Entity[] = world.queryWithTag('transformCore');
+    for (let i: number = 0; i < coreEntities.length; i++) {
+      const entity: Entity = coreEntities[i];
+      if (!entity.active) continue;
+
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>('Position');
+      if (pos === null) continue;
+
+      const screenX: number = pos.x + offX;
+      const screenY: number = pos.y + offY;
+
+      if (screenX < -20 || screenX > screenW + 20 || screenY < -20 || screenY > screenH + 20) {
+        continue;
+      }
+
+      const bob: number = Math.sin(t * 0.06) * 3;
+      const drawY: number = screenY + bob;
+
+      // Transform cores render as FORM_CORE style
+      this.drawMaterialDrop(c, screenX, drawY, MaterialType.FORM_CORE, 0, t);
+    }
+
     c.globalAlpha = 1.0;
   }
 
-  private renderBossHPBar(c: CanvasRenderingContext2D): void {
-    const boss: BossState | null = this.g.activeBoss;
-    if (boss === null || boss.defeated) {
-      for (let i: number = 0; i < this.g.bosses.length; i++) {
-        if (this.g.bosses[i].active && !this.g.bosses[i].defeated) {
-          this.drawBossHPBar(c, this.g.bosses[i]);
-          return;
-        }
-      }
-      return;
+  private drawMaterialDrop(c: CanvasRenderingContext2D, screenX: number, drawY: number, materialType: number, bobPhase: number, t: number): void {
+    let color: string = '#ffffff';
+    if (materialType === MaterialType.CRYSTAL_ORE) color = COLOR_CRYSTAL;
+    else if (materialType === MaterialType.MUSHROOM_ORE) color = COLOR_MUSHROOM_CAP;
+    else if (materialType === MaterialType.FLAME_ORE) color = COLOR_LAVA_LIGHT;
+    else if (materialType === MaterialType.ABYSS_ORE) color = COLOR_BOSS_ABYSS;
+    else if (materialType === MaterialType.VOID_ORE) color = COLOR_BOSS_VOID;
+    else if (materialType === MaterialType.CORE_NORMAL) color = '#c0c0c0';
+    else if (materialType === MaterialType.CORE_RARE) color = '#ffd700';
+    else if (materialType === MaterialType.FORM_CORE) color = '#e879f9';
+
+    const isCore: boolean = materialType === MaterialType.CORE_NORMAL ||
+      materialType === MaterialType.CORE_RARE || materialType === MaterialType.FORM_CORE;
+
+    // Outer glow
+    c.globalAlpha = 0.25 + Math.sin(t * 0.08 + bobPhase) * 0.1;
+    c.fillStyle = color;
+    c.beginPath();
+    c.arc(screenX, drawY, 10, 0, Math.PI * 2);
+    c.fill();
+
+    if (isCore) {
+      // Core drops: round with inner glow and ring
+      c.globalAlpha = 0.9;
+      c.fillStyle = color;
+      c.beginPath();
+      c.arc(screenX, drawY, 5, 0, Math.PI * 2);
+      c.fill();
+
+      // Inner highlight
+      c.fillStyle = '#ffffff';
+      c.globalAlpha = 0.4;
+      c.beginPath();
+      c.arc(screenX - 1.5, drawY - 1.5, 2, 0, Math.PI * 2);
+      c.fill();
+
+      // Orbiting ring
+      c.strokeStyle = color;
+      c.lineWidth = 1;
+      c.globalAlpha = 0.5;
+      const ringAng: number = t * 0.06 + bobPhase;
+      c.beginPath();
+      c.ellipse(screenX, drawY, 7, 3, ringAng, 0, Math.PI * 2);
+      c.stroke();
+
+      // Sparkle
+      c.fillStyle = '#ffffff';
+      c.globalAlpha = 0.5 + Math.sin(t * 0.12 + bobPhase) * 0.3;
+      const spAng: number = t * 0.05 + bobPhase;
+      const spX: number = screenX + Math.cos(spAng) * 6;
+      const spY: number = drawY + Math.sin(spAng) * 3;
+      c.fillRect(spX - 0.5, spY - 0.5, 1, 1);
+    } else {
+      // Ore drops: diamond/crystal shape
+      c.globalAlpha = 0.9;
+      c.fillStyle = color;
+      c.beginPath();
+      c.moveTo(screenX, drawY - 5);
+      c.lineTo(screenX + 4, drawY);
+      c.lineTo(screenX, drawY + 5);
+      c.lineTo(screenX - 4, drawY);
+      c.closePath();
+      c.fill();
+
+      // Crystal edge highlight
+      c.fillStyle = '#ffffff';
+      c.globalAlpha = 0.3;
+      c.beginPath();
+      c.moveTo(screenX, drawY - 5);
+      c.lineTo(screenX + 4, drawY);
+      c.lineTo(screenX, drawY);
+      c.closePath();
+      c.fill();
+
+      // Outline
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 0.8;
+      c.globalAlpha = 0.5;
+      c.beginPath();
+      c.moveTo(screenX, drawY - 5);
+      c.lineTo(screenX + 4, drawY);
+      c.lineTo(screenX, drawY + 5);
+      c.lineTo(screenX - 4, drawY);
+      c.closePath();
+      c.stroke();
+
+      // Sparkle
+      c.fillStyle = '#ffffff';
+      c.globalAlpha = 0.4 + Math.sin(t * 0.1 + bobPhase * 2) * 0.3;
+      c.fillRect(screenX - 1, drawY - 6, 1, 1);
     }
-    this.drawBossHPBar(c, boss);
   }
 
-  private drawBossHPBar(c: CanvasRenderingContext2D, boss: BossState): void {
+  private renderBossHPBar(world: World, c: CanvasRenderingContext2D, screenW: number, screenH: number, frameCount: number): void {
+    const bosses: Entity[] = world.queryWithTag('boss');
+    let activeBossEntity: Entity | null = null;
+    let activeBossAI: BossAIComponent | null = null;
+    let activeBossHealth: HealthComponent | null = null;
+
+    for (let i: number = 0; i < bosses.length; i++) {
+      const entity: Entity = bosses[i];
+      if (!entity.active) continue;
+      const ai: BossAIComponent | null = entity.getComponent<BossAIComponent>('bossAI');
+      const health: HealthComponent | null = entity.getComponent<HealthComponent>('Health');
+      if (ai === null || health === null) continue;
+      if (ai.defeated) continue;
+      if (ai.active) {
+        activeBossEntity = entity;
+        activeBossAI = ai;
+        activeBossHealth = health;
+        break;
+      }
+    }
+
+    if (activeBossAI === null || activeBossHealth === null) {
+      // No active boss found
+      return;
+    }
+
+    this.drawBossHPBar(c, activeBossAI, activeBossHealth, screenW, frameCount);
+  }
+
+  private drawBossHPBar(c: CanvasRenderingContext2D, ai: BossAIComponent, health: HealthComponent, screenW: number, frameCount: number): void {
     const barW: number = 220;
     const barH: number = 14;
-    const barX: number = (this.g.screenW - barW) / 2;
+    const barX: number = (screenW - barW) / 2;
     const barY: number = 22;
-    const hpRatio: number = Math.max(0, boss.hp / boss.maxHp);
-    const t: number = this.g.frameCount;
+    const hpRatio: number = Math.max(0, health.current / health.max);
+    const t: number = frameCount;
 
     // Boss name
     c.fillStyle = '#ffffff';
@@ -815,13 +884,13 @@ export class BossRenderer {
     c.textAlign = 'center';
     c.globalAlpha = 0.9;
     let name: string = 'Boss';
-    if (boss.bossType === BossType.CRYSTAL_GUARDIAN) name = '\u2666 Crystal Guardian';
-    else if (boss.bossType === BossType.MUSHROOM_KING) name = '\u2654 Mushroom King';
-    else if (boss.bossType === BossType.LAVA_BEAST) name = '\u2668 Lava Beast';
-    else if (boss.bossType === BossType.ABYSS_SIREN) name = '\u2620 Abyss Siren';
-    else if (boss.bossType === BossType.VOID_RIFT) name = '\u25CE Void Rift';
-    if (boss.phase === BossPhase.PHASE_2) name += '  [Enraged]';
-    c.fillText(name, this.g.screenW / 2, barY - 6);
+    if (ai.bossType === BossType.CRYSTAL_GUARDIAN) name = '\u2666 Crystal Guardian';
+    else if (ai.bossType === BossType.MUSHROOM_KING) name = '\u2654 Mushroom King';
+    else if (ai.bossType === BossType.LAVA_BEAST) name = '\u2668 Lava Beast';
+    else if (ai.bossType === BossType.ABYSS_SIREN) name = '\u2620 Abyss Siren';
+    else if (ai.bossType === BossType.VOID_RIFT) name = '\u25CE Void Rift';
+    if (ai.phase === BossPhase.PHASE_2) name += '  [Enraged]';
+    c.fillText(name, screenW / 2, barY - 6);
 
     // Bar background with border
     c.fillStyle = '#0a0a14';
@@ -839,7 +908,7 @@ export class BossRenderer {
       // Bottom layer - darker
       let barColor1: string = COLOR_BOSS_HP_BAR;
       let barColor2: string = '#ff8888';
-      if (boss.phase === BossPhase.PHASE_2) {
+      if (ai.phase === BossPhase.PHASE_2) {
         barColor1 = '#ff4444';
         barColor2 = '#ff8800';
       }
@@ -896,7 +965,7 @@ export class BossRenderer {
     c.stroke();
 
     // Enraged pulsing border
-    if (boss.phase === BossPhase.PHASE_2) {
+    if (ai.phase === BossPhase.PHASE_2) {
       c.strokeStyle = '#ff4444';
       c.lineWidth = 1;
       c.globalAlpha = 0.3 + 0.2 * Math.sin(t * 0.1);
@@ -906,8 +975,4 @@ export class BossRenderer {
     c.globalAlpha = 1.0;
     c.lineWidth = 1;
   }
-}
-
-function boss_size(boss: BossState): number {
-  return boss.size;
 }

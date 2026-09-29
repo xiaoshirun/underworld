@@ -1,28 +1,47 @@
+import { World, Entity, PositionComponent } from '@qiuyu/engine';
 import {
-  MINIMAP_SIZE, TILE_SIZE,
-  TileType, BiomeType, PlayerState, SlimeState, BossState, ChestState, ChestType,
+  MINIMAP_SIZE, TILE_SIZE, CHUNK_SIZE,
+  TileType, BiomeType, ChestType,
   COLOR_MINIMAP_BG, COLOR_MINIMAP_ENEMY, COLOR_MINIMAP_PLAYER, COLOR_CHEST_GLOW,
   COLOR_CHEST_NORMAL, COLOR_CHEST_ELITE, COLOR_CHEST_BOSS,
+  ChunkData,
 } from '../GameConstants';
-import { GameContext } from '../GameContext';
+import { MovementComponent } from '../components/MovementComponent';
+import { EnemyAIComponent } from '../components/EnemyAIComponent';
+import { BossAIComponent } from '../components/BossAIComponent';
+import { ChestComponent } from '../components/ChestComponent';
+import { WorldGenerator } from '../WorldGenerator';
 
 export class UIRenderer {
-  private g: GameContext;
 
-  constructor(g: GameContext) {
-    this.g = g;
+  private getTile(chunks: Map<string, Object>, worldX: number, worldY: number): number {
+    const tx: number = Math.floor(worldX / TILE_SIZE);
+    const ty: number = Math.floor(worldY / TILE_SIZE);
+    const cx: number = Math.floor(tx / CHUNK_SIZE);
+    const cy: number = Math.floor(ty / CHUNK_SIZE);
+    const key: string = cx + ',' + cy;
+    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData;
+    if (chunk === undefined) return TileType.WALL;
+    const lx: number = tx - cx * CHUNK_SIZE;
+    const ly: number = ty - cy * CHUNK_SIZE;
+    return chunk.tiles[ly][lx];
   }
 
-  renderMinimap(): void {
-    if (this.g.minimapCtx === null || this.g.player === null) return;
-    const mc: CanvasRenderingContext2D = this.g.minimapCtx;
+  renderMinimap(world: World, minimapCtx: CanvasRenderingContext2D, cameraX: number, cameraY: number, screenW: number, screenH: number, frameCount: number): void {
+    const mc: CanvasRenderingContext2D = minimapCtx;
     const size: number = MINIMAP_SIZE;
-    const p: PlayerState = this.g.player;
+
+    const player: Entity | null = world.findEntityByTag('player');
+    if (player === null) return;
+    const playerPos: PositionComponent | null = player.getComponent<PositionComponent>('Position');
+    const playerMovement: MovementComponent | null = player.getComponent<MovementComponent>('movement');
+    if (playerPos === null || playerMovement === null) return;
 
     // --- Background with biome tint ---
-    const camWorldX: number = this.g.cameraX + this.g.screenW / 2;
-    const camWorldY: number = this.g.cameraY + this.g.screenH / 2;
-    const viewBiome: BiomeType = this.g.worldGen.getBiome(camWorldX, camWorldY);
+    const camWorldX: number = cameraX + screenW / 2;
+    const camWorldY: number = cameraY + screenH / 2;
+    const worldGen: WorldGenerator | null = world.worldGen as WorldGenerator | null;
+    const viewBiome: BiomeType = worldGen !== null ? worldGen.getBiome(camWorldX, camWorldY) : BiomeType.CRYSTAL;
 
     let biomeTint: string = '#0a0a15';
     switch (viewBiome) {
@@ -48,15 +67,15 @@ export class UIRenderer {
 
     // --- Terrain ---
     const viewRange: number = 40;
-    const playerTX: number = Math.floor(p.x / TILE_SIZE);
-    const playerTY: number = Math.floor(p.y / TILE_SIZE);
+    const playerTX: number = Math.floor(playerPos.x / TILE_SIZE);
+    const playerTY: number = Math.floor(playerPos.y / TILE_SIZE);
     const scale: number = size / (viewRange * 2);
 
     for (let dy: number = -viewRange; dy <= viewRange; dy++) {
       for (let dx: number = -viewRange; dx <= viewRange; dx++) {
         const tx: number = playerTX + dx;
         const ty: number = playerTY + dy;
-        const tile: number = this.g.getTile(tx * TILE_SIZE, ty * TILE_SIZE);
+        const tile: number = this.getTile(world.chunks, tx * TILE_SIZE, ty * TILE_SIZE);
         const sx: number = (dx + viewRange) * scale;
         const sy: number = (dy + viewRange) * scale;
 
@@ -83,11 +102,14 @@ export class UIRenderer {
     }
 
     // --- Enemies ---
-    for (let i: number = 0; i < this.g.enemies.length; i++) {
-      const s: SlimeState = this.g.enemies[i];
-      if (!s.active) continue;
-      const sdx: number = (s.x / TILE_SIZE) - playerTX;
-      const sdy: number = (s.y / TILE_SIZE) - playerTY;
+    const enemies: Entity[] = world.queryWithTag('enemy');
+    for (let i: number = 0; i < enemies.length; i++) {
+      const entity: Entity = enemies[i];
+      if (!entity.active) continue;
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>('Position');
+      if (pos === null) continue;
+      const sdx: number = (pos.x / TILE_SIZE) - playerTX;
+      const sdy: number = (pos.y / TILE_SIZE) - playerTY;
       if (Math.abs(sdx) > viewRange || Math.abs(sdy) > viewRange) continue;
       const sx: number = (sdx + viewRange) * scale;
       const sy: number = (sdy + viewRange) * scale;
@@ -100,16 +122,21 @@ export class UIRenderer {
     }
 
     // --- Bosses ---
-    for (let i: number = 0; i < this.g.bosses.length; i++) {
-      const boss: BossState = this.g.bosses[i];
-      if (!boss.active || boss.defeated) continue;
-      const bdx: number = (boss.x / TILE_SIZE) - playerTX;
-      const bdy: number = (boss.y / TILE_SIZE) - playerTY;
+    const bosses: Entity[] = world.queryWithTag('boss');
+    for (let i: number = 0; i < bosses.length; i++) {
+      const entity: Entity = bosses[i];
+      if (!entity.active) continue;
+      const ai: BossAIComponent | null = entity.getComponent<BossAIComponent>('bossAI');
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>('Position');
+      if (ai === null || pos === null) continue;
+      if (ai.defeated) continue;
+      const bdx: number = (pos.x / TILE_SIZE) - playerTX;
+      const bdy: number = (pos.y / TILE_SIZE) - playerTY;
       if (Math.abs(bdx) > viewRange || Math.abs(bdy) > viewRange) continue;
       const bsx: number = (bdx + viewRange) * scale;
       const bsy: number = (bdy + viewRange) * scale;
       // Pulsing boss marker
-      const bPulse: number = 0.6 + 0.4 * Math.sin(this.g.frameCount * 0.08);
+      const bPulse: number = 0.6 + 0.4 * Math.sin(frameCount * 0.08);
       mc.globalAlpha = 0.25 * bPulse;
       mc.fillStyle = '#ff0000';
       mc.fillRect(bsx - 5, bsy - 5, 10, 10);
@@ -122,11 +149,16 @@ export class UIRenderer {
     }
 
     // --- Chests ---
-    for (let i: number = 0; i < this.g.chests.length; i++) {
-      const chest: ChestState = this.g.chests[i];
-      if (!chest.active || chest.opened) continue;
-      const cdx: number = (chest.x / TILE_SIZE) - playerTX;
-      const cdy: number = (chest.y / TILE_SIZE) - playerTY;
+    const chests: Entity[] = world.queryWithTag('chest');
+    for (let i: number = 0; i < chests.length; i++) {
+      const entity: Entity = chests[i];
+      if (!entity.active) continue;
+      const chest: ChestComponent | null = entity.getComponent<ChestComponent>('chest');
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>('Position');
+      if (chest === null || pos === null) continue;
+      if (chest.opened) continue;
+      const cdx: number = (pos.x / TILE_SIZE) - playerTX;
+      const cdy: number = (pos.y / TILE_SIZE) - playerTY;
       if (Math.abs(cdx) > viewRange || Math.abs(cdy) > viewRange) continue;
       const csx: number = (cdx + viewRange) * scale;
       const csy: number = (cdy + viewRange) * scale;
@@ -144,12 +176,12 @@ export class UIRenderer {
     // --- Player direction indicator (triangle) ---
     const pcx: number = size / 2;
     const pcy: number = size / 2;
-    const facing: number = p.facing;
+    const facing: number = playerMovement.facing;
     const dirX: number = Math.cos(facing);
     const dirY: number = Math.sin(facing);
 
     // Player glow
-    const pPulse: number = 0.7 + 0.3 * Math.sin(this.g.frameCount * 0.06);
+    const pPulse: number = 0.7 + 0.3 * Math.sin(frameCount * 0.06);
     mc.globalAlpha = 0.2 * pPulse;
     mc.fillStyle = COLOR_MINIMAP_PLAYER;
     mc.beginPath();
@@ -224,7 +256,7 @@ export class UIRenderer {
     mc.fillRect(size - 2, size - 2, 2, 2);
 
     // --- Depth display ---
-    const depth: number = Math.floor(p.y / (TILE_SIZE * 10));
+    const depth: number = Math.floor(playerPos.y / (TILE_SIZE * 10));
     mc.globalAlpha = 0.7;
     mc.fillStyle = '#000000';
     mc.fillRect(size / 2 - 14, size - 11, 28, 9);

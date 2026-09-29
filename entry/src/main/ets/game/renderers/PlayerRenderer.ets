@@ -21,34 +21,64 @@ import {
   EvolutionLevel,
   GenderType,
   PLAYER_SIZE,
-  PlayerState,
   TRANSFORM_ACTIVATE_ANIM,
   TRANSFORM_REVERT_ANIM,
   TransformForm,
   WEAPON_FORM_STATS,
   WeaponForm,
+  GameSettings,
 } from '../GameConstants';
-import { GameContext } from '../GameContext';
+import { World, Entity, PositionComponent, VelocityComponent } from '@qiuyu/engine';
+import { MovementComponent } from '../components/MovementComponent';
+import { CombatComponent } from '../components/CombatComponent';
+import { TransformComponent } from '../components/TransformComponent';
+import { EvolutionComponent } from '../components/EvolutionComponent';
+
+interface PComp {
+  pos: PositionComponent;
+  vel: VelocityComponent;
+  movement: MovementComponent;
+  combat: CombatComponent;
+  transform: TransformComponent;
+  evolution: EvolutionComponent;
+  frameCount: number;
+  transformAnimIsRevert: boolean;
+}
 
 export class PlayerRenderer {
-  private g: GameContext;
-
-  constructor(g: GameContext) {
-    this.g = g;
+  render(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number, screenW: number, screenH: number, settings: GameSettings, frameCount: number): void {
+    const player: Entity | null = world.findEntityByTag('player');
+    if (player === null) return;
+    const pos: PositionComponent | null = player.getComponent<PositionComponent>('Position');
+    const vel: VelocityComponent | null = player.getComponent<VelocityComponent>('Velocity');
+    const movement: MovementComponent | null = player.getComponent<MovementComponent>('movement');
+    const combat: CombatComponent | null = player.getComponent<CombatComponent>('combat');
+    const transform: TransformComponent | null = player.getComponent<TransformComponent>('transform');
+    const evolution: EvolutionComponent | null = player.getComponent<EvolutionComponent>('evolution');
+    if (pos === null || vel === null || movement === null || combat === null || transform === null || evolution === null) return;
+    const pc: PComp = {
+      pos: pos,
+      vel: vel,
+      movement: movement,
+      combat: combat,
+      transform: transform,
+      evolution: evolution,
+      frameCount: frameCount,
+      transformAnimIsRevert: transform.transformForm === -1,
+    };
+    const offX: number = -cameraX;
+    const offY: number = -cameraY;
+    this.renderPlayer(ctx, offX, offY, pc);
   }
 
-  render(c: CanvasRenderingContext2D, offX: number, offY: number, p: PlayerState): void {
-    this.renderPlayer(c, offX, offY, p);
-  }
-
-  private renderPlayer(c: CanvasRenderingContext2D, offX: number, offY: number, p: PlayerState): void {
-    const screenX: number = p.x + offX;
-    const screenY: number = p.y + offY - p.jumpHeight;
+  private renderPlayer(c: CanvasRenderingContext2D, offX: number, offY: number, pc: PComp): void {
+    const screenX: number = pc.pos.x + offX;
+    const screenY: number = pc.pos.y + offY - pc.movement.jumpHeight;
     const half: number = PLAYER_SIZE / 2;
 
-    if (p.isEngulfed) {
-      c.globalAlpha = 0.5 + Math.sin(this.g.frameCount * 0.2) * 0.3;
-      const engulfBodyColor: string = p.gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY : COLOR_PLAYER_BODY;
+    if (pc.movement.isEngulfed) {
+      c.globalAlpha = 0.5 + Math.sin(pc.frameCount * 0.2) * 0.3;
+      const engulfBodyColor: string = (0 === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY : COLOR_PLAYER_BODY);
       c.fillStyle = engulfBodyColor;
       c.beginPath();
       c.arc(screenX, screenY, half * 0.6, 0, Math.PI * 2);
@@ -57,46 +87,47 @@ export class PlayerRenderer {
       return;
     }
 
-    if (p.invincibleTimer > 0 && Math.floor(this.g.frameCount / 3) % 2 === 0) {
+    if (pc.combat.invincibleTimer > 0 && Math.floor(pc.frameCount / 3) % 2 === 0) {
       return;
     }
 
-    if (p.isTransformed) {
-      const bobY: number = p.isJumping ? -p.jumpHeight : Math.sin(this.g.frameCount * 0.08) * 1.5;
-      if (p.transformForm === TransformForm.SLIME) {
-        this.renderSlimeForm(c, screenX, screenY, p, bobY);
-      } else if (p.transformForm === TransformForm.GHOST) {
-        this.renderGhostForm(c, screenX, screenY, p, bobY);
-      } else if (p.transformForm === TransformForm.ARMOR) {
-        this.renderArmorForm(c, screenX, screenY, p, bobY);
-      } else if (p.transformForm === TransformForm.IRON_MAN) {
-        this.renderIronManForm(c, screenX, screenY, p, bobY);
+    if (pc.transform.isTransformed) {
+      const bobY: number = pc.movement.isJumping ? -pc.movement.jumpHeight : Math.sin(pc.frameCount * 0.08) * 1.5;
+      if ((pc.transform.transformForm as TransformForm) === TransformForm.SLIME) {
+        this.renderSlimeForm(c, screenX, screenY, pc, bobY);
+      } else if ((pc.transform.transformForm as TransformForm) === TransformForm.GHOST) {
+        this.renderGhostForm(c, screenX, screenY, pc, bobY);
+      } else if ((pc.transform.transformForm as TransformForm) === TransformForm.ARMOR) {
+        this.renderArmorForm(c, screenX, screenY, pc, bobY);
+      } else if ((pc.transform.transformForm as TransformForm) === TransformForm.IRON_MAN) {
+        this.renderIronManForm(c, screenX, screenY, pc, bobY);
       }
-      if (p.transformAnimTimer > 0) {
-        this.renderTransformAnim(c, screenX, screenY, p);
+      if (pc.transform.transformAnimTimer > 0) {
+        this.renderTransformAnim(c, screenX, screenY, pc);
       }
       return;
     }
 
-    if (p.isJumping) {
+    if (pc.movement.isJumping) {
       c.globalAlpha = 0.3;
       c.fillStyle = '#000000';
       c.beginPath();
-      c.ellipse(screenX, p.y + offY + half, half * 0.8, half * 0.3, 0, 0, Math.PI * 2);
+      c.ellipse(screenX, pc.pos.y + offY + half, half * 0.8, half * 0.3, 0, 0, Math.PI * 2);
       c.fill();
       c.globalAlpha = 1.0;
     }
 
-    const bobY: number = Math.sin(p.animFrame) * 1.5;
-    const walkPhase: number = Math.sin(p.animFrame * 2);
-    const isMoving: boolean = Math.abs(p.vx) > 0.1 || Math.abs(p.vy) > 0.1;
-    const facingRight: boolean = Math.cos(p.facing) >= 0;
+    const bobY: number = Math.sin(pc.combat.animFrame) * 1.5;
+    const walkPhase: number = Math.sin(pc.combat.animFrame * 2);
+    const isMoving: boolean = Math.abs(pc.vel.vx) > 0.1 || Math.abs(pc.vel.vy) > 0.1;
+    const facingRight: boolean = Math.cos(pc.movement.facing) >= 0;
 
-    const bodyColor: string = p.gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY : COLOR_PLAYER_BODY;
-    const bodyDarkColor: string = p.gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY_DARK : COLOR_PLAYER_BODY_DARK;
-    const hairColor: string = p.gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_HAIR : COLOR_PLAYER_HAIR;
+    const gender: number = 0;
+    const bodyColor: string = gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY : COLOR_PLAYER_BODY;
+    const bodyDarkColor: string = gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY_DARK : COLOR_PLAYER_BODY_DARK;
+    const hairColor: string = gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_HAIR : COLOR_PLAYER_HAIR;
 
-    if (!p.isJumping) {
+    if (!pc.movement.isJumping) {
       c.globalAlpha = 0.25;
       c.fillStyle = '#000000';
       c.beginPath();
@@ -178,16 +209,16 @@ export class PlayerRenderer {
     c.fillRect(screenX - 5, screenY - 12 + bobY, 10, 4);
     c.fillRect(screenX - 6, screenY - 10 + bobY, 2, 5);
     c.fillRect(screenX + 4, screenY - 10 + bobY, 2, 5);
-    const hairHighlight: string = p.gender === GenderType.FEMALE ? '#7a3a9a' : '#9a5a3a';
+    const hairHighlight: string = gender === GenderType.FEMALE ? '#7a3a9a' : '#9a5a3a';
     c.fillStyle = hairHighlight;
     c.fillRect(screenX - 4, screenY - 11 + bobY, 2, 1);
     c.fillRect(screenX + 1, screenY - 12 + bobY, 3, 1);
     c.fillRect(screenX - 2, screenY - 10 + bobY, 1, 2);
-    c.fillStyle = p.gender === GenderType.FEMALE ? '#3a1050' : '#4a2a10';
+    c.fillStyle = gender === GenderType.FEMALE ? '#3a1050' : '#4a2a10';
     c.fillRect(screenX - 3, screenY - 9 + bobY, 1, 3);
     c.fillRect(screenX + 3, screenY - 10 + bobY, 1, 2);
     c.fillRect(screenX, screenY - 11 + bobY, 1, 1);
-    if (p.gender === GenderType.FEMALE) {
+    if (gender === GenderType.FEMALE) {
       c.fillStyle = hairColor;
       c.fillRect(screenX - 7, screenY - 8 + bobY, 2, 10);
       c.fillRect(screenX + 5, screenY - 8 + bobY, 2, 10);
@@ -228,18 +259,18 @@ export class PlayerRenderer {
     c.fillStyle = '#a06850';
     c.fillRect(screenX, screenY - 4 + bobY, 2, 1);
 
-    this.renderDrill(c, screenX, screenY, p, bobY);
-    this.renderWeaponOnPlayer(c, screenX, screenY, p, bobY);
-    this.renderEvolutionEffects(c, screenX, screenY, p, bobY);
+    this.renderDrill(c, screenX, screenY, pc, bobY);
+    this.renderWeaponOnPlayer(c, screenX, screenY, pc, bobY);
+    this.renderEvolutionEffects(c, screenX, screenY, pc, bobY);
   }
 
-  private renderDrill(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
-    const drillLen: number = p.isDrilling ? 14 : 8;
-    const drillOffX: number = Math.cos(p.facing) * (8 + (p.isDrilling ? 6 : 0));
-    const drillOffY: number = Math.sin(p.facing) * (8 + (p.isDrilling ? 6 : 0));
+  private renderDrill(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number): void {
+    const drillLen: number = pc.movement.isDrilling ? 14 : 8;
+    const drillOffX: number = Math.cos(pc.movement.facing) * (8 + (pc.movement.isDrilling ? 6 : 0));
+    const drillOffY: number = Math.sin(pc.movement.facing) * (8 + (pc.movement.isDrilling ? 6 : 0));
     const baseX: number = sx + drillOffX;
     const baseY: number = sy + drillOffY + bobY;
-    const fAng: number = p.facing;
+    const fAng: number = pc.movement.facing;
     const perpX: number = -Math.sin(fAng);
     const perpY: number = Math.cos(fAng);
 
@@ -271,12 +302,12 @@ export class PlayerRenderer {
     c.stroke();
     c.strokeStyle = '#b45309';
     c.lineWidth = 1;
-    const spiralSegs: number = p.isDrilling ? 5 : 3;
+    const spiralSegs: number = pc.movement.isDrilling ? 5 : 3;
     for (let i: number = 1; i <= spiralSegs; i++) {
       const t: number = i / (spiralSegs + 1);
       const gx: number = baseX + Math.cos(fAng) * drillLen * t;
       const gy: number = baseY + Math.sin(fAng) * drillLen * t;
-      const groovePhase: number = t * Math.PI * 2 + (p.isDrilling ? this.g.frameCount * 0.3 : 0);
+      const groovePhase: number = t * Math.PI * 2 + (pc.movement.isDrilling ? pc.frameCount * 0.3 : 0);
       const grooveOff: number = Math.sin(groovePhase) * 1.5;
       c.beginPath();
       c.moveTo(gx + perpX * grooveOff, gy + perpY * grooveOff);
@@ -284,7 +315,7 @@ export class PlayerRenderer {
       c.stroke();
     }
 
-    if (p.isDrilling) {
+    if (pc.movement.isDrilling) {
       c.fillStyle = '#ff6b00';
       c.globalAlpha = 0.5 + Math.random() * 0.3;
       c.beginPath();
@@ -307,35 +338,35 @@ export class PlayerRenderer {
       c.globalAlpha = 1.0;
     }
 
-    if (p.isAttacking) {
-      this.renderWeaponAttackEffect(c, sx, sy, p, bobY);
+    if (pc.combat.isAttacking) {
+      this.renderWeaponAttackEffect(c, sx, sy, pc, bobY);
     }
   }
 
-  private renderWeaponAttackEffect(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
-    const form: WeaponForm = p.currentWeaponForm;
+  private renderWeaponAttackEffect(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number): void {
+    const form: WeaponForm = (pc.transform.currentWeaponForm as WeaponForm);
     const formStats: number[] = WEAPON_FORM_STATS[form];
     const range: number = formStats[0];
     const width: number = formStats[1];
-    const offX: number = Math.cos(p.facing) * range * 0.7;
-    const offY: number = Math.sin(p.facing) * range * 0.7;
+    const offX: number = Math.cos(pc.movement.facing) * range * 0.7;
+    const offY: number = Math.sin(pc.movement.facing) * range * 0.7;
     const cx: number = sx + offX;
     const cy: number = sy + offY + bobY;
-    const perpX: number = -Math.sin(p.facing);
-    const perpY: number = Math.cos(p.facing);
+    const perpX: number = -Math.sin(pc.movement.facing);
+    const perpY: number = Math.cos(pc.movement.facing);
 
     // Liquid metal flash at attack start
-    const atkProg: number = 1.0 - (p.attackTimer / ATTACK_DURATION);
+    const atkProg: number = 1.0 - (pc.combat.attackTimer / ATTACK_DURATION);
     if (atkProg < 0.25) {
       const flashA: number = (1.0 - atkProg / 0.25) * 0.35;
       c.globalAlpha = flashA;
       c.fillStyle = '#e5e7eb';
       c.beginPath();
-      c.arc(sx + Math.cos(p.facing) * 6, sy + bobY + Math.sin(p.facing) * 6, 4 + atkProg * 12, 0, Math.PI * 2);
+      c.arc(sx + Math.cos(pc.movement.facing) * 6, sy + bobY + Math.sin(pc.movement.facing) * 6, 4 + atkProg * 12, 0, Math.PI * 2);
       c.fill();
       // Chrome splash particles
       for (let i: number = 0; i < 5; i++) {
-        const pa: number = p.facing + (i - 2) * 0.6;
+        const pa: number = pc.movement.facing + (i - 2) * 0.6;
         const pd: number = 5 + atkProg / 0.25 * 10;
         c.globalAlpha = flashA * 0.6;
         c.fillStyle = '#d1d5db';
@@ -347,8 +378,8 @@ export class PlayerRenderer {
     }
 
     if (form === WeaponForm.BLADE) {
-      const arcStart: number = p.facing - 1.0;
-      const arcEnd: number = p.facing + 1.0;
+      const arcStart: number = pc.movement.facing - 1.0;
+      const arcEnd: number = pc.movement.facing + 1.0;
       c.globalAlpha = 0.25;
       c.strokeStyle = '#60a5fa';
       c.lineWidth = 8;
@@ -380,7 +411,7 @@ export class PlayerRenderer {
       c.beginPath();
       c.arc(sx, sy + bobY, range * 0.5, arcStart + 0.4, arcEnd - 0.4);
       c.stroke();
-      const sparkAng: number = p.facing + 0.8;
+      const sparkAng: number = pc.movement.facing + 0.8;
       const sparkX: number = sx + Math.cos(sparkAng) * range * 0.85;
       const sparkY: number = sy + bobY + Math.sin(sparkAng) * range * 0.85;
       c.fillStyle = '#ffffff';
@@ -394,11 +425,11 @@ export class PlayerRenderer {
       c.strokeStyle = '#a78bfa';
       c.lineWidth = 3;
       c.beginPath();
-      c.moveTo(sx + Math.cos(p.facing) * 8, sy + bobY + Math.sin(p.facing) * 8);
-      const cp1x: number = sx + Math.cos(p.facing) * whipLen * 0.5 + perpX * 15;
-      const cp1y: number = sy + bobY + Math.sin(p.facing) * whipLen * 0.5 + perpY * 15;
-      const endX: number = sx + Math.cos(p.facing) * whipLen;
-      const endY: number = sy + bobY + Math.sin(p.facing) * whipLen;
+      c.moveTo(sx + Math.cos(pc.movement.facing) * 8, sy + bobY + Math.sin(pc.movement.facing) * 8);
+      const cp1x: number = sx + Math.cos(pc.movement.facing) * whipLen * 0.5 + perpX * 15;
+      const cp1y: number = sy + bobY + Math.sin(pc.movement.facing) * whipLen * 0.5 + perpY * 15;
+      const endX: number = sx + Math.cos(pc.movement.facing) * whipLen;
+      const endY: number = sy + bobY + Math.sin(pc.movement.facing) * whipLen;
       c.quadraticCurveTo(cp1x, cp1y, endX, endY);
       c.stroke();
       c.globalAlpha = 0.6;
@@ -415,7 +446,7 @@ export class PlayerRenderer {
       c.strokeStyle = '#d8b4fe';
       c.lineWidth = 1;
       for (let i: number = 0; i < 4; i++) {
-        const a: number = p.facing + (i - 1.5) * 0.5;
+        const a: number = pc.movement.facing + (i - 1.5) * 0.5;
         c.beginPath();
         c.moveTo(endX, endY);
         c.lineTo(endX + Math.cos(a) * 8, endY + Math.sin(a) * 8);
@@ -450,13 +481,13 @@ export class PlayerRenderer {
         c.stroke();
       }
     } else if (form === WeaponForm.STAFF) {
-      const boltX: number = sx + Math.cos(p.facing) * range;
-      const boltY: number = sy + bobY + Math.sin(p.facing) * range;
+      const boltX: number = sx + Math.cos(pc.movement.facing) * range;
+      const boltY: number = sy + bobY + Math.sin(pc.movement.facing) * range;
       c.globalAlpha = 0.3;
       c.strokeStyle = '#38bdf8';
       c.lineWidth = 4;
       c.beginPath();
-      c.moveTo(sx + Math.cos(p.facing) * 10, sy + bobY + Math.sin(p.facing) * 10);
+      c.moveTo(sx + Math.cos(pc.movement.facing) * 10, sy + bobY + Math.sin(pc.movement.facing) * 10);
       c.lineTo(boltX, boltY);
       c.stroke();
       c.globalAlpha = 0.35;
@@ -482,19 +513,19 @@ export class PlayerRenderer {
         c.strokeStyle = '#fb923c';
         c.lineWidth = 6;
         c.beginPath();
-        c.arc(arcCx, arcCy, range * 0.7, p.facing - 0.8, p.facing + 0.8);
+        c.arc(arcCx, arcCy, range * 0.7, pc.movement.facing - 0.8, pc.movement.facing + 0.8);
         c.stroke();
         c.globalAlpha = 0.75;
         c.strokeStyle = '#fdba74';
         c.lineWidth = 3;
         c.beginPath();
-        c.arc(arcCx, arcCy, range * 0.7, p.facing - 0.8, p.facing + 0.8);
+        c.arc(arcCx, arcCy, range * 0.7, pc.movement.facing - 0.8, pc.movement.facing + 0.8);
         c.stroke();
         c.globalAlpha = 0.9;
         c.strokeStyle = '#fff7ed';
         c.lineWidth = 1;
         c.beginPath();
-        c.arc(arcCx, arcCy, range * 0.55, p.facing - 0.6, p.facing + 0.6);
+        c.arc(arcCx, arcCy, range * 0.55, pc.movement.facing - 0.6, pc.movement.facing + 0.6);
         c.stroke();
       }
     } else if (form === WeaponForm.GREAT_AXE) {
@@ -530,17 +561,17 @@ export class PlayerRenderer {
     c.globalAlpha = 1.0;
   }
 
-  private renderWeaponOnPlayer(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
-    const form: WeaponForm = p.currentWeaponForm;
+  private renderWeaponOnPlayer(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number): void {
+    const form: WeaponForm = (pc.transform.currentWeaponForm as WeaponForm);
     const handX: number = sx + 5;
     const handY: number = sy + 2 + bobY;
-    const fAng: number = p.facing;
+    const fAng: number = pc.movement.facing;
     const cosF: number = Math.cos(fAng);
     const sinF: number = Math.sin(fAng);
     const perpX: number = -sinF;
     const perpY: number = cosF;
 
-    if (!p.isAttacking) {
+    if (!pc.combat.isAttacking) {
       const formColors: string[][] = [
         ['#60a5fa', '#2563eb'],
         ['#a78bfa', '#7c3aed'],
@@ -550,7 +581,7 @@ export class PlayerRenderer {
         ['#ef4444', '#991b1b'],
       ];
       const colors: string[] = formColors[form];
-      const t: number = this.g.frameCount * 0.06;
+      const t: number = pc.frameCount * 0.06;
       // Orbit: ball gently orbits around hand position
       const orbitR: number = 2.5;
       const orbitAng: number = t * 0.5;
@@ -684,7 +715,7 @@ export class PlayerRenderer {
     }
 
     // === Morphing transition: ball → weapon ===
-    const atkProgress: number = 1.0 - (p.attackTimer / ATTACK_DURATION);
+    const atkProgress: number = 1.0 - (pc.combat.attackTimer / ATTACK_DURATION);
     if (atkProgress < 0.35) {
       const morphAlpha: number = (1.0 - atkProgress / 0.35) * 0.6;
       const formColors2: string[][] = [
@@ -841,7 +872,7 @@ export class PlayerRenderer {
       let prevY: number = handY;
       for (let i: number = 1; i <= segs; i++) {
         const t: number = i / segs;
-        const wave: number = Math.sin(t * Math.PI * 2 + this.g.frameCount * 0.15) * 3 * t;
+        const wave: number = Math.sin(t * Math.PI * 2 + pc.frameCount * 0.15) * 3 * t;
         const segX: number = handX + cosF * len * t + perpX * wave;
         const segY: number = handY + sinF * len * t + perpY * wave;
         c.lineTo(segX, segY);
@@ -855,7 +886,7 @@ export class PlayerRenderer {
       c.moveTo(handX, handY);
       for (let i: number = 1; i <= segs; i++) {
         const t: number = i / segs;
-        const wave: number = Math.sin(t * Math.PI * 2 + this.g.frameCount * 0.15) * 3 * t;
+        const wave: number = Math.sin(t * Math.PI * 2 + pc.frameCount * 0.15) * 3 * t;
         const segX: number = handX + cosF * len * t + perpX * wave;
         const segY: number = handY + sinF * len * t + perpY * wave;
         c.lineTo(segX, segY);
@@ -864,7 +895,7 @@ export class PlayerRenderer {
       c.fillStyle = '#c4b5fd';
       for (let i: number = 1; i < segs; i++) {
         const t: number = i / segs;
-        const wave: number = Math.sin(t * Math.PI * 2 + this.g.frameCount * 0.15) * 3 * t;
+        const wave: number = Math.sin(t * Math.PI * 2 + pc.frameCount * 0.15) * 3 * t;
         const jx: number = handX + cosF * len * t + perpX * wave;
         const jy: number = handY + sinF * len * t + perpY * wave;
         c.beginPath();
@@ -1045,7 +1076,7 @@ export class PlayerRenderer {
         c.lineTo(orbX + Math.cos(ang) * 3, orbY + Math.sin(ang) * 3);
         c.stroke();
       }
-      const pulse: number = Math.sin(this.g.frameCount * 0.1) * 1.5;
+      const pulse: number = Math.sin(pc.frameCount * 0.1) * 1.5;
       c.globalAlpha = 0.3;
       c.fillStyle = '#38bdf8';
       c.beginPath();
@@ -1064,7 +1095,7 @@ export class PlayerRenderer {
       c.strokeStyle = '#bae6fd';
       c.lineWidth = 0.6;
       c.globalAlpha = 0.5;
-      const swirlAng: number = this.g.frameCount * 0.08;
+      const swirlAng: number = pc.frameCount * 0.08;
       c.beginPath();
       c.arc(orbX + Math.cos(swirlAng) * 1, orbY + Math.sin(swirlAng) * 1, 1.5, 0, Math.PI * 1.2);
       c.stroke();
@@ -1317,12 +1348,12 @@ export class PlayerRenderer {
     }
   }
 
-  private renderEvolutionEffects(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
-    const level: number = p.evolutionLevel;
+  private renderEvolutionEffects(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number): void {
+    const level: number = pc.evolution.evolutionLevel;
     if (level === EvolutionLevel.BASE) return;
 
-    const branchColor: string = this.getBranchColor(p.evolutionBranch);
-    const t: number = this.g.frameCount * 0.05;
+    const branchColor: string = this.getBranchColor(pc.evolution.evolutionBranch);
+    const t: number = pc.frameCount * 0.05;
 
     if (level >= EvolutionLevel.LEVEL_1) {
       c.globalAlpha = 0.15 + Math.sin(t) * 0.05;
@@ -1334,7 +1365,7 @@ export class PlayerRenderer {
     }
 
     if (level >= EvolutionLevel.LEVEL_2) {
-      const isMoving: boolean = Math.abs(p.vx) > 0.1 || Math.abs(p.vy) > 0.1;
+      const isMoving: boolean = Math.abs(pc.vel.vx) > 0.1 || Math.abs(pc.vel.vy) > 0.1;
       if (isMoving) {
         c.globalAlpha = 0.4;
         c.fillStyle = branchColor;
@@ -1373,10 +1404,10 @@ export class PlayerRenderer {
     }
   }
 
-  private renderSlimeForm(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
+  private renderSlimeForm(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number): void {
     const size: number = 18;
-    const squash: number = p.isJumping ? 0.8 : 1.0 + Math.sin(this.g.frameCount * 0.1) * 0.05;
-    const stretch: number = p.isJumping ? 1.3 : 1.0 - Math.sin(this.g.frameCount * 0.1) * 0.05;
+    const squash: number = pc.movement.isJumping ? 0.8 : 1.0 + Math.sin(pc.frameCount * 0.1) * 0.05;
+    const stretch: number = pc.movement.isJumping ? 1.3 : 1.0 - Math.sin(pc.frameCount * 0.1) * 0.05;
 
     c.save();
     c.translate(sx + PLAYER_SIZE / 2, sy + PLAYER_SIZE / 2 + bobY);
@@ -1400,8 +1431,8 @@ export class PlayerRenderer {
     c.ellipse(4, -2, 3, 4, 0, 0, Math.PI * 2);
     c.fill();
 
-    const pupilOffX: number = Math.cos(p.facing) * 1.5;
-    const pupilOffY: number = Math.sin(p.facing) * 1.5;
+    const pupilOffX: number = Math.cos(pc.movement.facing) * 1.5;
+    const pupilOffY: number = Math.sin(pc.movement.facing) * 1.5;
     c.fillStyle = '#1a1a2e';
     c.beginPath();
     c.arc(-4 + pupilOffX, -2 + pupilOffY, 1.5, 0, Math.PI * 2);
@@ -1413,9 +1444,9 @@ export class PlayerRenderer {
     c.restore();
   }
 
-  private renderGhostForm(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
+  private renderGhostForm(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number): void {
     c.save();
-    c.globalAlpha = 0.5 + Math.sin(this.g.frameCount * 0.06) * 0.15;
+    c.globalAlpha = 0.5 + Math.sin(pc.frameCount * 0.06) * 0.15;
     c.translate(sx + PLAYER_SIZE / 2, sy + PLAYER_SIZE / 2 + bobY - 3);
 
     c.fillStyle = COLOR_TRANSFORM_GHOST;
@@ -1446,7 +1477,7 @@ export class PlayerRenderer {
     c.restore();
   }
 
-  private renderArmorForm(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
+  private renderArmorForm(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number): void {
     const scale: number = 1.3;
     c.save();
     c.translate(sx + PLAYER_SIZE / 2, sy + PLAYER_SIZE / 2 + bobY);
@@ -1462,7 +1493,7 @@ export class PlayerRenderer {
     c.fillRect(-5, -9, 10, 6);
 
     c.fillStyle = COLOR_TRANSFORM_ARMOR_ACCENT;
-    const visorGlow: number = 0.6 + Math.sin(this.g.frameCount * 0.08) * 0.3;
+    const visorGlow: number = 0.6 + Math.sin(pc.frameCount * 0.08) * 0.3;
     c.globalAlpha = visorGlow;
     c.fillRect(-4, -7, 8, 2);
     c.globalAlpha = 1.0;
@@ -1478,7 +1509,7 @@ export class PlayerRenderer {
     c.restore();
   }
 
-  private renderIronManForm(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
+  private renderIronManForm(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number): void {
     c.save();
     c.translate(sx + PLAYER_SIZE / 2, sy + PLAYER_SIZE / 2 + bobY - 2);
 
@@ -1497,7 +1528,7 @@ export class PlayerRenderer {
     c.fillRect(-3, -7, 2, 1);
     c.fillRect(1, -7, 2, 1);
 
-    const reactorGlow: number = 0.7 + Math.sin(this.g.frameCount * 0.1) * 0.3;
+    const reactorGlow: number = 0.7 + Math.sin(pc.frameCount * 0.1) * 0.3;
     c.fillStyle = '#67e8f9';
     c.globalAlpha = reactorGlow;
     c.beginPath();
@@ -1505,7 +1536,7 @@ export class PlayerRenderer {
     c.fill();
     c.globalAlpha = 1.0;
 
-    if (p.isAttacking) {
+    if (pc.combat.isAttacking) {
       c.fillStyle = COLOR_TRANSFORM_IRON_GOLD;
       c.globalAlpha = 0.9;
       c.beginPath();
@@ -1524,9 +1555,9 @@ export class PlayerRenderer {
     c.restore();
   }
 
-  private renderTransformAnim(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState): void {
-    const maxDuration: number = this.g.transformAnimIsRevert ? TRANSFORM_REVERT_ANIM : TRANSFORM_ACTIVATE_ANIM;
-    const progress: number = 1 - (p.transformAnimTimer / maxDuration);
+  private renderTransformAnim(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp): void {
+    const maxDuration: number = pc.transformAnimIsRevert ? TRANSFORM_REVERT_ANIM : TRANSFORM_ACTIVATE_ANIM;
+    const progress: number = 1 - (pc.transform.transformAnimTimer / maxDuration);
     const cx: number = sx + PLAYER_SIZE / 2;
     const cy: number = sy + PLAYER_SIZE / 2;
 
@@ -1540,7 +1571,7 @@ export class PlayerRenderer {
 
     const scale: number = 0.5 + progress * 0.7;
     c.globalAlpha = Math.min(1, progress * 2);
-    c.fillStyle = this.getTransformColor(p.transformForm);
+    c.fillStyle = this.getTransformColor((pc.transform.transformForm as TransformForm));
     c.beginPath();
     c.arc(cx, cy, 8 * scale, 0, Math.PI * 2);
     c.fill();
