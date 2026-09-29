@@ -1,122 +1,157 @@
+import { System, SystemContext, Entity, PositionComponent, VelocityComponent, HealthComponent } from '@qiuyu/engine';
+import { MovementComponent } from '../components/MovementComponent';
+import { CombatComponent } from '../components/CombatComponent';
+import { TransformComponent } from '../components/TransformComponent';
+import { EnemyAIComponent } from '../components/EnemyAIComponent';
+import { CameraComponent } from '../components/CameraComponent';
+import { DropFactory } from '../factories/DropFactory';
 import {
-  TILE_SIZE, PLAYER_SIZE,
   SLIME_KNOCKBACK,
-  PlayerState, SlimeState, BossState,
-  EnemyType, TransformForm,
   WEAPON_FORM_STATS,
   TRANSFORM_ENERGY_KILL_SLIME,
-  COLOR_DAMAGE_PARTICLE, COLOR_ATTACK_FLASH,
-  COLOR_SLIME_GRAY_LIGHT, COLOR_SLIME_PURPLE_LIGHT, COLOR_SLIME_RED_LIGHT,
-  COLOR_SLIME_BLUE_LIGHT, COLOR_SLIME_YELLOW_LIGHT, COLOR_SLIME_GHOST_LIGHT,
 } from '../GameConstants';
-import { GameContext } from '../GameContext';
 
-export class PlayerCombatSystem {
-  private g: GameContext;
+interface AudioManager {
+  playEnemyHit(): void;
+  playEnemyDeath(): void;
+}
 
-  constructor(g: GameContext) {
-    this.g = g;
-  }
+export class PlayerCombatSystem extends System {
 
-  performAttack(p: PlayerState): void {
-    if (p.isEngulfed) {
-      p.engulfEscapeCount++;
-      this.g.audio.playEnemyHit();
-      this.g.shakeTimer = 80;
-      return;
+  update(entities: Entity[], context: SystemContext): void {
+    const player: Entity | null = context.world.findEntityByTag("player");
+    if (player === null) return;
+
+    const pos: PositionComponent | null = player.getComponent<PositionComponent>("Position");
+    const movement: MovementComponent | null = player.getComponent<MovementComponent>("movement");
+    const combat: CombatComponent | null = player.getComponent<CombatComponent>("combat");
+    const health: HealthComponent | null = player.getComponent<HealthComponent>("Health");
+    const transform: TransformComponent | null = player.getComponent<TransformComponent>("transform");
+    if (pos === null || movement === null || combat === null || health === null || transform === null) return;
+
+    if (health.isDead()) return;
+
+    const audio: AudioManager = context.audio as AudioManager;
+
+    // Handle attack trigger (engulf escape or normal attack initiation)
+    if (context.input.attackPressed) {
+      context.input.attackPressed = false;
+      if (movement.isEngulfed) {
+        movement.engulfEscapeCount++;
+        audio.playEnemyHit();
+        this.shakeCamera(context, 80);
+        return;
+      }
     }
 
-    const formStats: number[] = WEAPON_FORM_STATS[p.currentWeaponForm];
+    // Process active attack
+    if (combat.isAttacking) {
+      this.performAttack(entities, pos, movement, combat, transform, audio, context);
+    }
+  }
+
+  private performAttack(
+    entities: Entity[],
+    pos: PositionComponent,
+    movement: MovementComponent,
+    combat: CombatComponent,
+    transform: TransformComponent,
+    audio: AudioManager,
+    context: SystemContext
+  ): void {
+    const formStats: number[] = WEAPON_FORM_STATS[transform.currentWeaponForm];
     const formRange: number = formStats[0];
     const formWidth: number = formStats[1];
 
-    const attackX: number = p.x + Math.cos(p.facing) * formRange;
-    const attackY: number = p.y + Math.sin(p.facing) * formRange;
+    const attackX: number = pos.x + Math.cos(movement.facing) * formRange;
+    const attackY: number = pos.y + Math.sin(movement.facing) * formRange;
 
-    for (let i: number = 0; i < this.g.enemies.length; i++) {
-      const s: SlimeState = this.g.enemies[i];
-      if (!s.active) continue;
-      const dx: number = s.x - attackX;
-      const dy: number = s.y - attackY;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
-      if (dist < formWidth + s.size) {
-        s.hp--;
-        s.hitFlash = 150;
-        const knockAngle: number = Math.atan2(dy, dx);
-        s.vx = Math.cos(knockAngle) * SLIME_KNOCKBACK;
-        s.vy = Math.sin(knockAngle) * SLIME_KNOCKBACK;
-        this.g.shakeTimer = 100;
-        this.g.audio.playEnemyHit();
-        if (this.g.settings.effectsEnabled) {
-          this.g.particleMgr.sparks(s.x, s.y, COLOR_DAMAGE_PARTICLE, 6);
-        }
-        if (s.hp <= 0) {
-          this.onEnemyDeath(s);
-        }
-      }
-    }
+    // Query spatial grid for nearby entities
+    const nearby: Entity[] = context.world.getSpatialGrid().queryRadius(attackX, attackY, formWidth + 60);
 
-    for (let i: number = 0; i < this.g.bosses.length; i++) {
-      const boss: BossState = this.g.bosses[i];
-      if (!boss.active || boss.defeated) continue;
-      const dx: number = boss.x - attackX;
-      const dy: number = boss.y - attackY;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
-      if (dist < formWidth + boss.size * 0.6) {
-        boss.hp--;
-        boss.hitFlash = 200;
-        this.g.shakeTimer = 120;
-        this.g.audio.playEnemyHit();
-        if (this.g.settings.effectsEnabled) {
-          this.g.particleMgr.explosion(boss.x, boss.y, this.g.getBossColor(boss.bossType), 8);
-        }
-      }
-    }
+    for (let i: number = 0; i < nearby.length; i++) {
+      const e: Entity = nearby[i];
+      if (!e.active) continue;
 
-    if (this.g.settings.effectsEnabled) {
-      for (let k: number = 0; k < 3; k++) {
-        const spread: number = (Math.random() - 0.5) * 0.8;
-        const angle: number = p.facing + spread;
-        const speed: number = 2 + Math.random() * 2;
-        this.g.spawnParticle(attackX, attackY,
-          Math.cos(angle) * speed, Math.sin(angle) * speed, 200, COLOR_ATTACK_FLASH, 2);
+      if (e.tag === "enemy") {
+        const enemyPos: PositionComponent | null = e.getComponent<PositionComponent>("Position");
+        const enemyVel: VelocityComponent | null = e.getComponent<VelocityComponent>("Velocity");
+        const enemyHealth: HealthComponent | null = e.getComponent<HealthComponent>("Health");
+        const ai: EnemyAIComponent | null = e.getComponent<EnemyAIComponent>("enemyAI");
+        if (enemyPos === null || enemyVel === null || enemyHealth === null || ai === null) continue;
+
+        const dx: number = enemyPos.x - attackX;
+        const dy: number = enemyPos.y - attackY;
+        const dist: number = Math.sqrt(dx * dx + dy * dy);
+        if (dist < formWidth + ai.size) {
+          enemyHealth.damage(1);
+          ai.hitFlash = 150;
+          const knockAngle: number = Math.atan2(dy, dx);
+          enemyVel.vx = Math.cos(knockAngle) * SLIME_KNOCKBACK;
+          enemyVel.vy = Math.sin(knockAngle) * SLIME_KNOCKBACK;
+          this.shakeCamera(context, 100);
+          audio.playEnemyHit();
+
+          if (enemyHealth.isDead()) {
+            this.onEnemyDeath(e, enemyPos, ai, transform, audio, context);
+          }
+        }
+      } else if (e.tag === "boss") {
+        const bossPos: PositionComponent | null = e.getComponent<PositionComponent>("Position");
+        const bossHealth: HealthComponent | null = e.getComponent<HealthComponent>("Health");
+        if (bossPos === null || bossHealth === null) continue;
+
+        const dx: number = bossPos.x - attackX;
+        const dy: number = bossPos.y - attackY;
+        const dist: number = Math.sqrt(dx * dx + dy * dy);
+        if (dist < formWidth + 60) {
+          bossHealth.damage(1);
+          this.shakeCamera(context, 120);
+          audio.playEnemyHit();
+        }
       }
     }
   }
 
-  onEnemyDeath(s: SlimeState): void {
-    s.active = false;
-    if (this.g.player !== null && this.g.player.isTransformed) {
-      this.g.player.transformEnergy += TRANSFORM_ENERGY_KILL_SLIME;
-      if (this.g.player.transformEnergy > this.g.player.transformMaxEnergy) {
-        this.g.player.transformEnergy = this.g.player.transformMaxEnergy;
+  private onEnemyDeath(
+    enemy: Entity,
+    enemyPos: PositionComponent,
+    ai: EnemyAIComponent,
+    transform: TransformComponent,
+    audio: AudioManager,
+    context: SystemContext
+  ): void {
+    enemy.active = false;
+
+    // Transform energy gain
+    if (transform.isTransformed) {
+      transform.transformEnergy += TRANSFORM_ENERGY_KILL_SLIME;
+      if (transform.transformEnergy > transform.transformMaxEnergy) {
+        transform.transformEnergy = transform.transformMaxEnergy;
       }
     }
-    this.g.audio.playEnemyDeath();
-    if (this.g.settings.effectsEnabled) {
-      this.g.particleMgr.explosion(s.x, s.y, this.getEnemyColor(s), 10);
-    }
+
+    audio.playEnemyDeath();
+
+    // Create XP orb drops
     const orbCount: number = 1 + Math.floor(Math.random() * 3);
     for (let k: number = 0; k < orbCount; k++) {
       const angle: number = Math.random() * Math.PI * 2;
       const dist: number = 5 + Math.random() * 15;
-      this.g.xpOrbs.push({
-        x: s.x + Math.cos(angle) * dist,
-        y: s.y + Math.sin(angle) * dist,
-        value: 1, bobPhase: Math.random() * Math.PI * 2, active: true
-      });
+      const orb: Entity = DropFactory.createXpOrb(
+        enemyPos.x + Math.cos(angle) * dist,
+        enemyPos.y + Math.sin(angle) * dist,
+        1
+      );
+      context.world.addEntity(orb);
     }
   }
 
-  private getEnemyColor(s: SlimeState): string {
-    switch (s.enemyType) {
-      case EnemyType.GRAY_SLIME: return COLOR_SLIME_GRAY_LIGHT;
-      case EnemyType.PURPLE_SLIME: return COLOR_SLIME_PURPLE_LIGHT;
-      case EnemyType.RED_SLIME: return COLOR_SLIME_RED_LIGHT;
-      case EnemyType.BLUE_SLIME: return COLOR_SLIME_BLUE_LIGHT;
-      case EnemyType.YELLOW_SLIME: return COLOR_SLIME_YELLOW_LIGHT;
-      case EnemyType.GHOST_SLIME: return COLOR_SLIME_GHOST_LIGHT;
-      default: return COLOR_SLIME_GRAY_LIGHT;
+  private shakeCamera(context: SystemContext, duration: number): void {
+    const cameraEntity: Entity | null = context.world.findEntityByTag("camera");
+    if (cameraEntity !== null) {
+      const cam: CameraComponent = cameraEntity.getComponent<CameraComponent>("camera")!;
+      cam.shakeTimer = duration;
     }
   }
 }

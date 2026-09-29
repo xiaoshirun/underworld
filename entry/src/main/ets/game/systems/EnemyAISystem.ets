@@ -1,64 +1,93 @@
+import { System, SystemContext, Entity, PositionComponent, VelocityComponent, HealthComponent } from '@qiuyu/engine';
+import { MovementComponent } from '../components/MovementComponent';
+import { CombatComponent } from '../components/CombatComponent';
+import { TransformComponent } from '../components/TransformComponent';
+import { EnemyAIComponent } from '../components/EnemyAIComponent';
+import { CameraComponent } from '../components/CameraComponent';
 import {
   PLAYER_SIZE, SLIME_SIZE, SLIME_SPEED, PURPLE_SLIME_SPEED, PURPLE_SLIME_DETECT,
   RED_SLIME_SPEED, RED_SLIME_DETECT, BLUE_SLIME_SPEED,
   SLIME_DAMAGE, INVINCIBLE_DURATION,
-  TransformForm, PlayerState, SlimeState, EnemyType,
+  TransformForm, EnemyType,
   TRANSFORM_DAMAGE_REDUCTION,
+  TILE_SIZE, CHUNK_SIZE,
+  TileType, ChunkData,
 } from '../GameConstants';
-import { GameContext } from '../GameContext';
 
-export class EnemyAISystem {
-  private g: GameContext;
+interface AudioManager {
+  playPlayerDamage(): void;
+  playEngulf(): void;
+}
 
-  constructor(g: GameContext) {
-    this.g = g;
-  }
+export class EnemyAISystem extends System {
 
-  update(dt: number): void {
-    if (this.g.player === null) return;
-    const p: PlayerState = this.g.player;
+  update(entities: Entity[], context: SystemContext): void {
+    const player: Entity | null = context.world.findEntityByTag("player");
+    if (player === null) return;
 
-    for (let i: number = 0; i < this.g.enemies.length; i++) {
-      const s: SlimeState = this.g.enemies[i];
-      if (!s.active) continue;
+    const playerPos: PositionComponent | null = player.getComponent<PositionComponent>("Position");
+    const playerHealth: HealthComponent | null = player.getComponent<HealthComponent>("Health");
+    const playerMovement: MovementComponent | null = player.getComponent<MovementComponent>("movement");
+    const playerCombat: CombatComponent | null = player.getComponent<CombatComponent>("combat");
+    const playerTransform: TransformComponent | null = player.getComponent<TransformComponent>("transform");
+    if (playerPos === null || playerHealth === null || playerMovement === null ||
+        playerCombat === null || playerTransform === null) return;
 
-      s.bouncePhase += 0.05;
-      if (s.hitFlash > 0) s.hitFlash -= dt;
-      s.vx *= 0.9;
-      s.vy *= 0.9;
+    if (playerHealth.isDead()) return;
 
-      if (s.isEngulfing) continue;
+    const audio: AudioManager = context.audio as AudioManager;
+    const chunks: Map<string, Object> = context.world.chunks;
 
-      const dx: number = p.x - s.x;
-      const dy: number = p.y - s.y;
+    for (let idx: number = 0; idx < entities.length; idx++) {
+      const e: Entity = entities[idx];
+      if (!e.active || e.tag !== "enemy") continue;
+
+      const pos: PositionComponent | null = e.getComponent<PositionComponent>("Position");
+      const vel: VelocityComponent | null = e.getComponent<VelocityComponent>("Velocity");
+      const ai: EnemyAIComponent | null = e.getComponent<EnemyAIComponent>("enemyAI");
+      if (pos === null || vel === null || ai === null) continue;
+
+      // Bounce animation and hit flash decay
+      ai.bouncePhase += 0.05;
+      if (ai.hitFlash > 0) ai.hitFlash -= context.dt;
+
+      // Velocity damping
+      vel.vx *= 0.9;
+      vel.vy *= 0.9;
+
+      // Skip AI behavior if engulfing
+      if (ai.isEngulfing) continue;
+
+      const dx: number = playerPos.x - pos.x;
+      const dy: number = playerPos.y - pos.y;
       const dist: number = Math.sqrt(dx * dx + dy * dy);
 
-      switch (s.enemyType) {
+      // AI behavior by type
+      switch (ai.enemyType) {
         case EnemyType.GRAY_SLIME: {
-          s.moveTimer -= dt;
-          if (s.moveTimer <= 0) {
-            s.moveTimer = 2000 + Math.random() * 3000;
+          ai.moveTimer -= context.dt;
+          if (ai.moveTimer <= 0) {
+            ai.moveTimer = 2000 + Math.random() * 3000;
             const angle: number = Math.random() * Math.PI * 2;
-            s.targetX = Math.cos(angle) * SLIME_SPEED;
-            s.targetY = Math.sin(angle) * SLIME_SPEED;
+            ai.targetX = Math.cos(angle) * SLIME_SPEED;
+            ai.targetY = Math.sin(angle) * SLIME_SPEED;
           }
-          s.vx += s.targetX * 0.02;
-          s.vy += s.targetY * 0.02;
+          vel.vx += ai.targetX * 0.02;
+          vel.vy += ai.targetY * 0.02;
           break;
         }
         case EnemyType.PURPLE_SLIME: {
           if (dist < PURPLE_SLIME_DETECT && dist > 1) {
-            s.vx += (dx / dist) * PURPLE_SLIME_SPEED * 0.1;
-            s.vy += (dy / dist) * PURPLE_SLIME_SPEED * 0.1;
-            if (dist < s.size + PLAYER_SIZE && p.invincibleTimer <= 0 && !p.isEngulfed) {
+            vel.vx += (dx / dist) * PURPLE_SLIME_SPEED * 0.1;
+            vel.vy += (dy / dist) * PURPLE_SLIME_SPEED * 0.1;
+            if (dist < ai.size + PLAYER_SIZE && playerCombat.invincibleTimer <= 0 && !playerMovement.isEngulfed) {
               if (Math.random() < 0.01) {
-                s.isEngulfing = true;
-                s.engulfedPlayer = true;
-                p.isEngulfed = true;
-                p.engulfSlimeIndex = i;
-                p.engulfEscapeCount = 0;
-                p.engulfDamageTimer = 1000;
-                this.g.audio.playEngulf();
+                ai.isEngulfing = true;
+                ai.engulfedPlayer = true;
+                playerMovement.isEngulfed = true;
+                playerMovement.engulfEscapeCount = 0;
+                playerMovement.engulfDamageTimer = 1000;
+                audio.playEngulf();
               }
             }
           }
@@ -66,22 +95,22 @@ export class EnemyAISystem {
         }
         case EnemyType.RED_SLIME: {
           if (dist < RED_SLIME_DETECT && dist > 1) {
-            if (!s.isCharging) {
-              s.chargeTimer -= dt;
-              if (s.chargeTimer <= 0) {
-                s.isCharging = true;
-                s.chargeTimer = 500;
-                s.vx = (dx / dist) * RED_SLIME_SPEED * 2;
-                s.vy = (dy / dist) * RED_SLIME_SPEED * 2;
+            if (!ai.isCharging) {
+              ai.chargeTimer -= context.dt;
+              if (ai.chargeTimer <= 0) {
+                ai.isCharging = true;
+                ai.chargeTimer = 500;
+                vel.vx = (dx / dist) * RED_SLIME_SPEED * 2;
+                vel.vy = (dy / dist) * RED_SLIME_SPEED * 2;
               } else {
-                s.vx += (dx / dist) * RED_SLIME_SPEED * 0.03;
-                s.vy += (dy / dist) * RED_SLIME_SPEED * 0.03;
+                vel.vx += (dx / dist) * RED_SLIME_SPEED * 0.03;
+                vel.vy += (dy / dist) * RED_SLIME_SPEED * 0.03;
               }
             } else {
-              s.chargeTimer -= dt;
-              if (s.chargeTimer <= 0) {
-                s.isCharging = false;
-                s.chargeTimer = 1500;
+              ai.chargeTimer -= context.dt;
+              if (ai.chargeTimer <= 0) {
+                ai.isCharging = false;
+                ai.chargeTimer = 1500;
               }
             }
           }
@@ -89,104 +118,131 @@ export class EnemyAISystem {
         }
         case EnemyType.BLUE_SLIME: {
           if (dist < PURPLE_SLIME_DETECT && dist > 1) {
-            s.vx += (dx / dist) * BLUE_SLIME_SPEED * 0.05;
-            s.vy += (dy / dist) * BLUE_SLIME_SPEED * 0.05;
+            vel.vx += (dx / dist) * BLUE_SLIME_SPEED * 0.05;
+            vel.vy += (dy / dist) * BLUE_SLIME_SPEED * 0.05;
           }
-          s.moveTimer -= dt;
-          if (s.moveTimer <= 0) {
-            s.moveTimer = 1500 + Math.random() * 2000;
+          ai.moveTimer -= context.dt;
+          if (ai.moveTimer <= 0) {
+            ai.moveTimer = 1500 + Math.random() * 2000;
             const angle: number = Math.random() * Math.PI * 2;
-            s.targetX = Math.cos(angle) * BLUE_SLIME_SPEED * 0.5;
-            s.targetY = Math.sin(angle) * BLUE_SLIME_SPEED * 0.5;
+            ai.targetX = Math.cos(angle) * BLUE_SLIME_SPEED * 0.5;
+            ai.targetY = Math.sin(angle) * BLUE_SLIME_SPEED * 0.5;
           }
-          s.vx += s.targetX * 0.01;
-          s.vy += s.targetY * 0.01;
+          vel.vx += ai.targetX * 0.01;
+          vel.vy += ai.targetY * 0.01;
           break;
         }
         case EnemyType.YELLOW_SLIME: {
-          s.moveTimer -= dt;
-          if (s.moveTimer <= 0) {
-            s.moveTimer = 3000 + Math.random() * 2000;
+          ai.moveTimer -= context.dt;
+          if (ai.moveTimer <= 0) {
+            ai.moveTimer = 3000 + Math.random() * 2000;
             const angle: number = Math.random() * Math.PI * 2;
-            s.targetX = Math.cos(angle) * SLIME_SPEED * 0.5;
-            s.targetY = Math.sin(angle) * SLIME_SPEED * 0.5;
+            ai.targetX = Math.cos(angle) * SLIME_SPEED * 0.5;
+            ai.targetY = Math.sin(angle) * SLIME_SPEED * 0.5;
           }
-          s.vx += s.targetX * 0.01;
-          s.vy += s.targetY * 0.01;
+          vel.vx += ai.targetX * 0.01;
+          vel.vy += ai.targetY * 0.01;
           break;
         }
         case EnemyType.GHOST_SLIME: {
           if (dist < PURPLE_SLIME_DETECT * 1.5 && dist > 1) {
             const speed: number = PURPLE_SLIME_SPEED * 0.8;
-            s.vx += (dx / dist) * speed * 0.08;
-            s.vy += (dy / dist) * speed * 0.08;
+            vel.vx += (dx / dist) * speed * 0.08;
+            vel.vy += (dy / dist) * speed * 0.08;
           }
           break;
         }
       }
 
+      // Speed clamping
       let maxSpeed: number = SLIME_SPEED;
-      switch (s.enemyType) {
+      switch (ai.enemyType) {
         case EnemyType.PURPLE_SLIME: maxSpeed = PURPLE_SLIME_SPEED; break;
-        case EnemyType.RED_SLIME: maxSpeed = s.isCharging ? RED_SLIME_SPEED * 2 : RED_SLIME_SPEED; break;
+        case EnemyType.RED_SLIME: maxSpeed = ai.isCharging ? RED_SLIME_SPEED * 2 : RED_SLIME_SPEED; break;
         case EnemyType.BLUE_SLIME: maxSpeed = BLUE_SLIME_SPEED; break;
         case EnemyType.GHOST_SLIME: maxSpeed = PURPLE_SLIME_SPEED * 0.8; break;
         default: maxSpeed = SLIME_SPEED; break;
       }
-      const speed: number = Math.sqrt(s.vx * s.vx + s.vy * s.vy);
+      const speed: number = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
       if (speed > maxSpeed) {
-        s.vx = (s.vx / speed) * maxSpeed;
-        s.vy = (s.vy / speed) * maxSpeed;
+        vel.vx = (vel.vx / speed) * maxSpeed;
+        vel.vy = (vel.vy / speed) * maxSpeed;
       }
 
-      const newX: number = s.x + s.vx;
-      const newY: number = s.y + s.vy;
-      if (s.enemyType === EnemyType.GHOST_SLIME) {
-        s.x = newX;
-        s.y = newY;
+      // Movement with collision
+      const newX: number = pos.x + vel.vx;
+      const newY: number = pos.y + vel.vy;
+      if (ai.enemyType === EnemyType.GHOST_SLIME) {
+        pos.x = newX;
+        pos.y = newY;
       } else {
-        if (!this.checkCollision(newX, s.y)) { s.x = newX; } else { s.vx = -s.vx; }
-        if (!this.checkCollision(s.x, newY)) { s.y = newY; } else { s.vy = -s.vy; }
+        if (!this.checkCollision(newX, pos.y, chunks)) { pos.x = newX; } else { vel.vx = -vel.vx; }
+        if (!this.checkCollision(pos.x, newY, chunks)) { pos.y = newY; } else { vel.vy = -vel.vy; }
       }
 
-      if (p.invincibleTimer <= 0 && !p.isEngulfed && !s.isEngulfing) {
-        const cdx: number = p.x - s.x;
-        const cdy: number = p.y - s.y;
+      // Contact damage to player
+      if (playerCombat.invincibleTimer <= 0 && !playerMovement.isEngulfed && !ai.isEngulfing) {
+        const cdx: number = playerPos.x - pos.x;
+        const cdy: number = playerPos.y - pos.y;
         const cdist: number = Math.sqrt(cdx * cdx + cdy * cdy);
-        if (cdist < PLAYER_SIZE / 2 + s.size / 2) {
+        if (cdist < PLAYER_SIZE / 2 + ai.size / 2) {
           let incomingDamage: number = SLIME_DAMAGE;
-          if (p.isTransformed) {
-            const reduction: number = TRANSFORM_DAMAGE_REDUCTION[p.transformForm as number];
+          if (playerTransform.isTransformed) {
+            const reduction: number = TRANSFORM_DAMAGE_REDUCTION[playerTransform.transformForm as number];
             incomingDamage = Math.max(1, Math.floor(incomingDamage * (1 - reduction)));
           }
-          p.hp -= incomingDamage;
-          if (p.hp < 0) p.hp = 0;
-          this.g.damageFlashTimer = 200;
-          p.invincibleTimer = (p.isTransformed && p.transformForm === TransformForm.GHOST) ? 1500 : INVINCIBLE_DURATION;
+          playerHealth.damage(incomingDamage);
+          const isGhost: boolean = playerTransform.isTransformed &&
+            (playerTransform.transformForm as number) === (TransformForm.GHOST as number);
+          const isArmor: boolean = playerTransform.isTransformed &&
+            (playerTransform.transformForm as number) === (TransformForm.ARMOR as number);
+          playerCombat.invincibleTimer = isGhost ? 1500 : INVINCIBLE_DURATION;
           const knockAngle: number = Math.atan2(cdy, cdx);
-          const knockBack: number = (p.isTransformed && p.transformForm === TransformForm.ARMOR) ? 2.5 : 5;
-          p.x -= Math.cos(knockAngle) * knockBack;
-          p.y -= Math.sin(knockAngle) * knockBack;
-          this.g.shakeTimer = 150;
-          this.g.audio.playPlayerDamage();
-          if (this.g.settings.effectsEnabled) {
-            this.g.particleMgr.blood(p.x, p.y, -Math.cos(knockAngle), -Math.sin(knockAngle));
-          }
+          const knockBack: number = isArmor ? 2.5 : 5;
+          playerPos.x -= Math.cos(knockAngle) * knockBack;
+          playerPos.y -= Math.sin(knockAngle) * knockBack;
+          this.shakeCamera(context, 150);
+          audio.playPlayerDamage();
         }
       }
     }
   }
 
-  private checkCollision(x: number, y: number): boolean {
+  private checkCollision(x: number, y: number, chunks: Map<string, Object>): boolean {
     const halfSize: number = SLIME_SIZE / 2;
     const cornersX: number[] = [x - halfSize, x + halfSize];
     const cornersY: number[] = [y - halfSize, y + halfSize];
     for (let i: number = 0; i < 2; i++) {
       for (let j: number = 0; j < 2; j++) {
-        const tile: number = this.g.getTile(cornersX[i], cornersY[j]);
-        if (!this.g.isWalkable(tile)) return true;
+        const tile: number = this.getTile(chunks, cornersX[i], cornersY[j]);
+        if (!this.isWalkable(tile)) return true;
       }
     }
     return false;
+  }
+
+  private getTile(chunks: Map<string, Object>, worldX: number, worldY: number): number {
+    const tx: number = Math.floor(worldX / TILE_SIZE);
+    const ty: number = Math.floor(worldY / TILE_SIZE);
+    const cx: number = Math.floor(tx / CHUNK_SIZE);
+    const cy: number = Math.floor(ty / CHUNK_SIZE);
+    const key: string = cx + ',' + cy;
+    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
+    if (chunk === undefined) return TileType.WALL;
+    const lx: number = tx - cx * CHUNK_SIZE;
+    const ly: number = ty - cy * CHUNK_SIZE;
+    return chunk.tiles[ly][lx];
+  }
+
+  private isWalkable(tile: number): boolean {
+    return tile !== TileType.WALL && tile !== TileType.VOID;
+  }
+
+  private shakeCamera(context: SystemContext, duration: number): void {
+    const cameraEntity: Entity | null = context.world.findEntityByTag("camera");
+    if (cameraEntity !== null) {
+      const cam: CameraComponent = cameraEntity.getComponent<CameraComponent>("camera")!;
+      cam.shakeTimer = duration;
+    }
   }
 }

@@ -1,167 +1,167 @@
+import { System, SystemContext, Entity, PositionComponent, VelocityComponent, HealthComponent } from '@qiuyu/engine';
+import { MovementComponent } from '../components/MovementComponent';
+import { CombatComponent } from '../components/CombatComponent';
+import { TransformComponent } from '../components/TransformComponent';
+import { CameraComponent } from '../components/CameraComponent';
+import { EnemyAIComponent } from '../components/EnemyAIComponent';
 import {
   TILE_SIZE, CHUNK_SIZE, PLAYER_SIZE, PLAYER_SPEED,
   DASH_SPEED, DASH_DURATION, DASH_COOLDOWN,
-  ATTACK_DURATION,
   DRILL_BREAK_HITS,
   SLIME_DAMAGE, ENGULF_DAMAGE_INTERVAL, ENGULF_ESCAPE_ATTACKS,
   INVINCIBLE_DURATION,
-  TileType, PlayerState, SlimeState, TransformForm,
+  TileType, TransformForm,
   WEAPON_FORM_STATS,
-  COLOR_PLAYER_BODY, COLOR_DRILL_PARTICLE, COLOR_WALL, COLOR_BREAKABLE_WALL,
+  ChunkData,
 } from '../GameConstants';
-import { GameContext } from '../GameContext';
 
-export interface MovementBridge {
-  performAttack(p: PlayerState): void;
-  updateTransformMovement(p: PlayerState, dt: number, moveX: number, moveY: number): void;
-  handleTransformAttack(p: PlayerState): void;
-  applyTransformCollision(p: PlayerState): void;
+interface AudioManager {
+  playJump(): void;
+  playDash(): void;
+  playDrillHit(): void;
+  playWallBreak(): void;
+  playEngulf(): void;
+  playPlayerDamage(): void;
 }
 
-export class PlayerMovementSystem {
-  private g: GameContext;
-  private bridge: MovementBridge;
+export class PlayerMovementSystem extends System {
 
-  constructor(g: GameContext, bridge: MovementBridge) {
-    this.g = g;
-    this.bridge = bridge;
-  }
+  update(entities: Entity[], context: SystemContext): void {
+    const player: Entity | null = context.world.findEntityByTag("player");
+    if (player === null) return;
 
-  update(dt: number): void {
-    const p: PlayerState | null = this.g.player;
-    if (p === null) return;
+    const pos: PositionComponent | null = player.getComponent<PositionComponent>("Position");
+    const vel: VelocityComponent | null = player.getComponent<VelocityComponent>("Velocity");
+    const health: HealthComponent | null = player.getComponent<HealthComponent>("Health");
+    const movement: MovementComponent | null = player.getComponent<MovementComponent>("movement");
+    const combat: CombatComponent | null = player.getComponent<CombatComponent>("combat");
+    const transform: TransformComponent | null = player.getComponent<TransformComponent>("transform");
+    if (pos === null || vel === null || health === null || movement === null || combat === null || transform === null) return;
 
-    if (p.isEngulfed) {
-      this.updateEngulfedPlayer(p, dt);
+    if (health.isDead()) return;
+
+    // Transform movement is handled by TransformSystem
+    if (transform.isTransformed) return;
+
+    const audio: AudioManager = context.audio as AudioManager;
+    const chunks: Map<string, Object> = context.world.chunks;
+
+    // Engulfed player logic
+    if (movement.isEngulfed) {
+      this.updateEngulfedPlayer(entities, player, pos, health, movement, combat, audio, context);
       return;
     }
 
+    // Joystick input
     let moveX: number = 0;
     let moveY: number = 0;
 
-    if (this.g.input.joyActive) {
-      const len: number = Math.sqrt(this.g.input.joyDx * this.g.input.joyDx + this.g.input.joyDy * this.g.input.joyDy);
+    if (context.input.joyActive) {
+      const len: number = Math.sqrt(context.input.joyDx * context.input.joyDx + context.input.joyDy * context.input.joyDy);
       if (len > 0.1) {
-        moveX = this.g.input.joyDx / len;
-        moveY = this.g.input.joyDy / len;
-        p.facing = Math.atan2(this.g.input.joyDy, this.g.input.joyDx);
+        moveX = context.input.joyDx / len;
+        moveY = context.input.joyDy / len;
+        movement.facing = Math.atan2(context.input.joyDy, context.input.joyDx);
       }
     }
 
-    if (p.isTransformed) {
-      this.bridge.updateTransformMovement(p, dt, moveX, moveY);
-      if (this.g.input.attackPressed) {
-        this.g.input.attackPressed = false;
-        this.bridge.handleTransformAttack(p);
-      }
-      if (this.g.input.jumpPressed && p.transformForm !== TransformForm.IRON_MAN) {
-        this.g.input.jumpPressed = false;
-        if (p.transformForm === TransformForm.SLIME) {
-          p.isJumping = true;
-          p.jumpTimer = 400;
-        } else {
-          p.isJumping = true;
-          p.jumpTimer = 300;
-        }
-      }
-      this.bridge.applyTransformCollision(p);
-      return;
-    }
-
-    if (p.isDrilling) {
-      if (this.g.input.joyActive) {
-        const dLen: number = Math.sqrt(this.g.input.joyDx * this.g.input.joyDx + this.g.input.joyDy * this.g.input.joyDy);
+    // Drilling: cancel if joystick moved significantly
+    if (movement.isDrilling) {
+      if (context.input.joyActive) {
+        const dLen: number = Math.sqrt(context.input.joyDx * context.input.joyDx + context.input.joyDy * context.input.joyDy);
         if (dLen > 0.3) {
-          p.isDrilling = false;
-          p.isUsingTool = false;
-          p.drillHitCount = 0;
+          movement.isDrilling = false;
+          movement.isUsingTool = false;
+          movement.drillHitCount = 0;
         }
       }
-      if (p.isDrilling) {
-        this.updateDrilling(p, dt);
+      if (movement.isDrilling) {
+        this.updateDrilling(pos, movement, chunks, audio, context);
         return;
       }
     }
 
-    if (p.isDashing) {
-      p.dashTimer -= dt;
-      if (p.dashTimer <= 0) {
-        p.isDashing = false;
+    // Dash movement
+    if (movement.isDashing) {
+      movement.dashTimer -= context.dt;
+      if (movement.dashTimer <= 0) {
+        movement.isDashing = false;
       } else {
-        p.vx = p.dashDirX * DASH_SPEED;
-        p.vy = p.dashDirY * DASH_SPEED;
-        if (this.g.settings.effectsEnabled && this.g.frameCount % 3 === 0) {
-          this.g.spawnParticle(p.x, p.y + PLAYER_SIZE / 2, 0, 0, 200, COLOR_PLAYER_BODY, 4);
-        }
+        vel.vx = movement.dashDirX * DASH_SPEED;
+        vel.vy = movement.dashDirY * DASH_SPEED;
       }
     } else {
-      p.vx = moveX * PLAYER_SPEED;
-      p.vy = moveY * PLAYER_SPEED;
+      vel.vx = moveX * PLAYER_SPEED;
+      vel.vy = moveY * PLAYER_SPEED;
     }
 
-    const newX: number = p.x + p.vx;
-    const newY: number = p.y + p.vy;
-    if (!this.checkPlayerCollision(newX, p.y)) {
-      p.x = newX;
+    // Collision resolution
+    const newX: number = pos.x + vel.vx;
+    const newY: number = pos.y + vel.vy;
+    if (!this.checkPlayerCollision(newX, pos.y, transform, chunks)) {
+      pos.x = newX;
     }
-    if (!this.checkPlayerCollision(p.x, newY)) {
-      p.y = newY;
+    if (!this.checkPlayerCollision(pos.x, newY, transform, chunks)) {
+      pos.y = newY;
     }
 
-    if (this.g.input.jumpPressed && !p.isJumping) {
-      p.isJumping = true;
-      p.jumpTimer = 300;
-      this.g.input.jumpPressed = false;
-      this.g.audio.playJump();
+    // Jump
+    if (context.input.jumpPressed && !movement.isJumping) {
+      movement.isJumping = true;
+      movement.jumpTimer = 300;
+      context.input.jumpPressed = false;
+      audio.playJump();
     }
-    if (p.isJumping) {
-      p.jumpTimer -= dt;
-      const progress: number = 1.0 - (p.jumpTimer / 300);
-      p.jumpHeight = Math.sin(progress * Math.PI) * 12;
-      if (p.jumpTimer <= 0) {
-        p.isJumping = false;
-        p.jumpHeight = 0;
+    if (movement.isJumping) {
+      movement.jumpTimer -= context.dt;
+      const progress: number = 1.0 - (movement.jumpTimer / 300);
+      movement.jumpHeight = Math.sin(progress * Math.PI) * 12;
+      if (movement.jumpTimer <= 0) {
+        movement.isJumping = false;
+        movement.jumpHeight = 0;
       }
     }
 
-    if (this.g.input.attackPressed && !p.isAttacking && p.attackTimer <= 0) {
-      const formStats: number[] = WEAPON_FORM_STATS[p.currentWeaponForm];
+    // Attack trigger
+    if (context.input.attackPressed && !combat.isAttacking && combat.attackTimer <= 0) {
+      const formStats: number[] = WEAPON_FORM_STATS[transform.currentWeaponForm];
       const formDuration: number = formStats[2];
-      p.isAttacking = true;
-      p.attackTimer = formDuration;
-      this.g.input.attackPressed = false;
-      this.bridge.performAttack(p);
+      combat.isAttacking = true;
+      combat.attackTimer = formDuration;
+      context.input.attackPressed = false;
     }
-    if (p.isAttacking) {
-      p.attackTimer -= dt;
-      if (p.attackTimer <= 0) {
-        p.isAttacking = false;
-        const formStats: number[] = WEAPON_FORM_STATS[p.currentWeaponForm];
-        p.attackTimer = formStats[3] - formStats[2];
+    // Attack timer: active phase then cooldown
+    if (combat.isAttacking) {
+      combat.attackTimer -= context.dt;
+      if (combat.attackTimer <= 0) {
+        combat.isAttacking = false;
+        const formStats: number[] = WEAPON_FORM_STATS[transform.currentWeaponForm];
+        combat.attackTimer = formStats[3] - formStats[2];
       }
-    } else if (p.attackTimer > 0) {
-      p.attackTimer -= dt;
+    } else if (combat.attackTimer > 0) {
+      combat.attackTimer -= context.dt;
     }
 
-    if (this.g.input.toolPressed && !p.isUsingTool && p.toolCooldown <= 0 && !p.isDrilling) {
-      this.g.input.toolPressed = false;
-      const cosF: number = Math.cos(p.facing);
-      const sinF: number = Math.sin(p.facing);
+    // Tool / drill trigger
+    if (context.input.toolPressed && !movement.isUsingTool && movement.toolCooldown <= 0 && !movement.isDrilling) {
+      context.input.toolPressed = false;
+      const cosF: number = Math.cos(movement.facing);
+      const sinF: number = Math.sin(movement.facing);
       let bestTX: number = -1;
       let bestTY: number = -1;
       let bestDist: number = 9999;
       for (let r: number = 1; r <= 3; r++) {
-        const checkX: number = p.x + cosF * TILE_SIZE * r;
-        const checkY: number = p.y + sinF * TILE_SIZE * r;
+        const checkX: number = pos.x + cosF * TILE_SIZE * r;
+        const checkY: number = pos.y + sinF * TILE_SIZE * r;
         const ctx2: number = Math.floor(checkX / TILE_SIZE);
         const cty: number = Math.floor(checkY / TILE_SIZE);
         for (let ox: number = -1; ox <= 1; ox++) {
           for (let oy: number = -1; oy <= 1; oy++) {
             const ttx: number = ctx2 + ox;
             const tty: number = cty + oy;
-            if (this.g.getTile(ttx * TILE_SIZE, tty * TILE_SIZE) === TileType.WALL) {
-              const dx: number = (ttx * TILE_SIZE + TILE_SIZE / 2) - p.x;
-              const dy: number = (tty * TILE_SIZE + TILE_SIZE / 2) - p.y;
+            if (this.getTile(chunks, ttx * TILE_SIZE, tty * TILE_SIZE) === TileType.WALL) {
+              const dx: number = (ttx * TILE_SIZE + TILE_SIZE / 2) - pos.x;
+              const dy: number = (tty * TILE_SIZE + TILE_SIZE / 2) - pos.y;
               const dist: number = dx * dx + dy * dy;
               if (dist < bestDist) {
                 bestDist = dist;
@@ -173,112 +173,130 @@ export class PlayerMovementSystem {
         }
       }
       if (bestTX >= 0) {
-        p.isUsingTool = true;
-        p.isDrilling = true;
-        p.drillTargetX = bestTX;
-        p.drillTargetY = bestTY;
-        p.drillHitCount = 0;
-        p.vx = 0;
-        p.vy = 0;
-        p.toolCooldown = 200;
+        movement.isUsingTool = true;
+        movement.isDrilling = true;
+        movement.drillTargetX = bestTX;
+        movement.drillTargetY = bestTY;
+        movement.drillHitCount = 0;
+        vel.vx = 0;
+        vel.vy = 0;
+        movement.toolCooldown = 200;
       }
     }
-    if (p.toolCooldown > 0) p.toolCooldown -= dt;
-    if (p.isUsingTool && !p.isDrilling) {
-      p.isUsingTool = false;
+    if (movement.toolCooldown > 0) movement.toolCooldown -= context.dt;
+    if (movement.isUsingTool && !movement.isDrilling) {
+      movement.isUsingTool = false;
     }
 
-    if (this.g.input.dashPressed && !p.isDashing && p.dashCooldown <= 0) {
-      p.isDashing = true;
-      p.dashTimer = DASH_DURATION;
-      p.dashCooldown = DASH_COOLDOWN;
-      p.invincibleTimer = DASH_DURATION;
-      const dx: number = Math.cos(p.facing);
-      const dy: number = Math.sin(p.facing);
-      p.dashDirX = dx;
-      p.dashDirY = dy;
-      this.g.input.dashPressed = false;
-      this.g.audio.playDash();
+    // Dash trigger
+    if (context.input.dashPressed && !movement.isDashing && movement.dashCooldown <= 0) {
+      movement.isDashing = true;
+      movement.dashTimer = DASH_DURATION;
+      movement.dashCooldown = DASH_COOLDOWN;
+      combat.invincibleTimer = DASH_DURATION;
+      const dx: number = Math.cos(movement.facing);
+      const dy: number = Math.sin(movement.facing);
+      movement.dashDirX = dx;
+      movement.dashDirY = dy;
+      context.input.dashPressed = false;
+      audio.playDash();
     }
-    if (p.dashCooldown > 0) p.dashCooldown -= dt;
-    if (p.invincibleTimer > 0) p.invincibleTimer -= dt;
+    if (movement.dashCooldown > 0) movement.dashCooldown -= context.dt;
+    if (combat.invincibleTimer > 0) combat.invincibleTimer -= context.dt;
 
-    if (Math.abs(p.vx) > 0.1 || Math.abs(p.vy) > 0.1) {
-      p.animFrame += 0.15;
+    // Animation
+    if (Math.abs(vel.vx) > 0.1 || Math.abs(vel.vy) > 0.1) {
+      combat.animFrame += 0.15;
     }
   }
 
-  private updateDrilling(p: PlayerState, dt: number): void {
-    const wallWorldX: number = p.drillTargetX * TILE_SIZE + TILE_SIZE / 2;
-    const wallWorldY: number = p.drillTargetY * TILE_SIZE + TILE_SIZE / 2;
-    p.facing = Math.atan2(wallWorldY - p.y, wallWorldX - p.x);
+  private updateDrilling(
+    pos: PositionComponent,
+    movement: MovementComponent,
+    chunks: Map<string, Object>,
+    audio: AudioManager,
+    context: SystemContext
+  ): void {
+    const wallWorldX: number = movement.drillTargetX * TILE_SIZE + TILE_SIZE / 2;
+    const wallWorldY: number = movement.drillTargetY * TILE_SIZE + TILE_SIZE / 2;
+    movement.facing = Math.atan2(wallWorldY - pos.y, wallWorldX - pos.x);
 
-    const distToWall: number = Math.sqrt((p.x - wallWorldX) * (p.x - wallWorldX) + (p.y - wallWorldY) * (p.y - wallWorldY));
+    const distToWall: number = Math.sqrt(
+      (pos.x - wallWorldX) * (pos.x - wallWorldX) + (pos.y - wallWorldY) * (pos.y - wallWorldY)
+    );
     if (distToWall > TILE_SIZE * 2.5) {
-      p.isDrilling = false;
-      p.drillHitCount = 0;
+      movement.isDrilling = false;
+      movement.drillHitCount = 0;
       return;
     }
 
-    p.drillHitCount += dt;
+    movement.drillHitCount += context.dt;
 
-    if (this.g.settings.effectsEnabled && this.g.frameCount % 3 === 0) {
-      const angle: number = Math.random() * Math.PI * 2;
-      this.g.spawnParticle(wallWorldX, wallWorldY,
-        Math.cos(angle) * 1.5, Math.sin(angle) * 1.5, 200, COLOR_DRILL_PARTICLE, 2);
-    }
-
-    if (this.g.frameCount % 19 === 0) {
-      this.g.audio.playDrillHit();
+    if (context.frameCount % 19 === 0) {
+      audio.playDrillHit();
     }
 
     const breakTime: number = DRILL_BREAK_HITS * 300;
-    if (p.drillHitCount >= breakTime) {
-      this.g.setTile(wallWorldX, wallWorldY, TileType.BROKEN_WALL);
-      this.g.audio.playWallBreak();
-      if (this.g.settings.effectsEnabled) {
-        for (let k: number = 0; k < 8; k++) {
-          const angle: number = Math.random() * Math.PI * 2;
-          const speed: number = 1 + Math.random() * 3;
-          this.g.spawnParticle(wallWorldX, wallWorldY,
-            Math.cos(angle) * speed, Math.sin(angle) * speed, 400, COLOR_WALL, 4);
+    if (movement.drillHitCount >= breakTime) {
+      this.setTile(chunks, wallWorldX, wallWorldY, TileType.BROKEN_WALL);
+      audio.playWallBreak();
+      movement.isDrilling = false;
+      movement.drillHitCount = 0;
+    }
+  }
+
+  private updateEngulfedPlayer(
+    entities: Entity[],
+    player: Entity,
+    pos: PositionComponent,
+    health: HealthComponent,
+    movement: MovementComponent,
+    combat: CombatComponent,
+    audio: AudioManager,
+    context: SystemContext
+  ): void {
+    movement.engulfDamageTimer -= context.dt;
+    if (movement.engulfDamageTimer <= 0) {
+      health.damage(SLIME_DAMAGE);
+      movement.engulfDamageTimer = ENGULF_DAMAGE_INTERVAL;
+      audio.playPlayerDamage();
+      this.shakeCamera(context, 100);
+    }
+
+    if (movement.engulfEscapeCount >= ENGULF_ESCAPE_ATTACKS) {
+      movement.isEngulfed = false;
+      // Find the engulfing enemy
+      let engulfingEnemy: Entity | null = null;
+      for (let i: number = 0; i < entities.length; i++) {
+        const e: Entity = entities[i];
+        if (e.active && e.tag === "enemy") {
+          const ai: EnemyAIComponent | null = e.getComponent<EnemyAIComponent>("enemyAI");
+          if (ai !== null && ai.isEngulfing && ai.engulfedPlayer) {
+            engulfingEnemy = e;
+            break;
+          }
         }
       }
-      p.isDrilling = false;
-      p.drillHitCount = 0;
-    }
-  }
-
-  private updateEngulfedPlayer(p: PlayerState, dt: number): void {
-    p.engulfDamageTimer -= dt;
-    if (p.engulfDamageTimer <= 0) {
-      p.hp -= SLIME_DAMAGE;
-      if (p.hp < 0) p.hp = 0;
-      p.engulfDamageTimer = ENGULF_DAMAGE_INTERVAL;
-      this.g.damageFlashTimer = 200;
-      this.g.audio.playPlayerDamage();
-      this.g.shakeTimer = 100;
-    }
-
-    if (p.engulfEscapeCount >= ENGULF_ESCAPE_ATTACKS) {
-      p.isEngulfed = false;
-      if (p.engulfSlimeIndex >= 0 && p.engulfSlimeIndex < this.g.enemies.length) {
-        const s: SlimeState = this.g.enemies[p.engulfSlimeIndex];
-        s.isEngulfing = false;
-        s.engulfedPlayer = false;
+      if (engulfingEnemy !== null) {
+        const ai: EnemyAIComponent = engulfingEnemy.getComponent<EnemyAIComponent>("enemyAI")!;
+        const enemyPos: PositionComponent = engulfingEnemy.getComponent<PositionComponent>("Position")!;
+        ai.isEngulfing = false;
+        ai.engulfedPlayer = false;
         const angle: number = Math.random() * Math.PI * 2;
-        p.x = s.x + Math.cos(angle) * 20;
-        p.y = s.y + Math.sin(angle) * 20;
+        pos.x = enemyPos.x + Math.cos(angle) * 20;
+        pos.y = enemyPos.y + Math.sin(angle) * 20;
       }
-      p.engulfSlimeIndex = -1;
-      p.engulfEscapeCount = 0;
-      p.invincibleTimer = INVINCIBLE_DURATION;
+      movement.engulfEscapeCount = 0;
+      combat.invincibleTimer = INVINCIBLE_DURATION;
     }
   }
 
-  checkPlayerCollision(x: number, y: number): boolean {
-    if (this.g.player !== null && this.g.player.isTransformed &&
-        this.g.player.transformForm === TransformForm.GHOST) {
+  private checkPlayerCollision(
+    x: number, y: number,
+    transform: TransformComponent,
+    chunks: Map<string, Object>
+  ): boolean {
+    if (transform.isTransformed && (transform.transformForm as number) === (TransformForm.GHOST as number)) {
       return false;
     }
     const halfSize: number = PLAYER_SIZE / 2;
@@ -286,41 +304,48 @@ export class PlayerMovementSystem {
     const cornersY: number[] = [y - halfSize, y + halfSize];
     for (let i: number = 0; i < 2; i++) {
       for (let j: number = 0; j < 2; j++) {
-        const tile: number = this.g.getTile(cornersX[i], cornersY[j]);
-        if (!this.g.isWalkable(tile)) return true;
+        const tile: number = this.getTile(chunks, cornersX[i], cornersY[j]);
+        if (!this.isWalkable(tile)) return true;
       }
     }
     return false;
   }
 
-  checkBreakableWalls(p: PlayerState): void {
-    if (!p.isDrilling) return;
-    const wallTX: number = p.drillTargetX;
-    const wallTY: number = p.drillTargetY;
-    const wallWorldX: number = wallTX * TILE_SIZE + TILE_SIZE / 2;
-    const wallWorldY: number = wallTY * TILE_SIZE + TILE_SIZE / 2;
+  private getTile(chunks: Map<string, Object>, worldX: number, worldY: number): number {
+    const tx: number = Math.floor(worldX / TILE_SIZE);
+    const ty: number = Math.floor(worldY / TILE_SIZE);
+    const cx: number = Math.floor(tx / CHUNK_SIZE);
+    const cy: number = Math.floor(ty / CHUNK_SIZE);
+    const key: string = cx + ',' + cy;
+    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
+    if (chunk === undefined) return TileType.WALL;
+    const lx: number = tx - cx * CHUNK_SIZE;
+    const ly: number = ty - cy * CHUNK_SIZE;
+    return chunk.tiles[ly][lx];
+  }
 
-    for (let i: number = 0; i < this.g.secretRooms.length; i++) {
-      const room = this.g.secretRooms[i];
-      if (room.revealed) continue;
-      const roomWX: number = (room.chunkX * CHUNK_SIZE + room.wallTileX) * TILE_SIZE + TILE_SIZE / 2;
-      const roomWY: number = (room.chunkY * CHUNK_SIZE + room.wallTileY) * TILE_SIZE + TILE_SIZE / 2;
-      const dx: number = wallWorldX - roomWX;
-      const dy: number = wallWorldY - roomWY;
-      if (Math.abs(dx) < TILE_SIZE && Math.abs(dy) < TILE_SIZE) {
-        room.revealed = true;
-        this.g.setTile(roomWX, roomWY, TileType.FLOOR);
-        this.g.audio.playWallBreak();
-        this.g.shakeTimer = 200;
-        if (this.g.settings.effectsEnabled) {
-          for (let k: number = 0; k < 12; k++) {
-            const angle: number = Math.random() * Math.PI * 2;
-            const speed: number = 1 + Math.random() * 3;
-            this.g.spawnParticle(roomWX, roomWY,
-              Math.cos(angle) * speed, Math.sin(angle) * speed, 600, COLOR_BREAKABLE_WALL, 4);
-          }
-        }
-      }
+  private isWalkable(tile: number): boolean {
+    return tile !== TileType.WALL && tile !== TileType.VOID;
+  }
+
+  private setTile(chunks: Map<string, Object>, worldX: number, worldY: number, tileType: number): void {
+    const tx: number = Math.floor(worldX / TILE_SIZE);
+    const ty: number = Math.floor(worldY / TILE_SIZE);
+    const cx: number = Math.floor(tx / CHUNK_SIZE);
+    const cy: number = Math.floor(ty / CHUNK_SIZE);
+    const key: string = cx + ',' + cy;
+    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
+    if (chunk === undefined) return;
+    const lx: number = tx - cx * CHUNK_SIZE;
+    const ly: number = ty - cy * CHUNK_SIZE;
+    chunk.tiles[ly][lx] = tileType;
+  }
+
+  private shakeCamera(context: SystemContext, duration: number): void {
+    const cameraEntity: Entity | null = context.world.findEntityByTag("camera");
+    if (cameraEntity !== null) {
+      const cam: CameraComponent = cameraEntity.getComponent<CameraComponent>("camera")!;
+      cam.shakeTimer = duration;
     }
   }
 }
