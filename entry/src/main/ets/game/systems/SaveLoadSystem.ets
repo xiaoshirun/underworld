@@ -1,147 +1,149 @@
-import {
-  TILE_SIZE, SAVE_VERSION,
-  PlayerState, ChunkData, SaveData,
-} from '../GameConstants';
-import { GameContext } from '../GameContext';
+import { System, SystemContext, Entity, PositionComponent, VelocityComponent, HealthComponent } from '@qiuyu/engine';
+import { MovementComponent } from '../components/MovementComponent';
+import { CombatComponent } from '../components/CombatComponent';
+import { TransformComponent } from '../components/TransformComponent';
+import { InventoryComponent } from '../components/InventoryComponent';
+import { XpComponent } from '../components/XpComponent';
+import { EvolutionComponent } from '../components/EvolutionComponent';
+import { SAVE_VERSION, AUTO_SAVE_INTERVAL, TILE_SIZE, SaveData, Inventory } from '../GameConstants';
 import { SaveManager } from '../SaveManager';
 import { common } from '@kit.AbilityKit';
 
-export interface SaveLoadBridge {
-  onSave: (() => void) | null;
-}
+export class SaveLoadSystem extends System {
+  private saveTimer: number = 0;
+  harmonyContext: Object | null = null;
 
-export class SaveLoadSystem {
-  private g: GameContext;
-  private bridge: SaveLoadBridge;
-
-  constructor(g: GameContext, bridge: SaveLoadBridge) {
-    this.g = g;
-    this.bridge = bridge;
+  update(entities: Entity[], context: SystemContext): void {
+    this.saveTimer += context.dt;
+    if (this.saveTimer >= AUTO_SAVE_INTERVAL) {
+      this.saveTimer = 0;
+      this.autoSave(context);
+    }
   }
 
-  getSaveData(): SaveData {
-    const p: PlayerState = this.g.player!;
-    return {
+  getSaveData(player: Entity, context: SystemContext): SaveData {
+    const pos: PositionComponent = player.getComponent<PositionComponent>("Position")!;
+    const health: HealthComponent = player.getComponent<HealthComponent>("Health")!;
+    const transform: TransformComponent = player.getComponent<TransformComponent>("transform")!;
+    const inventory: InventoryComponent = player.getComponent<InventoryComponent>("inventory")!;
+    const xp: XpComponent = player.getComponent<XpComponent>("xp")!;
+    const evo: EvolutionComponent = player.getComponent<EvolutionComponent>("evolution")!;
+
+    const inv: Inventory = {
+      crystalOre: inventory.crystalOre,
+      mushroomOre: inventory.mushroomOre,
+      flameOre: inventory.flameOre,
+      abyssOre: inventory.abyssOre,
+      voidOre: inventory.voidOre,
+      coreNormal: inventory.coreNormal,
+      coreRare: inventory.coreRare,
+      formCore: inventory.formCore,
+      hpPotions: inventory.hpPotions,
+      gold: inventory.gold,
+      transformCoreSlime: inventory.transformCoreSlime,
+      transformCoreArmor: inventory.transformCoreArmor,
+      transformCoreIronMan: inventory.transformCoreIronMan,
+      transformCoreGhost: inventory.transformCoreGhost
+    };
+
+    const exploredChunks: string[] = [];
+    context.world.chunks.forEach((_: Object, key: string) => {
+      exploredChunks.push(key);
+    });
+
+    const saveData: SaveData = {
       version: SAVE_VERSION,
       timestamp: Date.now(),
-      playerX: p.x,
-      playerY: p.y,
-      hp: p.hp,
-      xp: p.xp,
-      level: p.level,
-      gender: p.gender,
-      currentWeaponForm: p.currentWeaponForm,
-      unlockedForms: p.unlockedForms.slice(),
-      evolutionBranch: p.evolutionBranch,
-      evolutionLevel: p.evolutionLevel,
-      inventory: {
-        crystalOre: p.inventory.crystalOre,
-        mushroomOre: p.inventory.mushroomOre,
-        flameOre: p.inventory.flameOre,
-        abyssOre: p.inventory.abyssOre,
-        voidOre: p.inventory.voidOre,
-        coreNormal: p.inventory.coreNormal,
-        coreRare: p.inventory.coreRare,
-        formCore: p.inventory.formCore,
-        hpPotions: p.inventory.hpPotions,
-        gold: p.inventory.gold,
-        transformCoreSlime: p.inventory.transformCoreSlime,
-        transformCoreArmor: p.inventory.transformCoreArmor,
-        transformCoreIronMan: p.inventory.transformCoreIronMan,
-        transformCoreGhost: p.inventory.transformCoreGhost
-      },
-      isTransformed: p.isTransformed,
-      transformForm: p.transformForm,
-      transformEnergy: p.transformEnergy,
-      transformMaxEnergy: p.transformMaxEnergy,
-      unlockedTransforms: p.unlockedTransforms.slice(),
-      exploredChunks: this.getExploredChunks()
+      playerX: pos.x,
+      playerY: pos.y,
+      hp: health.current,
+      xp: xp.xp,
+      level: xp.level,
+      gender: 0,
+      currentWeaponForm: transform.currentWeaponForm,
+      unlockedForms: evo.unlockedForms.slice(),
+      evolutionBranch: evo.evolutionBranch,
+      evolutionLevel: evo.evolutionLevel,
+      inventory: inv,
+      isTransformed: transform.isTransformed,
+      transformForm: transform.transformForm,
+      transformEnergy: transform.transformEnergy,
+      transformMaxEnergy: transform.transformMaxEnergy,
+      unlockedTransforms: [],
+      exploredChunks: exploredChunks
     };
+    return saveData;
   }
 
-  applySaveData(data: SaveData): void {
-    if (!this.g.player) return;
-    const p: PlayerState = this.g.player;
-    p.x = data.playerX;
-    p.y = data.playerY;
-    p.hp = data.hp;
-    p.xp = data.xp;
-    p.level = data.level;
-    p.gender = data.gender;
-    p.currentWeaponForm = data.currentWeaponForm;
-    p.unlockedForms = data.unlockedForms.slice();
-    p.evolutionBranch = data.evolutionBranch;
-    p.evolutionLevel = data.evolutionLevel;
-    p.inventory = {
-      crystalOre: data.inventory.crystalOre,
-      mushroomOre: data.inventory.mushroomOre,
-      flameOre: data.inventory.flameOre,
-      abyssOre: data.inventory.abyssOre,
-      voidOre: data.inventory.voidOre,
-      coreNormal: data.inventory.coreNormal,
-      coreRare: data.inventory.coreRare,
-      formCore: data.inventory.formCore,
-      hpPotions: data.inventory.hpPotions,
-      gold: data.inventory.gold,
-      transformCoreSlime: data.inventory.transformCoreSlime,
-      transformCoreArmor: data.inventory.transformCoreArmor,
-      transformCoreIronMan: data.inventory.transformCoreIronMan,
-      transformCoreGhost: data.inventory.transformCoreGhost
-    };
-    p.isTransformed = data.isTransformed;
-    p.transformForm = data.transformForm;
-    p.transformEnergy = data.transformEnergy;
-    p.transformMaxEnergy = data.transformMaxEnergy;
-    p.unlockedTransforms = data.unlockedTransforms.slice();
-    p.vx = 0;
-    p.vy = 0;
-    p.isAttacking = false;
-    p.isDashing = false;
-    p.isJumping = false;
-    p.isDrilling = false;
-    p.isEngulfed = false;
-    p.invincibleTimer = 1000;
+  applySaveData(player: Entity, data: SaveData, context: SystemContext): void {
+    const pos: PositionComponent = player.getComponent<PositionComponent>("Position")!;
+    const vel: VelocityComponent = player.getComponent<VelocityComponent>("Velocity")!;
+    const health: HealthComponent = player.getComponent<HealthComponent>("Health")!;
+    const movement: MovementComponent = player.getComponent<MovementComponent>("movement")!;
+    const combat: CombatComponent = player.getComponent<CombatComponent>("combat")!;
+    const transform: TransformComponent = player.getComponent<TransformComponent>("transform")!;
+    const inventory: InventoryComponent = player.getComponent<InventoryComponent>("inventory")!;
+    const xp: XpComponent = player.getComponent<XpComponent>("xp")!;
+    const evo: EvolutionComponent = player.getComponent<EvolutionComponent>("evolution")!;
 
-    this.g.cameraX = p.x - this.g.screenW / 2;
-    this.g.cameraY = p.y - this.g.screenH / 2;
+    // Write persistent state to components
+    pos.x = data.playerX;
+    pos.y = data.playerY;
+    health.current = data.hp;
+    xp.xp = data.xp;
+    xp.level = data.level;
+    transform.currentWeaponForm = data.currentWeaponForm;
+    evo.unlockedForms = data.unlockedForms.slice();
+    evo.evolutionBranch = data.evolutionBranch;
+    evo.evolutionLevel = data.evolutionLevel;
 
-    this.g.chunks.clear();
-    this.g.enemies = [];
-    this.g.xpOrbs = [];
-    this.g.bosses = [];
-    this.g.chests = [];
-    this.g.traps = [];
-    this.g.mechanisms = [];
-    this.g.materialDrops = [];
-    this.g.bossRooms = [];
-    this.g.secretRooms = [];
-    this.g.transformCoreDrops = [];
-    this.g.particles = [];
-    this.g.particleMgr.clear();
+    inventory.crystalOre = data.inventory.crystalOre;
+    inventory.mushroomOre = data.inventory.mushroomOre;
+    inventory.flameOre = data.inventory.flameOre;
+    inventory.abyssOre = data.inventory.abyssOre;
+    inventory.voidOre = data.inventory.voidOre;
+    inventory.coreNormal = data.inventory.coreNormal;
+    inventory.coreRare = data.inventory.coreRare;
+    inventory.formCore = data.inventory.formCore;
+    inventory.hpPotions = data.inventory.hpPotions;
+    inventory.gold = data.inventory.gold;
+    inventory.transformCoreSlime = data.inventory.transformCoreSlime;
+    inventory.transformCoreArmor = data.inventory.transformCoreArmor;
+    inventory.transformCoreIronMan = data.inventory.transformCoreIronMan;
+    inventory.transformCoreGhost = data.inventory.transformCoreGhost;
 
-    const ptx: number = Math.floor(p.x / TILE_SIZE);
-    const pty: number = Math.floor(p.y / TILE_SIZE);
-    this.g.loadChunksAround(ptx, pty);
+    transform.isTransformed = data.isTransformed;
+    transform.transformForm = data.transformForm;
+    transform.transformEnergy = data.transformEnergy;
+    transform.transformMaxEnergy = data.transformMaxEnergy;
+
+    // Reset transient state
+    vel.vx = 0;
+    vel.vy = 0;
+    combat.isAttacking = false;
+    movement.isDashing = false;
+    movement.isJumping = false;
+    movement.isDrilling = false;
+    movement.isEngulfed = false;
+    combat.invincibleTimer = 1000;
+
+    // Reset camera to player position
+    context.world.cameraX = pos.x - context.screenW / 2;
+    context.world.cameraY = pos.y - context.screenH / 2;
+
+    // Clear chunks; ChunkLoadSystem will regenerate on next update
+    context.world.chunks.clear();
   }
 
-  getExploredChunks(): string[] {
-    const keys: string[] = [];
-    this.g.chunks.forEach((_: ChunkData, key: string) => {
-      keys.push(key);
-    });
-    return keys;
-  }
-
-  async autoSave(): Promise<void> {
-    if (!this.g.context || !this.g.player) return;
-    try {
-      const data: SaveData = this.getSaveData();
-      await SaveManager.save(this.g.context as common.UIAbilityContext, data);
-      if (this.bridge.onSave) {
-        this.bridge.onSave();
-      }
-    } catch (e) {
-      console.error('autoSave failed: ' + JSON.stringify(e));
+  private autoSave(context: SystemContext): void {
+    if (this.harmonyContext === null) {
+      return;
     }
+    const player: Entity | null = context.world.findEntityByTag("player");
+    if (player === null) {
+      return;
+    }
+    const data: SaveData = this.getSaveData(player, context);
+    SaveManager.save(this.harmonyContext as common.UIAbilityContext, data);
   }
 }
