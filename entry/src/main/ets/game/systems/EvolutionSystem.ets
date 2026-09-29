@@ -1,106 +1,124 @@
+import { System, SystemContext, Entity } from '@qiuyu/engine';
+import { EvolutionComponent } from '../components/EvolutionComponent';
+import { InventoryComponent } from '../components/InventoryComponent';
 import {
   EVOLUTION_COST_ORE, EVOLUTION_COST_NORMAL, EVOLUTION_COST_RARE, FORM_UNLOCK_COST,
-  EvolutionBranch, EvolutionLevel, WeaponForm, MaterialType, PlayerState, Inventory,
+  EvolutionBranch, EvolutionLevel, WeaponForm, MaterialType,
 } from '../GameConstants';
-import { GameContext } from '../GameContext';
 
-export class EvolutionSystem {
-  private g: GameContext;
+export class EvolutionSystem extends System {
 
-  constructor(g: GameContext) {
-    this.g = g;
+  update(entities: Entity[], context: SystemContext): void {
+    // Utility/query system — no per-frame logic needed
   }
 
-  canEvolve(): boolean {
-    if (this.g.player === null) return false;
-    const p: PlayerState = this.g.player;
-    const level: number = p.evolutionLevel;
-    if (level >= EvolutionLevel.LEVEL_3) return false;
+  canEvolve(player: Entity): boolean {
+    const evo: EvolutionComponent | null = player.getComponent<EvolutionComponent>("evolution");
+    const inv: InventoryComponent | null = player.getComponent<InventoryComponent>("inventory");
+    if (evo === null || inv === null) return false;
+
+    const level: number = evo.evolutionLevel;
+    if (level >= (EvolutionLevel.LEVEL_3 as number)) return false;
+
     const nextLevel: number = level + 1;
-    const branch: EvolutionBranch = p.evolutionBranch;
-    const oreNeeded: number = EVOLUTION_COST_ORE[nextLevel];
-    const normalNeeded: number = EVOLUTION_COST_NORMAL[nextLevel];
-    const rareNeeded: number = EVOLUTION_COST_RARE[nextLevel];
-    if (this.getOreCount(p.inventory, branch) < oreNeeded) return false;
-    if (p.inventory.coreNormal < normalNeeded) return false;
-    if (p.inventory.coreRare < rareNeeded) return false;
-    return true;
-  }
-
-  tryEvolveWeapon(): boolean {
-    if (!this.canEvolve()) return false;
-    const p: PlayerState = this.g.player!;
-    const nextLevel: number = p.evolutionLevel + 1;
-    const branch: EvolutionBranch = p.evolutionBranch;
+    const branch: EvolutionBranch = evo.evolutionBranch as EvolutionBranch;
     const oreNeeded: number = EVOLUTION_COST_ORE[nextLevel];
     const normalNeeded: number = EVOLUTION_COST_NORMAL[nextLevel];
     const rareNeeded: number = EVOLUTION_COST_RARE[nextLevel];
 
-    this.deductOre(p.inventory, branch, oreNeeded);
-    p.inventory.coreNormal -= normalNeeded;
-    p.inventory.coreRare -= rareNeeded;
-    p.evolutionLevel = nextLevel as EvolutionLevel;
-
-    if (this.g.settings.effectsEnabled) {
-      this.g.particleMgr.explosion(p.x, p.y, this.getBranchColor(branch), 20);
-      this.g.particleMgr.magic(p.x, p.y, '#ffffff');
-    }
-    this.g.shakeTimer = 300;
+    if (this.getOreCount(inv, branch) < oreNeeded) return false;
+    if (inv.coreNormal < normalNeeded) return false;
+    if (inv.coreRare < rareNeeded) return false;
     return true;
   }
 
-  unlockWeaponForm(form: WeaponForm): boolean {
-    if (this.g.player === null) return false;
-    const p: PlayerState = this.g.player;
-    if (p.unlockedForms.indexOf(form) >= 0) return false;
-    if (p.inventory.formCore < FORM_UNLOCK_COST) return false;
-    p.inventory.formCore -= FORM_UNLOCK_COST;
-    p.unlockedForms.push(form);
+  tryEvolveWeapon(player: Entity): boolean {
+    if (!this.canEvolve(player)) return false;
+
+    const evo: EvolutionComponent | null = player.getComponent<EvolutionComponent>("evolution");
+    const inv: InventoryComponent | null = player.getComponent<InventoryComponent>("inventory");
+    if (evo === null || inv === null) return false;
+
+    const nextLevel: number = evo.evolutionLevel + 1;
+    const branch: EvolutionBranch = evo.evolutionBranch as EvolutionBranch;
+    const oreNeeded: number = EVOLUTION_COST_ORE[nextLevel];
+    const normalNeeded: number = EVOLUTION_COST_NORMAL[nextLevel];
+    const rareNeeded: number = EVOLUTION_COST_RARE[nextLevel];
+
+    this.deductOre(inv, branch, oreNeeded);
+    inv.coreNormal -= normalNeeded;
+    inv.coreRare -= rareNeeded;
+    evo.evolutionLevel = nextLevel;
+
     return true;
   }
 
-  getEvolutionInfo(): string[] {
-    if (this.g.player === null) return ['No player'];
-    const p: PlayerState = this.g.player;
+  unlockWeaponForm(player: Entity, form: WeaponForm): boolean {
+    const evo: EvolutionComponent | null = player.getComponent<EvolutionComponent>("evolution");
+    const inv: InventoryComponent | null = player.getComponent<InventoryComponent>("inventory");
+    if (evo === null || inv === null) return false;
+
+    const formNum: number = form as number;
+    if (evo.unlockedForms.indexOf(formNum) >= 0) return false;
+    if (inv.formCore < FORM_UNLOCK_COST) return false;
+
+    inv.formCore -= FORM_UNLOCK_COST;
+    evo.unlockedForms.push(formNum);
+    return true;
+  }
+
+  getEvolutionInfo(player: Entity): string[] {
+    const evo: EvolutionComponent | null = player.getComponent<EvolutionComponent>("evolution");
+    const inv: InventoryComponent | null = player.getComponent<InventoryComponent>("inventory");
+    if (evo === null || inv === null) return ['No player'];
+
     const branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
-    const branch: string = branchNames[p.evolutionBranch] || 'Unknown';
-    const level: number = p.evolutionLevel;
+    const branch: string = branchNames[evo.evolutionBranch] || 'Unknown';
+    const level: number = evo.evolutionLevel;
     const info: string[] = [];
+
     info.push('Branch: ' + branch);
     info.push('Level: ' + level + '/3');
+
     if (level < 3) {
       const next: number = level + 1;
       const oreNeeded: number = EVOLUTION_COST_ORE[next];
       const normalNeeded: number = EVOLUTION_COST_NORMAL[next];
       const rareNeeded: number = EVOLUTION_COST_RARE[next];
-      const oreHave: number = this.getOreCount(p.inventory, p.evolutionBranch);
+      const oreHave: number = this.getOreCount(inv, evo.evolutionBranch as EvolutionBranch);
       info.push('Ore: ' + oreHave + '/' + oreNeeded);
-      info.push('Core: ' + p.inventory.coreNormal + '/' + normalNeeded);
-      info.push('Rare: ' + p.inventory.coreRare + '/' + rareNeeded);
+      info.push('Core: ' + inv.coreNormal + '/' + normalNeeded);
+      info.push('Rare: ' + inv.coreRare + '/' + rareNeeded);
     } else {
       info.push('MAX LEVEL');
     }
+
     return info;
   }
 
-  getEvoBranch(): number {
-    if (this.g.player === null) return 0;
-    return this.g.player.evolutionBranch as number;
+  getEvoBranch(player: Entity): number {
+    const evo: EvolutionComponent | null = player.getComponent<EvolutionComponent>("evolution");
+    if (evo === null) return 0;
+    return evo.evolutionBranch;
   }
 
-  getEvoLevel(): number {
-    if (this.g.player === null) return 0;
-    return this.g.player.evolutionLevel as number;
+  getEvoLevel(player: Entity): number {
+    const evo: EvolutionComponent | null = player.getComponent<EvolutionComponent>("evolution");
+    if (evo === null) return 0;
+    return evo.evolutionLevel;
   }
 
-  getEvoOreHave(): number {
-    if (this.g.player === null) return 0;
-    return this.getOreCount(this.g.player.inventory, this.g.player.evolutionBranch);
+  getEvoOreHave(player: Entity): number {
+    const evo: EvolutionComponent | null = player.getComponent<EvolutionComponent>("evolution");
+    const inv: InventoryComponent | null = player.getComponent<InventoryComponent>("inventory");
+    if (evo === null || inv === null) return 0;
+    return this.getOreCount(inv, evo.evolutionBranch as EvolutionBranch);
   }
 
-  getEvoOreHaveForBranch(branch: number): number {
-    if (this.g.player === null) return 0;
-    return this.getOreCount(this.g.player.inventory, branch as EvolutionBranch);
+  getEvoOreHaveForBranch(player: Entity, branch: number): number {
+    const inv: InventoryComponent | null = player.getComponent<InventoryComponent>("inventory");
+    if (inv === null) return 0;
+    return this.getOreCount(inv, branch as EvolutionBranch);
   }
 
   private getBranchOreType(branch: EvolutionBranch): MaterialType {
@@ -112,7 +130,7 @@ export class EvolutionSystem {
     return MaterialType.CRYSTAL_ORE;
   }
 
-  private getOreCount(inventory: Inventory, branch: EvolutionBranch): number {
+  private getOreCount(inventory: InventoryComponent, branch: EvolutionBranch): number {
     const oreType: MaterialType = this.getBranchOreType(branch);
     if (oreType === MaterialType.CRYSTAL_ORE) return inventory.crystalOre;
     if (oreType === MaterialType.FLAME_ORE) return inventory.flameOre;
@@ -122,7 +140,7 @@ export class EvolutionSystem {
     return 0;
   }
 
-  private deductOre(inventory: Inventory, branch: EvolutionBranch, count: number): void {
+  private deductOre(inventory: InventoryComponent, branch: EvolutionBranch, count: number): void {
     const oreType: MaterialType = this.getBranchOreType(branch);
     if (oreType === MaterialType.CRYSTAL_ORE) inventory.crystalOre -= count;
     else if (oreType === MaterialType.FLAME_ORE) inventory.flameOre -= count;

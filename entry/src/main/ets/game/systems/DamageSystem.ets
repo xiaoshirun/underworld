@@ -1,45 +1,40 @@
-import { PLAYER_MAX_HP, PlayerState, GameState } from '../GameConstants';
-import { GameContext } from '../GameContext';
+import { System, SystemContext, Entity, HealthComponent } from '@qiuyu/engine';
+import { GameStateComponent } from '../components/GameStateComponent';
+import { GameState } from '../GameConstants';
 
-export interface DamageBridge {
-  autoSave(): void;
-  setState(state: GameState): void;
+interface AudioManager {
+  playPlayerDamage(): void;
 }
 
-export class DamageSystem {
-  private g: GameContext;
-  private bridge: DamageBridge;
+export class DamageSystem extends System {
 
-  constructor(g: GameContext, bridge: DamageBridge) {
-    this.g = g;
-    this.bridge = bridge;
-  }
+  update(entities: Entity[], context: SystemContext): void {
+    const player: Entity | null = context.world.findEntityByTag("player");
+    const gameStateEntity: Entity | null = context.world.findEntityByTag("gameState");
+    if (player === null || gameStateEntity === null) return;
 
-  update(dt: number): void {
-    if (this.g.player === null) return;
-    const p: PlayerState = this.g.player;
+    const health: HealthComponent | null = player.getComponent<HealthComponent>("Health");
+    const gs: GameStateComponent | null = gameStateEntity.getComponent<GameStateComponent>("gameState");
+    if (health === null || gs === null) return;
 
-    if (this.g.damageFlashTimer > 0) {
-      this.g.damageFlashTimer -= dt;
-      if (this.g.damageFlashTimer < 0) this.g.damageFlashTimer = 0;
+    const dt: number = context.dt;
+
+    // Decay damage flash timer
+    if (gs.damageFlashTimer > 0) {
+      gs.damageFlashTimer -= dt;
+      if (gs.damageFlashTimer < 0) {
+        gs.damageFlashTimer = 0;
+      }
     }
 
-    if (p.hp <= 0 && this.g.state === GameState.PLAYING) {
-      this.handlePlayerDeath(p);
+    // Check for player death
+    if (health.isDead() && gs.state === (GameState.PLAYING as number)) {
+      health.current = 0;
+
+      const audio: AudioManager = context.audio as AudioManager;
+      audio.playPlayerDamage();
+
+      gs.state = GameState.GAME_OVER as number;
     }
-  }
-
-  private handlePlayerDeath(p: PlayerState): void {
-    p.hp = 0;
-
-    if (this.g.settings.effectsEnabled) {
-      this.g.particleMgr.explosion(p.x, p.y, '#ef4444', 20);
-      this.g.particleMgr.sparks(p.x, p.y, '#fbbf24', 12);
-    }
-    this.g.shakeTimer = 500;
-    this.g.audio.playPlayerDamage();
-
-    this.bridge.autoSave();
-    this.bridge.setState(GameState.GAME_OVER);
   }
 }
