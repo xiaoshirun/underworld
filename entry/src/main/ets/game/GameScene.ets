@@ -21,7 +21,6 @@ export class GameScene extends Scene {
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    console.log('[GameScene.render] called, gameEngine:', !!this.gameEngine);
     this.gameEngine.render();
   }
 }

@@ -113,6 +113,9 @@ export class SaveLoadSystem {
     this.g.traps = [];
     this.g.mechanisms = [];
     this.g.materialDrops = [];
+    this.g.bossRooms = [];
+    this.g.secretRooms = [];
+    this.g.transformCoreDrops = [];
     this.g.particles = [];
     this.g.particleMgr.clear();
 

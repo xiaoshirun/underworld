@@ -2,10 +2,6 @@ import { display, router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { GameEngine } from '../game/GameEngine';
 import { SaveManager } from '../game/SaveManager';
-import { Engine, SceneDefinition } from '../engine/core/Engine';
-import { GameScene } from '../game/GameScene';
-import { MainMenuScene } from '../game/MainMenuScene';
-import { Scene } from '../engine/scene/Scene';
 import {
   PLAYER_MAX_HP, JOYSTICK_RADIUS, MINIMAP_SIZE,
   COLOR_HP_FULL, COLOR_HP_EMPTY,
@@ -23,10 +19,8 @@ import {
 @Component
 struct Index {
   private gameEngine: GameEngine = new GameEngine();
-  private engine: Engine | null = null;
-  private gameScene: GameScene | null = null;
-  private gameCtx: CanvasRenderingContext2D | null = null;
-  private minimapCtx: CanvasRenderingContext2D | null = null;
+  private gameCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
+  private minimapCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private gameCanvasReady: boolean = false;
   private minimapCanvasReady: boolean = false;
   @State screenW: number = 360;
@@ -112,19 +106,15 @@ struct Index {
   }
 
   aboutToDisappear(): void {
-    if (this.engine) {
-      this.engine.stop();
-    }
     this.gameEngine.destroy();
   }
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Canvas()
+      Canvas(this.gameCtx)
         .width('100%')
         .height('100%')
-        .onReady((context: CanvasRenderingContext2D) => {
-          this.gameCtx = context;
+        .onReady(() => {
           this.gameCanvasReady = true;
           console.log('[Index] Game Canvas ready, context obtained');
           this.tryInitEngine();
@@ -179,11 +169,10 @@ struct Index {
   @Builder
   MinimapView() {
     Stack() {
-      Canvas()
+      Canvas(this.minimapCtx)
         .width(MINIMAP_SIZE)
         .height(MINIMAP_SIZE)
-        .onReady((context: CanvasRenderingContext2D) => {
-          this.minimapCtx = context;
+        .onReady(() => {
           this.minimapCanvasReady = true;
           console.log('[Index] Minimap Canvas ready, context obtained');
           this.tryInitEngine();
@@ -865,6 +854,7 @@ struct Index {
             .onTouch((event: TouchEvent) => {
               if (event.type === TouchType.Down) {
                 this.evoBranch = index;
+                this.evoOreHave = this.gameEngine.getEvoOreHaveForBranch(index);
               }
             })
           })
@@ -1077,9 +1067,8 @@ struct Index {
   }
 
   private tryInitEngine(): void {
-    if (this.gameCanvasReady && this.minimapCanvasReady && this.gameCtx && this.minimapCtx) {
+    if (this.gameCanvasReady && this.minimapCanvasReady) {
       const ctx = getContext(this) as common.UIAbilityContext;
-      this.gameEngine.setExternalLoop(true);
       this.gameEngine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH,
         ctx);
       this.gameEngine.setGender(this.playerGender);
@@ -1106,26 +1095,7 @@ struct Index {
         }, 1500);
       });
 
-      const ge = this.gameEngine;
-      const sceneDefs: SceneDefinition[] = [
-        { name: 'main-menu', factory: (): Scene => new MainMenuScene() } as SceneDefinition,
-        { name: 'game', factory: (): Scene => { this.gameScene = new GameScene(ge); return this.gameScene; } } as SceneDefinition,
-      ];
-      Engine.init({
-        canvas: this.gameCtx,
-        screenWidth: this.screenW,
-        screenHeight: this.screenH,
-        scenes: sceneDefs,
-        entryScene: 'game',
-        appContext: ctx,
-      }).then((engine: Engine) => {
-        this.engine = engine;
-        console.log('[Index] Engine started, screenW:', this.screenW, 'screenH:', this.screenH);
-        engine.start();
-      }).catch((error: Error) => {
-        console.error('Engine init failed:', error);
-      });
-
+      console.log('[Index] Engine initialized directly, screenW:', this.screenW, 'screenH:', this.screenH);
       this.startStatusMonitor();
     }
   }
@@ -1442,7 +1412,7 @@ struct Index {
           .borderRadius(8)
           .onClick(() => {
             this.gameEngine.quit();
-            router.replace({ url: 'pages/LoginPage' });
+            router.replaceUrl({ url: 'pages/LoginPage' });
           })
       }
       .width(240)
@@ -1532,7 +1502,7 @@ struct Index {
           .borderRadius(8)
           .onClick(() => {
             this.gameEngine.quit();
-            router.replace({ url: 'pages/LoginPage' });
+            router.replaceUrl({ url: 'pages/LoginPage' });
           })
       }
       .width(260)

@@ -251,8 +251,12 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
 
 
   update(dt: number): void {
-    if (this.player === null) return;
-    if (this.state !== GameState.PLAYING) return;
+    if (this.player === null) {
+      return;
+    }
+    if (this.state !== GameState.PLAYING) {
+      return;
+    }
     const p: PlayerState = this.player;
 
     this.chunkLoadSystem!.update();
@@ -419,17 +423,14 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
 
   render(): void {
     if (this.ctx === null || this.player === null) {
-      console.log('[GameEngine.render] SKIP - ctx:', !!this.ctx, 'player:', !!this.player);
       return;
     }
-    console.log('[GameEngine.render] START - screenW:', this.screenW, 'screenH:', this.screenH);
     const c: CanvasRenderingContext2D = this.ctx;
     const p: PlayerState = this.player;
 
     c.clearRect(0, 0, this.screenW, this.screenH);
     c.fillStyle = COLOR_BG;
     c.fillRect(0, 0, this.screenW, this.screenH);
-    console.log('[GameEngine.render] Background filled');
 
     const offX: number = -this.cameraX + this.shakeX;
     const offY: number = -this.cameraY + this.shakeY;
@@ -568,6 +569,10 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
 
   getEvoOreHave(): number {
     return this.evolutionSystem!.getEvoOreHave();
+  }
+
+  getEvoOreHaveForBranch(branch: number): number {
+    return this.evolutionSystem!.getEvoOreHaveForBranch(branch);
   }
 
   getEvoOreNeed(): number {

@@ -110,14 +110,7 @@ export class Engine {
       currentScene.canvasHeight = this.screenHeight;
     }
 
-    console.log('[Engine.tick] canvas:', !!this.canvas, 'size:', this.screenWidth, 'x', this.screenHeight);
-    
     this.canvas.clearRect(0, 0, this.screenWidth, this.screenHeight);
-    
-    // Debug: draw a bright red rectangle to verify Canvas is working
-    this.canvas.fillStyle = '#ff0000';
-    this.canvas.fillRect(0, 0, 100, 100);
-    
     this.scenes.render(this.canvas);
   }
 }

@@ -14,3 +14,5 @@ build/
 .idea/
 local_build-profile.json5
 entry/signature/
+.codegenie/
+.appanalyzer/

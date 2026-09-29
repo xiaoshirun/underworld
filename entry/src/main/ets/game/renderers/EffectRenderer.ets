@@ -680,8 +680,8 @@ export class EffectRenderer {
     for (let i: number = 0; i < this.g.chests.length; i++) {
       const chest: ChestState = this.g.chests[i];
       if (!chest.active) continue;
-      const sx: number = chest.x - offX;
-      const sy: number = chest.y - offY;
+      const sx: number = chest.x + offX;
+      const sy: number = chest.y + offY;
       if (sx < -40 || sx > this.g.screenW + 40 || sy < -40 || sy > this.g.screenH + 40) continue;
 
       const halfSize: number = CHEST_SIZE / 2;

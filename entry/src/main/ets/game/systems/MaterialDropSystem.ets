@@ -53,10 +53,22 @@ export class MaterialDropSystem {
 
     if (this.g.materialDrops.length > 50) {
       const active: MaterialDrop[] = [];
+      const indexMap: Map<number, number> = new Map();
       for (let i: number = 0; i < this.g.materialDrops.length; i++) {
-        if (this.g.materialDrops[i].active) active.push(this.g.materialDrops[i]);
+        if (this.g.materialDrops[i].active) {
+          indexMap.set(i, active.length);
+          active.push(this.g.materialDrops[i]);
+        }
       }
       this.g.materialDrops = active;
+      for (let t: number = this.g.transformCoreDrops.length - 1; t >= 0; t--) {
+        const newIdx: number | undefined = indexMap.get(this.g.transformCoreDrops[t].dropIndex);
+        if (newIdx !== undefined) {
+          this.g.transformCoreDrops[t].dropIndex = newIdx;
+        } else {
+          this.g.transformCoreDrops.splice(t, 1);
+        }
+      }
     }
   }
 }

@@ -98,6 +98,11 @@ export class EvolutionSystem {
     return this.getOreCount(this.g.player.inventory, this.g.player.evolutionBranch);
   }
 
+  getEvoOreHaveForBranch(branch: number): number {
+    if (this.g.player === null) return 0;
+    return this.getOreCount(this.g.player.inventory, branch as EvolutionBranch);
+  }
+
   private getBranchOreType(branch: EvolutionBranch): MaterialType {
     if (branch === EvolutionBranch.CRYSTAL) return MaterialType.CRYSTAL_ORE;
     if (branch === EvolutionBranch.FLAME) return MaterialType.FLAME_ORE;
