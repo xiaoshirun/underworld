@@ -1,0 +1,14 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "module description"
+    }
+  ,{
+      "name": "EngineAbility_desc",
+      "value": "description"
+    },{
+      "name": "EngineAbility_label",
+      "value": "label"
+    }]
+}
