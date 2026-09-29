@@ -1,72 +1,15 @@
 import {
-  TILE_SIZE, CHUNK_SIZE, PLAYER_SIZE, PLAYER_SPEED,
-  DASH_SPEED, DASH_DURATION, DASH_COOLDOWN, ATTACK_DURATION, ATTACK_COOLDOWN,
-  ATTACK_RANGE, ATTACK_WIDTH, PLAYER_MAX_HP, INVINCIBLE_DURATION,
-  SLIME_SIZE, SLIME_SPEED, PURPLE_SLIME_SPEED, PURPLE_SLIME_DETECT,
-  RED_SLIME_SPEED, RED_SLIME_DETECT, BLUE_SLIME_SPEED,
-  SLIME_DAMAGE, SLIME_KNOCKBACK,
-  ENGULF_DAMAGE_INTERVAL, ENGULF_ESCAPE_ATTACKS, DRILL_BREAK_HITS,
-  XP_ORB_SIZE, XP_COLLECT_RANGE, XP_MAGNET_RANGE, LEVEL_UP_XP,
-  CHUNK_LOAD_RADIUS,
-  MINIMAP_SIZE, FRAME_INTERVAL, MINIMAP_UPDATE_INTERVAL,
-  TileType, EnemyType, BiomeType, PlayerState, SlimeState, XpOrb, Particle,
-  ChunkData, InputState, GameSettings, AmbientParticle,
+  TILE_SIZE, CHUNK_SIZE, PLAYER_MAX_HP, LEVEL_UP_XP,
+  FRAME_INTERVAL, MINIMAP_UPDATE_INTERVAL,
+  TileType, BiomeType, PlayerState, SlimeState,
+  ChunkData, GameSettings, AmbientParticle,
   GenderType, WeaponForm, EvolutionBranch, EvolutionLevel,
-  BossState, ChestState, ChestType, BossRoom, MaterialDrop, TrapInstance, MechanismInstance,
-  Inventory, TrapType, TrapState,
-  TransformCoreDrop, TransformUnlockNotify,
-  MechanismType, SecretRoom,
-  BossType, BossRole, BossPhase, MaterialType,
-  BOSS_HP, BOSS_SIZE, BOSS_ATTACK_INTERVAL, BOSS_PHASE2_THRESHOLD,
-  BOSS_RESPAWN_TIME, BOSS_ROOM_SIZE,
-  PASSAGE_GUARDIAN_AGGRO, OPTIONAL_CHALLENGE_AGGRO,
-  WEAPON_FORM_STATS,
-  TRAP_TELEGRAPH_TIME, TRAP_ACTIVE_TIME, TRAP_COOLDOWN_TIME, TRAP_TRIGGER_RADIUS, TRAP_DAMAGE, TRAP_SIZE,
-  MECH_INTERACT_RANGE, PUSH_BLOCK_SPEED, TELEPORT_COOLDOWN, PRESSURE_PLATE_RANGE,
-  CHEST_SIZE, CHEST_INTERACT_RANGE,
-  EVOLUTION_COST_ORE, EVOLUTION_COST_NORMAL, EVOLUTION_COST_RARE, FORM_UNLOCK_COST,
-  COLOR_BG, COLOR_WALL, COLOR_WALL_EDGE, COLOR_FLOOR, COLOR_FLOOR_VAR,
-  COLOR_WATER, COLOR_WATER_LIGHT, COLOR_LAVA, COLOR_LAVA_LIGHT,
-  COLOR_CRYSTAL, COLOR_CRYSTAL_GLOW,
-  COLOR_MUSHROOM_CAP, COLOR_MUSHROOM_STEM, COLOR_MUSHROOM_GLOW,
-  COLOR_GLOW_STONE, COLOR_GLOW, COLOR_PLANT, COLOR_PLANT_LIGHT,
-  COLOR_PLAYER_SKIN, COLOR_PLAYER_HAIR, COLOR_PLAYER_BODY, COLOR_PLAYER_BODY_DARK,
-  COLOR_PLAYER_FEMALE_BODY, COLOR_PLAYER_FEMALE_BODY_DARK, COLOR_PLAYER_FEMALE_HAIR,
-  COLOR_DRILL_BASE, COLOR_DRILL_TIP,
-  COLOR_SLIME_GRAY, COLOR_SLIME_GRAY_LIGHT, COLOR_SLIME_PURPLE, COLOR_SLIME_PURPLE_LIGHT,
-  COLOR_SLIME_RED, COLOR_SLIME_RED_LIGHT, COLOR_SLIME_BLUE, COLOR_SLIME_BLUE_LIGHT,
-  COLOR_SLIME_YELLOW, COLOR_SLIME_YELLOW_LIGHT, COLOR_SLIME_GHOST, COLOR_SLIME_GHOST_LIGHT,
-  COLOR_SLIME_EYE, COLOR_SLIME_PUPIL,
-  COLOR_XP_ORB, COLOR_XP_GLOW,
-  COLOR_MINIMAP_BG, COLOR_MINIMAP_PLAYER, COLOR_MINIMAP_ENEMY,
-  COLOR_ATTACK_FLASH, COLOR_DAMAGE_PARTICLE, COLOR_DRILL_PARTICLE,
-  COLOR_SPIKE, COLOR_SPIKE_TIP, COLOR_ROCK, COLOR_POISON_CLOUD,
-  COLOR_LAVA_GEYSER, COLOR_VOID_CRACK, COLOR_VOID_PULL, COLOR_VORTEX,
-  COLOR_TRAP_WARNING,
-  COLOR_PRESSURE_PLATE, COLOR_PLATE_ACTIVE, COLOR_LEVER, COLOR_LEVER_HANDLE,
-  COLOR_PUSH_BLOCK, COLOR_REFLECTOR, COLOR_BEAM, COLOR_BREAKABLE_WALL,
-  COLOR_TELEPORT_RUNE, COLOR_TELEPORT_ENTRY, COLOR_TELEPORT_EXIT,
-  COLOR_BOSS_CRYSTAL, COLOR_BOSS_MUSHROOM, COLOR_BOSS_LAVA, COLOR_BOSS_ABYSS, COLOR_BOSS_VOID,
-  COLOR_BOSS_HP_BAR, COLOR_BOSS_HP_BG,
-  COLOR_CHEST_NORMAL, COLOR_CHEST_ELITE, COLOR_CHEST_BOSS, COLOR_CHEST_GLOW,
-  COLOR_SHADOW_FLOOR, COLOR_SHADOW_WALL, COLOR_SHADOW_PARTICLE,
-  TransformForm, TRANSFORM_MAX_ENERGY, TRANSFORM_COOLDOWN, TRANSFORM_PASSIVE_REGEN,
-  TRANSFORM_DRAIN_RATES, TRANSFORM_SPEEDS, TRANSFORM_ATTACK_COSTS, TRANSFORM_ATTACK_COOLDOWNS,
-  TRANSFORM_DAMAGE_REDUCTION, TRANSFORM_ENERGY_KILL_SLIME,
-  TRANSFORM_ENERGY_KILL_BOSS, TRANSFORM_ENERGY_XP_ORB, TRANSFORM_ACTIVATE_ANIM, TRANSFORM_REVERT_ANIM,
-  COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_SLIME_DARK, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_GHOST_DARK,
-  COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_ARMOR_ACCENT, COLOR_TRANSFORM_IRON_RED, COLOR_TRANSFORM_IRON_GOLD,
-  COLOR_TRANSFORM_FLASH,
-  GameState, SaveData, SAVE_VERSION, AUTO_SAVE_INTERVAL,
+  BossState, BossRoom, Inventory, TransformUnlockNotify,
+  BossType, EVOLUTION_COST_ORE, EVOLUTION_COST_NORMAL, EVOLUTION_COST_RARE,
+  COLOR_BG, TransformForm, TRANSFORM_MAX_ENERGY,
+  GameState, SaveData, AUTO_SAVE_INTERVAL,
 } from './GameConstants';
-import { WorldGenerator } from './WorldGenerator';
-import { AudioManager } from './AudioManager';
-import { ParticleManager, ParticleEmitter, EmitterConfig, EmitterMode, ParticleShape,
-  createExplosionConfig, createSparkConfig, createDustConfig, createTrailConfig,
-  createBloodConfig, createMagicConfig, createSmokeConfig } from './ParticleSystem';
-import { PhysicsEngine, PhysicsBody, createBody, vec2Distance, vec2Normalize, vec2 } from './PhysicsEngine';
-import { TileBatchRenderer, SpriteBatch, GlowBatchRenderer } from '../engine/internal/SpriteBatch';
-import { GameContext, ChunkCacheEntry } from './GameContext';
+import { GameContext } from './GameContext';
 import { PlayerMovementSystem, MovementBridge } from './systems/PlayerMovementSystem';
 import { PlayerCombatSystem } from './systems/PlayerCombatSystem';
 import { TransformSystem, TransformBridge } from './systems/TransformSystem';
@@ -116,22 +59,13 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   }
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
-    cacheCtxs?: CanvasRenderingContext2D[], appContext?: Object): void {
+    appContext?: Object): void {
     this.ctx = ctx;
     this.minimapCtx = minimapCtx;
     this.screenW = screenW;
     this.screenH = screenH;
     if (appContext) {
       this.context = appContext;
-    }
-
-    if (cacheCtxs) {
-      this.cacheCtxs = cacheCtxs;
-      this.cacheEntryPool = new Array(cacheCtxs.length).fill(null);
-      this.freePoolIndices = [];
-      for (let i: number = 0; i < cacheCtxs.length; i++) {
-        this.freePoolIndices.push(i);
-      }
     }
 
     this.audio.init();
@@ -277,10 +211,6 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     return LEVEL_UP_XP;
   }
 
-  getSettings(): GameSettings {
-    return this.settings;
-  }
-
   setSettings(s: GameSettings): void {
     this.settings = s;
     this.audio.setSettings(s);
@@ -295,17 +225,6 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
 
   setInputTool(pressed: boolean): void {
     this.input.toolPressed = pressed;
-  }
-
-  switchWeaponForm(form: WeaponForm): void {
-    if (this.player === null) return;
-    const forms: WeaponForm[] = this.player.unlockedForms;
-    let found: boolean = false;
-    for (let i: number = 0; i < forms.length; i++) {
-      if (forms[i] === form) { found = true; break; }
-    }
-    if (!found) return;
-    this.player.currentWeaponForm = form;
   }
 
   cycleWeaponForm(): void {
@@ -499,13 +418,18 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   }
 
   render(): void {
-    if (this.ctx === null || this.player === null) return;
+    if (this.ctx === null || this.player === null) {
+      console.log('[GameEngine.render] SKIP - ctx:', !!this.ctx, 'player:', !!this.player);
+      return;
+    }
+    console.log('[GameEngine.render] START - screenW:', this.screenW, 'screenH:', this.screenH);
     const c: CanvasRenderingContext2D = this.ctx;
     const p: PlayerState = this.player;
 
     c.clearRect(0, 0, this.screenW, this.screenH);
     c.fillStyle = COLOR_BG;
     c.fillRect(0, 0, this.screenW, this.screenH);
+    console.log('[GameEngine.render] Background filled');
 
     const offX: number = -this.cameraX + this.shakeX;
     const offY: number = -this.cameraY + this.shakeY;
@@ -634,10 +558,6 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     return this.evolutionSystem!.unlockWeaponForm(form);
   }
 
-  getEvolutionInfo(): string[] {
-    return this.evolutionSystem!.getEvolutionInfo();
-  }
-
   getEvoBranch(): number {
     return this.evolutionSystem!.getEvoBranch();
   }
@@ -728,10 +648,6 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     return this.player;
   }
 
-  getState(): GameState {
-    return this.state;
-  }
-
   setOnStateChange(cb: (state: GameState) => void): void {
     this.onStateChange = cb;
   }
@@ -792,16 +708,10 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.secretRooms = [];
     this.transformCoreDrops = [];
     this.particleMgr.clear();
-    this.activeChunkCaches.clear();
-    this.cacheEntryPool = new Array(this.cacheCtxs.length).fill(null);
-    this.freePoolIndices = [];
-    for (let i: number = 0; i < this.cacheCtxs.length; i++) {
-      this.freePoolIndices.push(i);
-    }
     this.frameCount = 0;
     this.setState(GameState.PLAYING);
     if (this.ctx && this.minimapCtx) {
-      this.init(this.ctx, this.minimapCtx, this.screenW, this.screenH, this.cacheCtxs, this.context ?? undefined);
+      this.init(this.ctx, this.minimapCtx, this.screenW, this.screenH, this.context ?? undefined);
     }
   }
 

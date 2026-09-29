@@ -32,16 +32,6 @@ export class SaveManager {
     }
   }
 
-  static async hasSave(context: common.UIAbilityContext): Promise<boolean> {
-    try {
-      const pref = await preferences.getPreferences(context, SAVE_PREF_NAME);
-      const jsonStr: string = await pref.get(SAVE_KEY, '') as string;
-      return jsonStr.length > 0;
-    } catch (e) {
-      return false;
-    }
-  }
-
   static async deleteSave(context: common.UIAbilityContext): Promise<void> {
     try {
       const pref = await preferences.getPreferences(context, SAVE_PREF_NAME);

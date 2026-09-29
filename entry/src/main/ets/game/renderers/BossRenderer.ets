@@ -31,142 +31,650 @@ export class BossRenderer {
       const screenX: number = boss.x + offX;
       const screenY: number = boss.y + offY;
 
-      if (screenX < -60 || screenX > this.g.screenW + 60 || screenY < -60 || screenY > this.g.screenH + 60) {
+      if (screenX < -80 || screenX > this.g.screenW + 80 || screenY < -80 || screenY > this.g.screenH + 80) {
         continue;
       }
 
       const bossColor: string = this.g.getBossColor(boss.bossType);
       const halfSize: number = boss.size / 2;
       const pulse: number = Math.sin(this.g.frameCount * 0.05) * 2;
+      const t: number = this.g.frameCount;
+
+      // Ground shadow for all bosses
+      c.globalAlpha = 0.2;
+      c.fillStyle = '#000000';
+      c.beginPath();
+      c.ellipse(screenX, screenY + halfSize + 4, halfSize * 0.8, 4, 0, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 1.0;
 
       if (boss.hitFlash > 0) {
         c.globalAlpha = 0.5 + 0.5 * Math.sin(boss.hitFlash * 0.05);
         c.fillStyle = '#ffffff';
-        c.fillRect(screenX - halfSize - 2, screenY - halfSize - 2, boss.size + 4, boss.size + 4);
+        c.beginPath();
+        c.arc(screenX, screenY, halfSize + 4, 0, Math.PI * 2);
+        c.fill();
+        c.globalAlpha = 1.0;
       }
-
-      c.globalAlpha = 1.0;
 
       if (boss.bossType === BossType.CRYSTAL_GUARDIAN) {
-        c.fillStyle = bossColor;
-        c.beginPath();
-        c.moveTo(screenX, screenY - halfSize - pulse);
-        c.lineTo(screenX + halfSize + pulse, screenY);
-        c.lineTo(screenX, screenY + halfSize + pulse);
-        c.lineTo(screenX - halfSize - pulse, screenY);
-        c.closePath();
-        c.fill();
-        c.fillStyle = '#67e8f9';
-        c.globalAlpha = 0.5 + 0.3 * Math.sin(this.g.frameCount * 0.08);
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize * 0.4, 0, Math.PI * 2);
-        c.fill();
-        c.globalAlpha = 1.0;
-        c.fillStyle = '#ffffff';
-        c.fillRect(screenX - 6, screenY - 4, 4, 6);
-        c.fillRect(screenX + 3, screenY - 4, 4, 6);
+        this.renderCrystalGuardian(c, screenX, screenY, halfSize, pulse, bossColor, boss, t);
       } else if (boss.bossType === BossType.MUSHROOM_KING) {
-        c.fillStyle = bossColor;
-        c.beginPath();
-        c.arc(screenX, screenY - 4, halfSize + pulse, Math.PI, 0);
-        c.closePath();
-        c.fill();
-        c.fillStyle = '#ff9ec4';
-        c.beginPath();
-        c.arc(screenX - 8, screenY - 12, 4, 0, Math.PI * 2);
-        c.fill();
-        c.beginPath();
-        c.arc(screenX + 6, screenY - 16, 3, 0, Math.PI * 2);
-        c.fill();
-        c.fillStyle = COLOR_MUSHROOM_STEM;
-        c.fillRect(screenX - 8, screenY - 4, 16, halfSize);
-        c.fillStyle = '#ffffff';
-        c.fillRect(screenX - 5, screenY + 2, 4, 5);
-        c.fillRect(screenX + 2, screenY + 2, 4, 5);
+        this.renderMushroomKing(c, screenX, screenY, halfSize, pulse, bossColor, boss, t);
       } else if (boss.bossType === BossType.LAVA_BEAST) {
-        c.fillStyle = bossColor;
-        c.fillRect(screenX - halfSize, screenY - halfSize, boss.size, boss.size);
-        c.strokeStyle = '#ffd700';
-        c.lineWidth = 2;
-        c.globalAlpha = 0.6 + 0.4 * Math.sin(this.g.frameCount * 0.1);
-        c.beginPath();
-        c.moveTo(screenX - 10, screenY - 12);
-        c.lineTo(screenX - 2, screenY + 4);
-        c.lineTo(screenX + 8, screenY - 6);
-        c.moveTo(screenX + 4, screenY + 2);
-        c.lineTo(screenX - 6, screenY + 14);
-        c.stroke();
-        c.globalAlpha = 1.0;
-        c.lineWidth = 1;
-        c.fillStyle = '#ffd700';
-        c.fillRect(screenX - 7, screenY - 6, 5, 5);
-        c.fillRect(screenX + 3, screenY - 6, 5, 5);
+        this.renderLavaBeast(c, screenX, screenY, halfSize, pulse, bossColor, boss, t);
       } else if (boss.bossType === BossType.ABYSS_SIREN) {
-        c.fillStyle = bossColor;
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize + pulse, 0, Math.PI * 2);
-        c.fill();
-        c.strokeStyle = COLOR_WATER_LIGHT;
-        c.lineWidth = 3;
-        c.globalAlpha = 0.6;
-        for (let t: number = 0; t < 4; t++) {
-          const angle: number = (t / 4) * Math.PI * 2 + this.g.frameCount * 0.03;
-          const ex: number = screenX + Math.cos(angle) * (halfSize + 10);
-          const ey: number = screenY + Math.sin(angle) * (halfSize + 10);
-          c.beginPath();
-          c.moveTo(screenX + Math.cos(angle) * halfSize * 0.5, screenY + Math.sin(angle) * halfSize * 0.5);
-          c.quadraticCurveTo(
-            screenX + Math.cos(angle + 0.5) * halfSize,
-            screenY + Math.sin(angle + 0.5) * halfSize,
-            ex, ey
-          );
-          c.stroke();
-        }
-        c.globalAlpha = 1.0;
-        c.lineWidth = 1;
-        c.fillStyle = '#ffffff';
-        c.beginPath();
-        c.arc(screenX - 6, screenY - 3, 4, 0, Math.PI * 2);
-        c.fill();
-        c.beginPath();
-        c.arc(screenX + 6, screenY - 3, 4, 0, Math.PI * 2);
-        c.fill();
+        this.renderAbyssSiren(c, screenX, screenY, halfSize, pulse, bossColor, boss, t);
       } else if (boss.bossType === BossType.VOID_RIFT) {
-        c.fillStyle = bossColor;
-        c.globalAlpha = 0.8;
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize + pulse + 4, 0, Math.PI * 2);
-        c.fill();
-        c.fillStyle = '#0d0d1a';
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize * 0.5, 0, Math.PI * 2);
-        c.fill();
-        c.strokeStyle = '#a855f7';
-        c.lineWidth = 2;
-        c.globalAlpha = 0.5;
-        const spin: number = this.g.frameCount * 0.04;
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize * 0.7, spin, spin + Math.PI * 1.2);
-        c.stroke();
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize * 0.9, spin + Math.PI, spin + Math.PI * 2.2);
-        c.stroke();
-        c.globalAlpha = 1.0;
-        c.lineWidth = 1;
+        this.renderVoidRift(c, screenX, screenY, halfSize, pulse, bossColor, boss, t);
       }
 
+      // Phase 2 aura
       if (boss.phase === BossPhase.PHASE_2) {
-        c.strokeStyle = bossColor;
-        c.lineWidth = 2;
-        c.globalAlpha = 0.3 + 0.2 * Math.sin(this.g.frameCount * 0.1);
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize + 8 + pulse, 0, Math.PI * 2);
-        c.stroke();
-        c.globalAlpha = 1.0;
-        c.lineWidth = 1;
+        this.renderPhase2Aura(c, screenX, screenY, halfSize, pulse, bossColor, t);
       }
     }
     c.globalAlpha = 1.0;
+  }
+
+  private renderCrystalGuardian(c: CanvasRenderingContext2D, sx: number, sy: number,
+    hs: number, pulse: number, color: string, boss: BossState, t: number): void {
+    // Outer refraction glow
+    c.globalAlpha = 0.12 + Math.sin(t * 0.04) * 0.05;
+    c.fillStyle = '#67e8f9';
+    c.beginPath();
+    c.moveTo(sx, sy - hs - pulse - 6);
+    c.lineTo(sx + hs + pulse + 6, sy);
+    c.lineTo(sx, sy + hs + pulse + 6);
+    c.lineTo(sx - hs - pulse - 6, sy);
+    c.closePath();
+    c.fill();
+
+    // Main crystal body
+    c.globalAlpha = 0.9;
+    c.fillStyle = color;
+    c.beginPath();
+    c.moveTo(sx, sy - hs - pulse);
+    c.lineTo(sx + hs + pulse, sy);
+    c.lineTo(sx, sy + hs + pulse);
+    c.lineTo(sx - hs - pulse, sy);
+    c.closePath();
+    c.fill();
+
+    // Crystal facet lines
+    c.strokeStyle = '#a5f3fc';
+    c.lineWidth = 1;
+    c.globalAlpha = 0.4;
+    c.beginPath();
+    c.moveTo(sx, sy - hs - pulse);
+    c.lineTo(sx + 4, sy + 2);
+    c.lineTo(sx, sy + hs + pulse);
+    c.moveTo(sx, sy - hs - pulse);
+    c.lineTo(sx - 4, sy + 2);
+    c.lineTo(sx, sy + hs + pulse);
+    c.moveTo(sx - hs - pulse, sy);
+    c.lineTo(sx, sy + 3);
+    c.lineTo(sx + hs + pulse, sy);
+    c.stroke();
+
+    // Left facet highlight
+    c.fillStyle = '#67e8f9';
+    c.globalAlpha = 0.25;
+    c.beginPath();
+    c.moveTo(sx - 2, sy - hs * 0.6);
+    c.lineTo(sx - hs * 0.7, sy);
+    c.lineTo(sx - 2, sy + 2);
+    c.closePath();
+    c.fill();
+
+    // Right facet shadow
+    c.fillStyle = '#0e4a5c';
+    c.globalAlpha = 0.2;
+    c.beginPath();
+    c.moveTo(sx + 2, sy - hs * 0.6);
+    c.lineTo(sx + hs * 0.7, sy);
+    c.lineTo(sx + 2, sy + 2);
+    c.closePath();
+    c.fill();
+
+    // Top crystal spike crown
+    c.globalAlpha = 0.7;
+    c.fillStyle = '#22d3ee';
+    c.beginPath();
+    c.moveTo(sx - 4, sy - hs * 0.5);
+    c.lineTo(sx - 2, sy - hs * 0.9 - pulse);
+    c.lineTo(sx, sy - hs * 0.5);
+    c.closePath();
+    c.fill();
+    c.beginPath();
+    c.moveTo(sx + 1, sy - hs * 0.5);
+    c.lineTo(sx + 3, sy - hs * 0.85 - pulse);
+    c.lineTo(sx + 5, sy - hs * 0.5);
+    c.closePath();
+    c.fill();
+
+    // Inner core glow
+    c.fillStyle = '#67e8f9';
+    c.globalAlpha = 0.5 + 0.3 * Math.sin(t * 0.08);
+    c.beginPath();
+    c.arc(sx, sy, hs * 0.35, 0, Math.PI * 2);
+    c.fill();
+
+    // Shimmer particles orbiting
+    for (let p: number = 0; p < 5; p++) {
+      const ang: number = (p / 5) * Math.PI * 2 + t * 0.03;
+      const dist: number = hs * 0.7 + Math.sin(t * 0.06 + p * 2) * 3;
+      const px: number = sx + Math.cos(ang) * dist;
+      const py: number = sy + Math.sin(ang) * dist * 0.6;
+      c.fillStyle = '#a5f3fc';
+      c.globalAlpha = 0.4 + Math.sin(t * 0.1 + p) * 0.2;
+      c.fillRect(px - 1, py - 1, 2, 2);
+    }
+
+    // Eyes - crystal blue with glow
+    c.globalAlpha = 1.0;
+    c.fillStyle = '#ffffff';
+    c.fillRect(sx - 7, sy - 5, 5, 7);
+    c.fillRect(sx + 3, sy - 5, 5, 7);
+    c.fillStyle = '#0891b2';
+    c.fillRect(sx - 6, sy - 3, 3, 4);
+    c.fillRect(sx + 4, sy - 3, 3, 4);
+    c.fillStyle = '#ffffff';
+    c.fillRect(sx - 6, sy - 4, 1.5, 1.5);
+    c.fillRect(sx + 4, sy - 4, 1.5, 1.5);
+
+    c.globalAlpha = 1.0;
+  }
+
+  private renderMushroomKing(c: CanvasRenderingContext2D, sx: number, sy: number,
+    hs: number, pulse: number, color: string, boss: BossState, t: number): void {
+    // Spore particles floating upward
+    for (let sp: number = 0; sp < 4; sp++) {
+      const spY: number = sy - hs - 8 - ((t * 0.4 + sp * 12) % 30);
+      const spX: number = sx + Math.sin(t * 0.03 + sp * 3) * 10;
+      const spAlpha: number = 0.3 * (1 - ((t * 0.4 + sp * 12) % 30) / 30);
+      c.fillStyle = '#ff9ec4';
+      c.globalAlpha = spAlpha;
+      c.beginPath();
+      c.arc(spX, spY, 1.5, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // Stem body
+    c.globalAlpha = 1.0;
+    c.fillStyle = COLOR_MUSHROOM_STEM;
+    c.fillRect(sx - 9, sy - 4, 18, hs + 4);
+    // Stem shading
+    c.fillStyle = '#d4a574';
+    c.globalAlpha = 0.2;
+    c.fillRect(sx - 9, sy - 4, 4, hs + 4);
+    c.fillStyle = '#8b6040';
+    c.globalAlpha = 0.15;
+    c.fillRect(sx + 5, sy - 4, 4, hs + 4);
+    // Stem texture lines
+    c.strokeStyle = '#a07850';
+    c.lineWidth = 0.8;
+    c.globalAlpha = 0.2;
+    c.beginPath();
+    c.moveTo(sx - 4, sy);
+    c.lineTo(sx - 4, sy + hs);
+    c.moveTo(sx + 3, sy + 2);
+    c.lineTo(sx + 3, sy + hs - 2);
+    c.stroke();
+
+    // Cap (dome)
+    c.globalAlpha = 0.9;
+    c.fillStyle = color;
+    c.beginPath();
+    c.arc(sx, sy - 4, hs + pulse, Math.PI, 0);
+    c.closePath();
+    c.fill();
+
+    // Cap underside (gills)
+    c.fillStyle = '#cc4488';
+    c.globalAlpha = 0.3;
+    c.fillRect(sx - hs + 2, sy - 5, (hs - 2) * 2, 3);
+    // Gill lines
+    c.strokeStyle = '#aa3366';
+    c.lineWidth = 0.6;
+    c.globalAlpha = 0.25;
+    for (let gl: number = 0; gl < 7; gl++) {
+      const glX: number = sx - hs + 4 + gl * ((hs * 2 - 8) / 6);
+      c.beginPath();
+      c.moveTo(glX, sy - 5);
+      c.lineTo(glX, sy - 2);
+      c.stroke();
+    }
+
+    // Cap spots with depth
+    c.globalAlpha = 0.9;
+    c.fillStyle = '#ff9ec4';
+    c.beginPath();
+    c.arc(sx - 10, sy - 14, 5, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(sx + 7, sy - 18, 3.5, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(sx - 2, sy - 20, 2.5, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(sx + 14, sy - 10, 2, 0, Math.PI * 2);
+    c.fill();
+    // Spot highlights
+    c.fillStyle = '#ffc0e0';
+    c.globalAlpha = 0.5;
+    c.beginPath();
+    c.arc(sx - 11, sy - 15, 2, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(sx + 6, sy - 19, 1.5, 0, Math.PI * 2);
+    c.fill();
+
+    // Cap highlight
+    c.fillStyle = '#ffffff';
+    c.globalAlpha = 0.15;
+    c.beginPath();
+    c.arc(sx - 5, sy - hs * 0.6, hs * 0.35, 0, Math.PI * 2);
+    c.fill();
+
+    // Eyes
+    c.globalAlpha = 1.0;
+    c.fillStyle = '#ffffff';
+    c.fillRect(sx - 6, sy + 2, 5, 6);
+    c.fillRect(sx + 2, sy + 2, 5, 6);
+    c.fillStyle = '#4a2040';
+    c.fillRect(sx - 5, sy + 3, 3, 4);
+    c.fillRect(sx + 3, sy + 3, 3, 4);
+    c.fillStyle = '#ffffff';
+    c.fillRect(sx - 5, sy + 2, 1.5, 1.5);
+    c.fillRect(sx + 3, sy + 2, 1.5, 1.5);
+
+    // Mouth
+    c.fillStyle = '#6b3050';
+    c.beginPath();
+    c.arc(sx, sy + 12, 3, 0, Math.PI);
+    c.fill();
+
+    c.globalAlpha = 1.0;
+  }
+
+  private renderLavaBeast(c: CanvasRenderingContext2D, sx: number, sy: number,
+    hs: number, pulse: number, color: string, boss: BossState, t: number): void {
+    // Heat distortion aura
+    c.globalAlpha = 0.08 + Math.sin(t * 0.06) * 0.04;
+    c.fillStyle = '#ff4400';
+    c.beginPath();
+    c.arc(sx, sy, hs + 10 + pulse, 0, Math.PI * 2);
+    c.fill();
+
+    // Main body - dark rock
+    c.globalAlpha = 1.0;
+    c.fillStyle = '#3a1500';
+    c.fillRect(sx - hs, sy - hs, boss_size(boss), boss_size(boss));
+
+    // Rock texture overlay
+    c.fillStyle = '#2a0e00';
+    c.globalAlpha = 0.4;
+    c.fillRect(sx - hs + 2, sy - hs + 2, hs, hs * 0.6);
+    c.fillRect(sx + 2, sy + 2, hs - 2, hs * 0.8);
+    c.fillStyle = '#4a2010';
+    c.globalAlpha = 0.3;
+    c.fillRect(sx - hs + 4, sy - hs + 4, hs * 0.5, hs * 0.3);
+    c.fillRect(sx + 4, sy - 4, hs * 0.4, hs * 0.4);
+
+    // Magma cracks - animated glow
+    const crackGlow: number = 0.6 + 0.4 * Math.sin(t * 0.1);
+    c.strokeStyle = '#ff6600';
+    c.lineWidth = 2.5;
+    c.globalAlpha = crackGlow * 0.4;
+    c.beginPath();
+    c.moveTo(sx - 12, sy - 14);
+    c.lineTo(sx - 4, sy - 2);
+    c.lineTo(sx + 6, sy - 8);
+    c.moveTo(sx + 4, sy + 2);
+    c.lineTo(sx - 6, sy + 14);
+    c.moveTo(sx - 10, sy + 6);
+    c.lineTo(sx - 2, sy + 10);
+    c.lineTo(sx + 8, sy + 6);
+    c.stroke();
+
+    // Inner magma glow lines
+    c.strokeStyle = '#ffd700';
+    c.lineWidth = 1.5;
+    c.globalAlpha = crackGlow * 0.7;
+    c.beginPath();
+    c.moveTo(sx - 11, sy - 13);
+    c.lineTo(sx - 3, sy - 1);
+    c.lineTo(sx + 7, sy - 7);
+    c.moveTo(sx + 5, sy + 3);
+    c.lineTo(sx - 5, sy + 15);
+    c.stroke();
+
+    // Hot core spots
+    c.fillStyle = '#ffaa00';
+    c.globalAlpha = 0.3 + Math.sin(t * 0.08) * 0.15;
+    c.beginPath();
+    c.arc(sx - 3, sy, 5, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = '#ffd700';
+    c.globalAlpha = 0.2;
+    c.beginPath();
+    c.arc(sx + 6, sy + 8, 3, 0, Math.PI * 2);
+    c.fill();
+
+    // Ember particles rising
+    for (let em: number = 0; em < 4; em++) {
+      const emY: number = sy - hs - ((t * 0.6 + em * 10) % 20);
+      const emX: number = sx - 8 + em * 6 + Math.sin(t * 0.05 + em * 2) * 3;
+      const emAlpha: number = 0.6 * (1 - ((t * 0.6 + em * 10) % 20) / 20);
+      c.fillStyle = em % 2 === 0 ? '#ffaa00' : '#ff6600';
+      c.globalAlpha = emAlpha;
+      c.fillRect(emX, emY, 2, 2);
+    }
+
+    // Top edge glow
+    c.fillStyle = '#ff4400';
+    c.globalAlpha = 0.3 + Math.sin(t * 0.07) * 0.1;
+    c.fillRect(sx - hs, sy - hs, boss_size(boss), 2);
+    c.fillRect(sx - hs, sy - hs, 2, boss_size(boss));
+
+    // Eyes - glowing yellow
+    c.globalAlpha = 1.0;
+    c.fillStyle = '#ffd700';
+    c.fillRect(sx - 8, sy - 7, 6, 6);
+    c.fillRect(sx + 3, sy - 7, 6, 6);
+    // Pupils
+    c.fillStyle = '#ff4400';
+    c.fillRect(sx - 6, sy - 5, 3, 3);
+    c.fillRect(sx + 4, sy - 5, 3, 3);
+    // Eye glow
+    c.fillStyle = '#ffffff';
+    c.fillRect(sx - 7, sy - 6, 1.5, 1.5);
+    c.fillRect(sx + 4, sy - 6, 1.5, 1.5);
+
+    // Mouth - jagged
+    c.fillStyle = '#ff4400';
+    c.globalAlpha = 0.7;
+    c.beginPath();
+    c.moveTo(sx - 6, sy + 6);
+    c.lineTo(sx - 3, sy + 9);
+    c.lineTo(sx, sy + 6);
+    c.lineTo(sx + 3, sy + 9);
+    c.lineTo(sx + 6, sy + 6);
+    c.stroke();
+
+    c.globalAlpha = 1.0;
+    c.lineWidth = 1;
+  }
+
+  private renderAbyssSiren(c: CanvasRenderingContext2D, sx: number, sy: number,
+    hs: number, pulse: number, color: string, boss: BossState, t: number): void {
+    // Deep water aura
+    c.globalAlpha = 0.1;
+    c.fillStyle = COLOR_WATER_LIGHT;
+    c.beginPath();
+    c.arc(sx, sy, hs + 14 + pulse, 0, Math.PI * 2);
+    c.fill();
+
+    // Bubble particles
+    for (let b: number = 0; b < 5; b++) {
+      const bY: number = sy + hs - ((t * 0.3 + b * 8) % (hs * 2 + 16));
+      const bX: number = sx - 10 + b * 5 + Math.sin(t * 0.04 + b * 1.5) * 4;
+      const bSize: number = 1 + (b % 3) * 0.5;
+      const bAlpha: number = 0.3 * (1 - ((t * 0.3 + b * 8) % (hs * 2 + 16)) / (hs * 2 + 16));
+      c.strokeStyle = '#93c5fd';
+      c.lineWidth = 0.8;
+      c.globalAlpha = bAlpha;
+      c.beginPath();
+      c.arc(bX, bY, bSize, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    // Main body
+    c.globalAlpha = 0.9;
+    c.fillStyle = color;
+    c.beginPath();
+    c.arc(sx, sy, hs + pulse, 0, Math.PI * 2);
+    c.fill();
+
+    // Scale texture pattern
+    c.fillStyle = '#1a5a8a';
+    c.globalAlpha = 0.2;
+    for (let row: number = 0; row < 4; row++) {
+      for (let col: number = 0; col < 4; col++) {
+        const scX: number = sx - hs + 6 + col * 7 + (row % 2) * 3;
+        const scY: number = sy - hs + 6 + row * 6;
+        const dist: number = Math.sqrt((scX - sx) * (scX - sx) + (scY - sy) * (scY - sy));
+        if (dist < hs - 2) {
+          c.beginPath();
+          c.arc(scX, scY, 2.5, 0, Math.PI);
+          c.fill();
+        }
+      }
+    }
+
+    // Bioluminescent spots
+    c.fillStyle = '#67e8f9';
+    for (let bl: number = 0; bl < 6; bl++) {
+      const blAng: number = (bl / 6) * Math.PI * 2 + t * 0.01;
+      const blDist: number = hs * 0.5 + Math.sin(t * 0.03 + bl) * 2;
+      const blX: number = sx + Math.cos(blAng) * blDist;
+      const blY: number = sy + Math.sin(blAng) * blDist;
+      c.globalAlpha = 0.3 + Math.sin(t * 0.06 + bl * 2) * 0.2;
+      c.beginPath();
+      c.arc(blX, blY, 1.5, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // Body highlight
+    c.fillStyle = '#ffffff';
+    c.globalAlpha = 0.1;
+    c.beginPath();
+    c.ellipse(sx - hs * 0.2, sy - hs * 0.3, hs * 0.4, hs * 0.3, -0.3, 0, Math.PI * 2);
+    c.fill();
+
+    // Flowing tentacles with taper
+    c.strokeStyle = COLOR_WATER_LIGHT;
+    c.lineWidth = 3;
+    for (let tn: number = 0; tn < 6; tn++) {
+      const baseAngle: number = (tn / 6) * Math.PI * 2 + t * 0.02;
+      const wave1: number = Math.sin(t * 0.04 + tn * 1.5) * 6;
+      const wave2: number = Math.sin(t * 0.06 + tn * 2) * 4;
+      const startR: number = hs * 0.7;
+      const endR: number = hs + 14;
+      const startX: number = sx + Math.cos(baseAngle) * startR;
+      const startY: number = sy + Math.sin(baseAngle) * startR;
+      const midX: number = sx + Math.cos(baseAngle + 0.3) * (startR + endR) * 0.5 + wave1;
+      const midY: number = sy + Math.sin(baseAngle + 0.3) * (startR + endR) * 0.5 + wave2;
+      const endX: number = sx + Math.cos(baseAngle + 0.5) * endR + wave1 * 0.5;
+      const endY: number = sy + Math.sin(baseAngle + 0.5) * endR + wave2 * 0.5;
+
+      c.globalAlpha = 0.5;
+      c.beginPath();
+      c.moveTo(startX, startY);
+      c.quadraticCurveTo(midX, midY, endX, endY);
+      c.stroke();
+
+      // Tentacle tip glow
+      c.fillStyle = '#93c5fd';
+      c.globalAlpha = 0.4;
+      c.beginPath();
+      c.arc(endX, endY, 1.5, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // Inner ring
+    c.strokeStyle = '#38bdf8';
+    c.lineWidth = 1.5;
+    c.globalAlpha = 0.3;
+    c.beginPath();
+    c.arc(sx, sy, hs * 0.6, 0, Math.PI * 2);
+    c.stroke();
+
+    // Eyes - large, deep
+    c.globalAlpha = 1.0;
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.ellipse(sx - 7, sy - 4, 5, 5.5, 0, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.ellipse(sx + 7, sy - 4, 5, 5.5, 0, 0, Math.PI * 2);
+    c.fill();
+    // Iris
+    c.fillStyle = '#0369a1';
+    c.beginPath();
+    c.arc(sx - 6, sy - 3, 2.5, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(sx + 8, sy - 3, 2.5, 0, Math.PI * 2);
+    c.fill();
+    // Pupil
+    c.fillStyle = '#0c2d5e';
+    c.beginPath();
+    c.arc(sx - 6, sy - 3, 1.2, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(sx + 8, sy - 3, 1.2, 0, Math.PI * 2);
+    c.fill();
+    // Eye highlight
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.arc(sx - 7, sy - 4.5, 1, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(sx + 7, sy - 4.5, 1, 0, Math.PI * 2);
+    c.fill();
+
+    c.globalAlpha = 1.0;
+    c.lineWidth = 1;
+  }
+
+  private renderVoidRift(c: CanvasRenderingContext2D, sx: number, sy: number,
+    hs: number, pulse: number, color: string, boss: BossState, t: number): void {
+    // Outer distortion field
+    c.globalAlpha = 0.06;
+    c.fillStyle = '#7c3aed';
+    c.beginPath();
+    c.arc(sx, sy, hs + 20 + pulse, 0, Math.PI * 2);
+    c.fill();
+
+    // Orbiting debris particles
+    for (let d: number = 0; d < 8; d++) {
+      const dAng: number = (d / 8) * Math.PI * 2 + t * 0.025;
+      const dDist: number = hs + 6 + Math.sin(t * 0.04 + d * 1.7) * 5;
+      const dx: number = sx + Math.cos(dAng) * dDist;
+      const dy: number = sy + Math.sin(dAng) * dDist;
+      const dSize: number = 1 + (d % 3);
+      c.fillStyle = d % 2 === 0 ? '#a855f7' : '#6d28d9';
+      c.globalAlpha = 0.5 + Math.sin(t * 0.08 + d) * 0.2;
+      c.fillRect(dx - dSize / 2, dy - dSize / 2, dSize, dSize);
+    }
+
+    // Outer ring - dark energy
+    c.fillStyle = color;
+    c.globalAlpha = 0.7;
+    c.beginPath();
+    c.arc(sx, sy, hs + pulse + 4, 0, Math.PI * 2);
+    c.fill();
+
+    // Mid ring gradient
+    c.fillStyle = '#2d1060';
+    c.globalAlpha = 0.8;
+    c.beginPath();
+    c.arc(sx, sy, hs * 0.75, 0, Math.PI * 2);
+    c.fill();
+
+    // Event horizon (center void)
+    c.fillStyle = '#0d0d1a';
+    c.beginPath();
+    c.arc(sx, sy, hs * 0.45, 0, Math.PI * 2);
+    c.fill();
+
+    // Absolute black core
+    c.fillStyle = '#000000';
+    c.beginPath();
+    c.arc(sx, sy, hs * 0.25, 0, Math.PI * 2);
+    c.fill();
+
+    // Spinning energy arcs
+    const spin: number = t * 0.04;
+    c.strokeStyle = '#a855f7';
+    c.lineWidth = 2;
+    c.globalAlpha = 0.5;
+    c.beginPath();
+    c.arc(sx, sy, hs * 0.65, spin, spin + Math.PI * 1.2);
+    c.stroke();
+    c.beginPath();
+    c.arc(sx, sy, hs * 0.85, spin + Math.PI, spin + Math.PI * 2.2);
+    c.stroke();
+
+    // Inner crackling
+    c.strokeStyle = '#c084fc';
+    c.lineWidth = 1;
+    c.globalAlpha = 0.3;
+    for (let cr: number = 0; cr < 3; cr++) {
+      const crAng: number = (cr / 3) * Math.PI * 2 + t * 0.06;
+      const crR: number = hs * 0.5;
+      c.beginPath();
+      c.moveTo(sx + Math.cos(crAng) * hs * 0.25, sy + Math.sin(crAng) * hs * 0.25);
+      c.lineTo(sx + Math.cos(crAng + 0.2) * crR * 0.6, sy + Math.sin(crAng + 0.2) * crR * 0.6);
+      c.lineTo(sx + Math.cos(crAng + 0.1) * crR, sy + Math.sin(crAng + 0.1) * crR);
+      c.stroke();
+    }
+
+    // Void eye (center)
+    c.fillStyle = '#7c3aed';
+    c.globalAlpha = 0.4 + Math.sin(t * 0.05) * 0.2;
+    c.beginPath();
+    c.ellipse(sx, sy, hs * 0.15, hs * 0.08, 0, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = '#e9d5ff';
+    c.globalAlpha = 0.6;
+    c.beginPath();
+    c.arc(sx, sy, hs * 0.05, 0, Math.PI * 2);
+    c.fill();
+
+    c.globalAlpha = 1.0;
+    c.lineWidth = 1;
+  }
+
+  private renderPhase2Aura(c: CanvasRenderingContext2D, sx: number, sy: number,
+    hs: number, pulse: number, color: string, t: number): void {
+    // Pulsing double ring
+    c.strokeStyle = color;
+    c.lineWidth = 2;
+    c.globalAlpha = 0.3 + 0.2 * Math.sin(t * 0.1);
+    c.beginPath();
+    c.arc(sx, sy, hs + 8 + pulse, 0, Math.PI * 2);
+    c.stroke();
+
+    c.lineWidth = 1.5;
+    c.globalAlpha = 0.2 + 0.15 * Math.sin(t * 0.12 + 1);
+    c.beginPath();
+    c.arc(sx, sy, hs + 14 + pulse, 0, Math.PI * 2);
+    c.stroke();
+
+    // Energy crackling particles
+    for (let p: number = 0; p < 6; p++) {
+      const pAng: number = (p / 6) * Math.PI * 2 + t * 0.05;
+      const pDist: number = hs + 10 + Math.sin(t * 0.08 + p * 3) * 4;
+      const px: number = sx + Math.cos(pAng) * pDist;
+      const py: number = sy + Math.sin(pAng) * pDist;
+      c.fillStyle = '#ffffff';
+      c.globalAlpha = 0.4 + Math.sin(t * 0.15 + p * 2) * 0.3;
+      c.fillRect(px - 1, py - 1, 2, 2);
+    }
+
+    // Red/danger tint flash
+    c.fillStyle = '#ff0000';
+    c.globalAlpha = 0.03 + 0.02 * Math.sin(t * 0.08);
+    c.beginPath();
+    c.arc(sx, sy, hs + 16, 0, Math.PI * 2);
+    c.fill();
+
+    c.globalAlpha = 1.0;
+    c.lineWidth = 1;
   }
 
   private renderMaterialDrops(c: CanvasRenderingContext2D, offX: number, offY: number): void {
@@ -183,6 +691,7 @@ export class BossRenderer {
 
       const bob: number = Math.sin(this.g.frameCount * 0.06 + drop.bobPhase) * 3;
       const drawY: number = screenY + bob;
+      const t: number = this.g.frameCount;
 
       let color: string = '#ffffff';
       if (drop.type === MaterialType.CRYSTAL_ORE) color = COLOR_CRYSTAL;
@@ -194,18 +703,86 @@ export class BossRenderer {
       else if (drop.type === MaterialType.CORE_RARE) color = '#ffd700';
       else if (drop.type === MaterialType.FORM_CORE) color = '#e879f9';
 
-      c.globalAlpha = 0.3;
+      const isCore: boolean = drop.type === MaterialType.CORE_NORMAL ||
+        drop.type === MaterialType.CORE_RARE || drop.type === MaterialType.FORM_CORE;
+
+      // Outer glow
+      c.globalAlpha = 0.25 + Math.sin(t * 0.08 + drop.bobPhase) * 0.1;
       c.fillStyle = color;
       c.beginPath();
-      c.arc(screenX, drawY, 8, 0, Math.PI * 2);
+      c.arc(screenX, drawY, 10, 0, Math.PI * 2);
       c.fill();
 
-      c.globalAlpha = 1.0;
-      c.fillStyle = color;
-      c.fillRect(screenX - 4, drawY - 4, 8, 8);
-      c.strokeStyle = '#ffffff';
-      c.lineWidth = 1;
-      c.strokeRect(screenX - 4, drawY - 4, 8, 8);
+      if (isCore) {
+        // Core drops: round with inner glow and ring
+        c.globalAlpha = 0.9;
+        c.fillStyle = color;
+        c.beginPath();
+        c.arc(screenX, drawY, 5, 0, Math.PI * 2);
+        c.fill();
+
+        // Inner highlight
+        c.fillStyle = '#ffffff';
+        c.globalAlpha = 0.4;
+        c.beginPath();
+        c.arc(screenX - 1.5, drawY - 1.5, 2, 0, Math.PI * 2);
+        c.fill();
+
+        // Orbiting ring
+        c.strokeStyle = color;
+        c.lineWidth = 1;
+        c.globalAlpha = 0.5;
+        const ringAng: number = t * 0.06 + drop.bobPhase;
+        c.beginPath();
+        c.ellipse(screenX, drawY, 7, 3, ringAng, 0, Math.PI * 2);
+        c.stroke();
+
+        // Sparkle
+        c.fillStyle = '#ffffff';
+        c.globalAlpha = 0.5 + Math.sin(t * 0.12 + drop.bobPhase) * 0.3;
+        const spAng: number = t * 0.05 + drop.bobPhase;
+        const spX: number = screenX + Math.cos(spAng) * 6;
+        const spY: number = drawY + Math.sin(spAng) * 3;
+        c.fillRect(spX - 0.5, spY - 0.5, 1, 1);
+      } else {
+        // Ore drops: diamond/crystal shape
+        c.globalAlpha = 0.9;
+        c.fillStyle = color;
+        c.beginPath();
+        c.moveTo(screenX, drawY - 5);
+        c.lineTo(screenX + 4, drawY);
+        c.lineTo(screenX, drawY + 5);
+        c.lineTo(screenX - 4, drawY);
+        c.closePath();
+        c.fill();
+
+        // Crystal edge highlight
+        c.fillStyle = '#ffffff';
+        c.globalAlpha = 0.3;
+        c.beginPath();
+        c.moveTo(screenX, drawY - 5);
+        c.lineTo(screenX + 4, drawY);
+        c.lineTo(screenX, drawY);
+        c.closePath();
+        c.fill();
+
+        // Outline
+        c.strokeStyle = '#ffffff';
+        c.lineWidth = 0.8;
+        c.globalAlpha = 0.5;
+        c.beginPath();
+        c.moveTo(screenX, drawY - 5);
+        c.lineTo(screenX + 4, drawY);
+        c.lineTo(screenX, drawY + 5);
+        c.lineTo(screenX - 4, drawY);
+        c.closePath();
+        c.stroke();
+
+        // Sparkle
+        c.fillStyle = '#ffffff';
+        c.globalAlpha = 0.4 + Math.sin(t * 0.1 + drop.bobPhase * 2) * 0.3;
+        c.fillRect(screenX - 1, drawY - 6, 1, 1);
+      }
     }
     c.globalAlpha = 1.0;
   }
@@ -225,36 +802,112 @@ export class BossRenderer {
   }
 
   private drawBossHPBar(c: CanvasRenderingContext2D, boss: BossState): void {
-    const barW: number = 200;
-    const barH: number = 12;
+    const barW: number = 220;
+    const barH: number = 14;
     const barX: number = (this.g.screenW - barW) / 2;
-    const barY: number = 20;
+    const barY: number = 22;
     const hpRatio: number = Math.max(0, boss.hp / boss.maxHp);
+    const t: number = this.g.frameCount;
 
-    c.fillStyle = COLOR_BOSS_HP_BG;
-    c.globalAlpha = 0.8;
-    c.fillRect(barX - 2, barY - 2, barW + 4, barH + 4);
-
-    c.fillStyle = COLOR_BOSS_HP_BAR;
-    c.globalAlpha = 1.0;
-    c.fillRect(barX, barY, barW * hpRatio, barH);
-
-    c.strokeStyle = '#ffffff';
-    c.lineWidth = 1;
-    c.globalAlpha = 0.5;
-    c.strokeRect(barX - 2, barY - 2, barW + 4, barH + 4);
-
-    c.globalAlpha = 1.0;
+    // Boss name
     c.fillStyle = '#ffffff';
-    c.font = '10px sans-serif';
+    c.font = '11px sans-serif';
     c.textAlign = 'center';
+    c.globalAlpha = 0.9;
     let name: string = 'Boss';
-    if (boss.bossType === BossType.CRYSTAL_GUARDIAN) name = 'Crystal Guardian';
-    else if (boss.bossType === BossType.MUSHROOM_KING) name = 'Mushroom King';
-    else if (boss.bossType === BossType.LAVA_BEAST) name = 'Lava Beast';
-    else if (boss.bossType === BossType.ABYSS_SIREN) name = 'Abyss Siren';
-    else if (boss.bossType === BossType.VOID_RIFT) name = 'Void Rift';
-    if (boss.phase === BossPhase.PHASE_2) name += ' [Enraged]';
+    if (boss.bossType === BossType.CRYSTAL_GUARDIAN) name = '\u2666 Crystal Guardian';
+    else if (boss.bossType === BossType.MUSHROOM_KING) name = '\u2654 Mushroom King';
+    else if (boss.bossType === BossType.LAVA_BEAST) name = '\u2668 Lava Beast';
+    else if (boss.bossType === BossType.ABYSS_SIREN) name = '\u2620 Abyss Siren';
+    else if (boss.bossType === BossType.VOID_RIFT) name = '\u25CE Void Rift';
+    if (boss.phase === BossPhase.PHASE_2) name += '  [Enraged]';
     c.fillText(name, this.g.screenW / 2, barY - 6);
+
+    // Bar background with border
+    c.fillStyle = '#0a0a14';
+    c.globalAlpha = 0.85;
+    c.fillRect(barX - 3, barY - 3, barW + 6, barH + 6);
+
+    // Inner bg
+    c.fillStyle = COLOR_BOSS_HP_BG;
+    c.globalAlpha = 0.9;
+    c.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+
+    // HP bar with gradient-like effect (two layers)
+    const fillW: number = barW * hpRatio;
+    if (fillW > 0) {
+      // Bottom layer - darker
+      let barColor1: string = COLOR_BOSS_HP_BAR;
+      let barColor2: string = '#ff8888';
+      if (boss.phase === BossPhase.PHASE_2) {
+        barColor1 = '#ff4444';
+        barColor2 = '#ff8800';
+      }
+      c.fillStyle = barColor1;
+      c.globalAlpha = 1.0;
+      c.fillRect(barX, barY, fillW, barH);
+
+      // Top highlight stripe
+      c.fillStyle = barColor2;
+      c.globalAlpha = 0.4;
+      c.fillRect(barX, barY, fillW, barH * 0.4);
+
+      // Shimmer
+      c.fillStyle = '#ffffff';
+      c.globalAlpha = 0.1 + Math.sin(t * 0.06) * 0.05;
+      c.fillRect(barX, barY, fillW, 2);
+    }
+
+    // Phase divider marks
+    c.fillStyle = '#ffffff';
+    c.globalAlpha = 0.2;
+    c.fillRect(barX + barW * 0.25, barY, 1, barH);
+    c.fillRect(barX + barW * 0.5, barY, 1, barH);
+    c.fillRect(barX + barW * 0.75, barY, 1, barH);
+
+    // Decorative corner brackets
+    c.strokeStyle = '#ffffff';
+    c.lineWidth = 1.5;
+    c.globalAlpha = 0.5;
+    const cornerLen: number = 6;
+    // Top-left
+    c.beginPath();
+    c.moveTo(barX - 3, barY - 3 + cornerLen);
+    c.lineTo(barX - 3, barY - 3);
+    c.lineTo(barX - 3 + cornerLen, barY - 3);
+    c.stroke();
+    // Top-right
+    c.beginPath();
+    c.moveTo(barX + barW + 3 - cornerLen, barY - 3);
+    c.lineTo(barX + barW + 3, barY - 3);
+    c.lineTo(barX + barW + 3, barY - 3 + cornerLen);
+    c.stroke();
+    // Bottom-left
+    c.beginPath();
+    c.moveTo(barX - 3, barY + barH + 3 - cornerLen);
+    c.lineTo(barX - 3, barY + barH + 3);
+    c.lineTo(barX - 3 + cornerLen, barY + barH + 3);
+    c.stroke();
+    // Bottom-right
+    c.beginPath();
+    c.moveTo(barX + barW + 3 - cornerLen, barY + barH + 3);
+    c.lineTo(barX + barW + 3, barY + barH + 3);
+    c.lineTo(barX + barW + 3, barY + barH + 3 - cornerLen);
+    c.stroke();
+
+    // Enraged pulsing border
+    if (boss.phase === BossPhase.PHASE_2) {
+      c.strokeStyle = '#ff4444';
+      c.lineWidth = 1;
+      c.globalAlpha = 0.3 + 0.2 * Math.sin(t * 0.1);
+      c.strokeRect(barX - 4, barY - 4, barW + 8, barH + 8);
+    }
+
+    c.globalAlpha = 1.0;
+    c.lineWidth = 1;
   }
+}
+
+function boss_size(boss: BossState): number {
+  return boss.size;
 }

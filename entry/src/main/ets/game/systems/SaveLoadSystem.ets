@@ -115,12 +115,6 @@ export class SaveLoadSystem {
     this.g.materialDrops = [];
     this.g.particles = [];
     this.g.particleMgr.clear();
-    this.g.activeChunkCaches.clear();
-    this.g.cacheEntryPool = new Array(this.g.cacheCtxs.length).fill(null);
-    this.g.freePoolIndices = [];
-    for (let i: number = 0; i < this.g.cacheCtxs.length; i++) {
-      this.g.freePoolIndices.push(i);
-    }
 
     const ptx: number = Math.floor(p.x / TILE_SIZE);
     const pty: number = Math.floor(p.y / TILE_SIZE);

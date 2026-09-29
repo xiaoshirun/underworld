@@ -1,5 +1,5 @@
 import {
-  TILE_SIZE, CHUNK_SIZE,
+  TILE_SIZE,
   BiomeType, TileType,
   COLOR_BG, COLOR_WALL, COLOR_WALL_EDGE, COLOR_FLOOR, COLOR_FLOOR_VAR,
   COLOR_WATER, COLOR_WATER_LIGHT, COLOR_LAVA, COLOR_LAVA_LIGHT,
@@ -8,10 +8,7 @@ import {
   COLOR_GLOW_STONE, COLOR_GLOW, COLOR_PLANT, COLOR_PLANT_LIGHT,
   COLOR_SHADOW_FLOOR, COLOR_SHADOW_WALL,
 } from '../GameConstants';
-import { GameContext, ChunkCacheEntry } from '../GameContext';
-
-const CACHE_CANVAS_SIZE: number = CHUNK_SIZE * TILE_SIZE + 32;
-const CACHE_PADDING: number = 16;
+import { GameContext } from '../GameContext';
 
 export class TileRenderer {
   private g: GameContext;
@@ -150,49 +147,9 @@ export class TileRenderer {
     const viewBiome: BiomeType = this.g.worldGen.getBiome(camWorldX, camWorldY);
     const isShadow: boolean = viewBiome === BiomeType.SHADOW;
 
-    if (isShadow !== this.g.lastCacheIsShadow) {
-      this.g.lastCacheIsShadow = isShadow;
-      this.g.invalidateAllChunkCaches();
-    }
-
     const floorColor: string = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
     const floorVarColor: string = isShadow ? '#0a0a16' : COLOR_FLOOR_VAR;
     const wallColor: string = isShadow ? COLOR_SHADOW_WALL : COLOR_WALL;
-
-    if (this.g.cacheCtxs.length > 0) {
-      const startCX: number = Math.floor(startTX / CHUNK_SIZE) - 1;
-      const startCY: number = Math.floor(startTY / CHUNK_SIZE) - 1;
-      const endCX: number = Math.floor(endTX / CHUNK_SIZE) + 1;
-      const endCY: number = Math.floor(endTY / CHUNK_SIZE) + 1;
-
-      for (let cy: number = startCY; cy <= endCY; cy++) {
-        for (let cx: number = startCX; cx <= endCX; cx++) {
-          const key: string = this.g.chunkKey(cx, cy);
-          if (!this.g.activeChunkCaches.has(key)) {
-            if (this.g.freePoolIndices.length === 0) {
-              let oldestKey: string = '';
-              let oldestPool: number = Number.MAX_SAFE_INTEGER;
-              this.g.activeChunkCaches.forEach((entry: ChunkCacheEntry, k: string) => {
-                if (entry.poolIndex < oldestPool) {
-                  oldestPool = entry.poolIndex;
-                  oldestKey = k;
-                }
-              });
-              if (oldestKey !== '') {
-                this.g.invalidateChunkCache(oldestKey);
-              }
-            }
-            this.buildChunkCache(cx, cy);
-          }
-
-          const entry: ChunkCacheEntry | undefined = this.g.activeChunkCaches.get(key);
-          if (entry !== undefined) {
-            // TODO: ArkTS does not support drawImage(CanvasRenderingContext2D, ...);
-            // chunk cache rendering needs PixelMap-based approach
-          }
-        }
-      }
-    }
 
     for (let ty: number = startTY; ty <= endTY; ty++) {
       for (let tx: number = startTX; tx <= endTX; tx++) {
@@ -200,13 +157,13 @@ export class TileRenderer {
         const screenY: number = ty * TILE_SIZE + offY;
         const tile: number = this.g.getTile(tx * TILE_SIZE, ty * TILE_SIZE);
 
-        if (this.g.cacheCtxs.length === 0 && tile === TileType.WALL) {
+        if (tile === TileType.WALL) {
           this.renderStaticWall(c, screenX, screenY, tx, ty, wallColor, isShadow);
-        } else if (this.g.cacheCtxs.length === 0 && tile === TileType.FLOOR) {
+        } else if (tile === TileType.FLOOR) {
           this.renderStaticFloor(c, screenX, screenY, tx, ty, floorColor, floorVarColor, isShadow);
-        } else if (this.g.cacheCtxs.length === 0 && tile === TileType.BROKEN_WALL) {
+        } else if (tile === TileType.BROKEN_WALL) {
           this.renderStaticBrokenWall(c, screenX, screenY);
-        } else if (this.g.cacheCtxs.length === 0 && tile === TileType.PLANT) {
+        } else if (tile === TileType.PLANT) {
           this.renderStaticPlant(c, screenX, screenY, floorColor);
         } else if (tile === TileType.GLOW_STONE) {
           c.fillStyle = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
@@ -363,57 +320,6 @@ export class TileRenderer {
         }
       }
     }
-  }
-
-  buildChunkCache(cx: number, cy: number): void {
-    if (this.g.cacheCtxs.length === 0 || this.g.freePoolIndices.length === 0) return;
-    const key: string = this.g.chunkKey(cx, cy);
-    if (this.g.activeChunkCaches.has(key)) return;
-
-    const poolIndex: number = this.g.freePoolIndices.pop()!;
-    const cacheCtx: CanvasRenderingContext2D = this.g.cacheCtxs[poolIndex];
-
-    cacheCtx.clearRect(0, 0, CACHE_CANVAS_SIZE, CACHE_CANVAS_SIZE);
-
-    const chunkWorldX: number = cx * this.g.chunkPixelSize;
-    const chunkWorldY: number = cy * this.g.chunkPixelSize;
-    const cacheOffX: number = CACHE_PADDING - chunkWorldX;
-    const cacheOffY: number = CACHE_PADDING - chunkWorldY;
-
-    const camWorldX: number = this.g.cameraX + this.g.screenW / 2;
-    const camWorldY: number = this.g.cameraY + this.g.screenH / 2;
-    const viewBiome: BiomeType = this.g.worldGen.getBiome(camWorldX, camWorldY);
-    const isShadow: boolean = viewBiome === BiomeType.SHADOW;
-    const floorColor: string = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
-    const floorVarColor: string = isShadow ? '#0a0a16' : COLOR_FLOOR_VAR;
-    const wallColor: string = isShadow ? COLOR_SHADOW_WALL : COLOR_WALL;
-
-    const startTX: number = cx * CHUNK_SIZE;
-    const startTY: number = cy * CHUNK_SIZE;
-    const endTX: number = startTX + CHUNK_SIZE;
-    const endTY: number = startTY + CHUNK_SIZE;
-
-    for (let ty: number = startTY; ty < endTY; ty++) {
-      for (let tx: number = startTX; tx < endTX; tx++) {
-        const screenX: number = tx * TILE_SIZE + cacheOffX;
-        const screenY: number = ty * TILE_SIZE + cacheOffY;
-        const tile: number = this.g.getTile(tx * TILE_SIZE, ty * TILE_SIZE);
-
-        if (tile === TileType.WALL) {
-          this.renderStaticWall(cacheCtx, screenX, screenY, tx, ty, wallColor, isShadow);
-        } else if (tile === TileType.FLOOR) {
-          this.renderStaticFloor(cacheCtx, screenX, screenY, tx, ty, floorColor, floorVarColor, isShadow);
-        } else if (tile === TileType.BROKEN_WALL) {
-          this.renderStaticBrokenWall(cacheCtx, screenX, screenY);
-        } else if (tile === TileType.PLANT) {
-          this.renderStaticPlant(cacheCtx, screenX, screenY, floorColor);
-        }
-      }
-    }
-
-    const entry: ChunkCacheEntry = { key: key, poolIndex: poolIndex, isShadow: isShadow };
-    this.g.cacheEntryPool[poolIndex] = entry;
-    this.g.activeChunkCaches.set(key, entry);
   }
 
   private renderStaticWall(c: CanvasRenderingContext2D, screenX: number, screenY: number,

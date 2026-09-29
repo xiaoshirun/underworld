@@ -25,17 +25,10 @@ struct Index {
   private gameEngine: GameEngine = new GameEngine();
   private engine: Engine | null = null;
   private gameScene: GameScene | null = null;
-  private gameCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
-  private minimapCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
-  private cacheCtx0: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
-  private cacheCtx1: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
-  private cacheCtx2: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
-  private cacheCtx3: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
-  private cacheCtx4: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
-  private cacheCtx5: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
+  private gameCtx: CanvasRenderingContext2D | null = null;
+  private minimapCtx: CanvasRenderingContext2D | null = null;
   private gameCanvasReady: boolean = false;
   private minimapCanvasReady: boolean = false;
-  private cacheCanvasesReady: number = 0;
   @State screenW: number = 360;
   @State screenH: number = 780;
   @State playerHp: number = PLAYER_MAX_HP;
@@ -91,15 +84,16 @@ struct Index {
   aboutToAppear(): void {
     try {
       const displayInfo = display.getDefaultDisplaySync();
-      // Ensure landscape: width > height
-      const rawW: number = px2vp(displayInfo.width);
-      const rawH: number = px2vp(displayInfo.height);
-      if (rawW > rawH) {
-        this.screenW = rawW;
-        this.screenH = rawH;
+      const pxW: number = displayInfo.width;
+      const pxH: number = displayInfo.height;
+      const vpW: number = px2vp(pxW);
+      const vpH: number = px2vp(pxH);
+      if (pxW > pxH) {
+        this.screenW = vpW;
+        this.screenH = vpH;
       } else {
-        this.screenW = rawH;
-        this.screenH = rawW;
+        this.screenW = vpH;
+        this.screenH = vpW;
       }
       const params = router.getParams();
       if (params !== null && params !== undefined) {
@@ -126,36 +120,13 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Canvas(this.cacheCtx0)
-        .width(1056)
-        .height(1056)
-        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
-      Canvas(this.cacheCtx1)
-        .width(1056)
-        .height(1056)
-        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
-      Canvas(this.cacheCtx2)
-        .width(1056)
-        .height(1056)
-        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
-      Canvas(this.cacheCtx3)
-        .width(1056)
-        .height(1056)
-        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
-      Canvas(this.cacheCtx4)
-        .width(1056)
-        .height(1056)
-        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
-      Canvas(this.cacheCtx5)
-        .width(1056)
-        .height(1056)
-        .onReady(() => { this.cacheCanvasesReady++; this.tryInitEngine(); })
-
-      Canvas(this.gameCtx)
+      Canvas()
         .width('100%')
         .height('100%')
-        .onReady(() => {
+        .onReady((context: CanvasRenderingContext2D) => {
+          this.gameCtx = context;
           this.gameCanvasReady = true;
+          console.log('[Index] Game Canvas ready, context obtained');
           this.tryInitEngine();
         })
 
@@ -208,17 +179,19 @@ struct Index {
   @Builder
   MinimapView() {
     Stack() {
-      Canvas(this.minimapCtx)
+      Canvas()
         .width(MINIMAP_SIZE)
         .height(MINIMAP_SIZE)
-        .onReady(() => {
+        .onReady((context: CanvasRenderingContext2D) => {
+          this.minimapCtx = context;
           this.minimapCanvasReady = true;
+          console.log('[Index] Minimap Canvas ready, context obtained');
           this.tryInitEngine();
         })
     }
     .width(MINIMAP_SIZE + 6)
     .height(MINIMAP_SIZE + 6)
-    .margin({ left: 8, top: 46 })
+    .margin({ left: 8, top: 72 })
     .borderRadius(4)
     .border({ width: 3, color: '#475569' })
     .backgroundColor('#0a0a15')
@@ -244,7 +217,7 @@ struct Index {
         this.currentWeaponForm = this.gameEngine.getCurrentWeaponForm();
       }
     })
-    .position({ x: 10, y: this.screenH - 100 })
+    .position({ x: 10, y: this.screenH * 0.50 })
   }
 
   @Builder
@@ -317,7 +290,7 @@ struct Index {
     .backgroundColor('#0a0a15d0')
     .borderRadius(3)
     .border({ width: 2, color: '#334155' })
-    .position({ x: 10, y: this.screenH - 72 })
+    .position({ x: 10, y: this.screenH * 0.58 })
   }
 
   @Builder
@@ -403,7 +376,7 @@ struct Index {
     }
     .width(30)
     .height(30)
-    .position({ x: this.screenW - 72, y: 10 })
+    .position({ x: this.screenW - 74, y: 10 })
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
         this.gameEngine.pause();
@@ -445,7 +418,7 @@ struct Index {
     }
     .width(30)
     .height(30)
-    .position({ x: this.screenW - 74, y: 10 })
+    .position({ x: this.screenW - 110, y: 10 })
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
         this.refreshEvoState();
@@ -481,7 +454,7 @@ struct Index {
     }
     .width(JOYSTICK_RADIUS * 2)
     .height(JOYSTICK_RADIUS * 2)
-    .position({ x: 20, y: this.screenH - JOYSTICK_RADIUS * 2 - 40 })
+    .position({ x: 20, y: this.screenH * 0.66 })
     .onTouch((event: TouchEvent) => {
       this.handleJoystickTouch(event);
     })
@@ -511,7 +484,7 @@ struct Index {
       }
       .width(54)
       .height(54)
-      .position({ x: this.screenW - 66, y: this.screenH - 66 })
+      .position({ x: this.screenW - 66, y: this.screenH * 0.82 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
           this.gameEngine.setInputAttack(true);
@@ -540,7 +513,7 @@ struct Index {
       }
       .width(46)
       .height(46)
-      .position({ x: this.screenW - 128, y: this.screenH - 90 })
+      .position({ x: this.screenW - 120, y: this.screenH * 0.73 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
           this.gameEngine.setInputJump(true);
@@ -569,7 +542,7 @@ struct Index {
       }
       .width(40)
       .height(40)
-      .position({ x: this.screenW - 128, y: this.screenH - 38 })
+      .position({ x: this.screenW - 120, y: this.screenH * 0.88 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down && this.dashReady) {
           this.gameEngine.setInputDash(true);
@@ -601,7 +574,7 @@ struct Index {
       }
       .width(42)
       .height(42)
-      .position({ x: this.screenW - 66, y: this.screenH - 120 })
+      .position({ x: this.screenW - 66, y: this.screenH * 0.66 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down && this.toolReady) {
           this.gameEngine.setInputTool(true);
@@ -634,7 +607,7 @@ struct Index {
     .borderRadius(4)
     .border({ width: 3, color: '#fbbf24' })
     .justifyContent(FlexAlign.Center)
-    .position({ x: this.screenW * 0.05, y: this.screenH / 2 - 18 })
+    .position({ x: this.screenW * 0.05, y: this.screenH * 0.43 })
   }
 
   @Builder
@@ -1104,11 +1077,11 @@ struct Index {
   }
 
   private tryInitEngine(): void {
-    if (this.gameCanvasReady && this.minimapCanvasReady && this.cacheCanvasesReady >= 6) {
+    if (this.gameCanvasReady && this.minimapCanvasReady && this.gameCtx && this.minimapCtx) {
       const ctx = getContext(this) as common.UIAbilityContext;
       this.gameEngine.setExternalLoop(true);
       this.gameEngine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH,
-        [this.cacheCtx0, this.cacheCtx1, this.cacheCtx2, this.cacheCtx3, this.cacheCtx4, this.cacheCtx5], ctx);
+        ctx);
       this.gameEngine.setGender(this.playerGender);
       this.gameEngine.setSettings({
         soundEnabled: this.soundEnabled,
@@ -1147,7 +1120,10 @@ struct Index {
         appContext: ctx,
       }).then((engine: Engine) => {
         this.engine = engine;
+        console.log('[Index] Engine started, screenW:', this.screenW, 'screenH:', this.screenH);
         engine.start();
+      }).catch((error: Error) => {
+        console.error('Engine init failed:', error);
       });
 
       this.startStatusMonitor();
@@ -1257,7 +1233,7 @@ struct Index {
           .position({ x: 13, y: 23 })
       }
     }
-    .position({ x: 30, y: this.screenH - 140 })
+    .position({ x: this.screenW - 180, y: this.screenH * 0.57 })
     .onClick(() => {
       if (this.isTransformed) {
         this.gameEngine.deactivateTransform();
@@ -1290,7 +1266,7 @@ struct Index {
           .fontColor('#ffffffa0')
           .margin({ top: 1 })
       }
-      .position({ x: 74, y: this.screenH - 136 })
+      .position({ x: this.screenW - 178, y: this.screenH * 0.53 })
     }
   }
 
@@ -1340,7 +1316,7 @@ struct Index {
       .backgroundColor('#0a0a15f5')
       .borderRadius(6)
       .border({ width: 3, color: '#475569' })
-      .position({ x: (this.screenW - 260) / 2, y: (this.screenH - 130) / 2 })
+      .position({ x: (this.screenW - 260) / 2, y: this.screenH * 0.32 })
     }
   }
 
@@ -1366,7 +1342,7 @@ struct Index {
       .backgroundColor('#0a0a15f5')
       .borderRadius(6)
       .border({ width: 3, color: '#fbbf24' })
-      .position({ x: (this.screenW - 180) / 2, y: (this.screenH - 110) / 2 })
+      .position({ x: (this.screenW - 180) / 2, y: this.screenH * 0.35 })
     }
   }
 

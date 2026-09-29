@@ -17,9 +17,11 @@ export class GameScene extends Scene {
 
   update(dt: number): void {
     this.gameEngine.update(dt);
+    this.gameEngine.frameCount++;
   }
 
   render(ctx: CanvasRenderingContext2D): void {
+    console.log('[GameScene.render] called, gameEngine:', !!this.gameEngine);
     this.gameEngine.render();
   }
 }

@@ -1,17 +1,32 @@
 import {
-  PLAYER_SIZE,
-  TRANSFORM_ACTIVATE_ANIM, TRANSFORM_REVERT_ANIM,
-  WEAPON_FORM_STATS,
-  GenderType, WeaponForm, EvolutionBranch, EvolutionLevel, TransformForm,
-  PlayerState,
-  COLOR_PLAYER_SKIN, COLOR_PLAYER_HAIR, COLOR_PLAYER_BODY, COLOR_PLAYER_BODY_DARK,
-  COLOR_PLAYER_FEMALE_BODY, COLOR_PLAYER_FEMALE_BODY_DARK, COLOR_PLAYER_FEMALE_HAIR,
+  ATTACK_DURATION,
   COLOR_DRILL_TIP,
-  COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_SLIME_DARK,
-  COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_GHOST_DARK,
-  COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_ARMOR_ACCENT,
-  COLOR_TRANSFORM_IRON_RED, COLOR_TRANSFORM_IRON_GOLD,
+  COLOR_PLAYER_BODY,
+  COLOR_PLAYER_BODY_DARK,
+  COLOR_PLAYER_FEMALE_BODY,
+  COLOR_PLAYER_FEMALE_BODY_DARK,
+  COLOR_PLAYER_FEMALE_HAIR,
+  COLOR_PLAYER_HAIR,
+  COLOR_PLAYER_SKIN,
+  COLOR_TRANSFORM_ARMOR,
+  COLOR_TRANSFORM_ARMOR_ACCENT,
   COLOR_TRANSFORM_FLASH,
+  COLOR_TRANSFORM_GHOST,
+  COLOR_TRANSFORM_GHOST_DARK,
+  COLOR_TRANSFORM_IRON_GOLD,
+  COLOR_TRANSFORM_IRON_RED,
+  COLOR_TRANSFORM_SLIME,
+  COLOR_TRANSFORM_SLIME_DARK,
+  EvolutionBranch,
+  EvolutionLevel,
+  GenderType,
+  PLAYER_SIZE,
+  PlayerState,
+  TRANSFORM_ACTIVATE_ANIM,
+  TRANSFORM_REVERT_ANIM,
+  TransformForm,
+  WEAPON_FORM_STATS,
+  WeaponForm,
 } from '../GameConstants';
 import { GameContext } from '../GameContext';
 
@@ -309,6 +324,28 @@ export class PlayerRenderer {
     const perpX: number = -Math.sin(p.facing);
     const perpY: number = Math.cos(p.facing);
 
+    // Liquid metal flash at attack start
+    const atkProg: number = 1.0 - (p.attackTimer / ATTACK_DURATION);
+    if (atkProg < 0.25) {
+      const flashA: number = (1.0 - atkProg / 0.25) * 0.35;
+      c.globalAlpha = flashA;
+      c.fillStyle = '#e5e7eb';
+      c.beginPath();
+      c.arc(sx + Math.cos(p.facing) * 6, sy + bobY + Math.sin(p.facing) * 6, 4 + atkProg * 12, 0, Math.PI * 2);
+      c.fill();
+      // Chrome splash particles
+      for (let i: number = 0; i < 5; i++) {
+        const pa: number = p.facing + (i - 2) * 0.6;
+        const pd: number = 5 + atkProg / 0.25 * 10;
+        c.globalAlpha = flashA * 0.6;
+        c.fillStyle = '#d1d5db';
+        c.beginPath();
+        c.arc(sx + Math.cos(pa) * pd, sy + bobY + Math.sin(pa) * pd, 0.8, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.globalAlpha = 1.0;
+    }
+
     if (form === WeaponForm.BLADE) {
       const arcStart: number = p.facing - 1.0;
       const arcEnd: number = p.facing + 1.0;
@@ -329,6 +366,19 @@ export class PlayerRenderer {
       c.lineWidth = 1.5;
       c.beginPath();
       c.arc(sx, sy + bobY, range * 0.7, arcStart, arcEnd);
+      c.stroke();
+      // Chrome metallic trail
+      c.globalAlpha = 0.3;
+      c.strokeStyle = '#d1d5db';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(sx, sy + bobY, range * 0.6, arcStart + 0.2, arcEnd - 0.2);
+      c.stroke();
+      c.globalAlpha = 0.15;
+      c.strokeStyle = '#9ca3af';
+      c.lineWidth = 1;
+      c.beginPath();
+      c.arc(sx, sy + bobY, range * 0.5, arcStart + 0.4, arcEnd - 0.4);
       c.stroke();
       const sparkAng: number = p.facing + 0.8;
       const sparkX: number = sx + Math.cos(sparkAng) * range * 0.85;
@@ -500,59 +550,189 @@ export class PlayerRenderer {
         ['#ef4444', '#991b1b'],
       ];
       const colors: string[] = formColors[form];
-      const ballX: number = handX + cosF * 3;
-      const ballY: number = handY + sinF * 3;
       const t: number = this.g.frameCount * 0.06;
-      const pulse: number = Math.sin(t) * 0.8;
+      // Orbit: ball gently orbits around hand position
+      const orbitR: number = 2.5;
+      const orbitAng: number = t * 0.5;
+      const orbOffX: number = Math.cos(orbitAng) * orbitR;
+      const orbOffY: number = Math.sin(orbitAng) * orbitR * 0.6;
+      const ballX: number = handX + cosF * 3 + orbOffX;
+      const ballY: number = handY + sinF * 3 + orbOffY;
+      const pulse: number = Math.sin(t) * 0.6;
       const baseR: number = 3.5;
-      c.globalAlpha = 0.15 + Math.sin(t * 0.7) * 0.05;
+      // Ground shadow
+      c.globalAlpha = 0.12;
+      c.fillStyle = '#000000';
+      c.beginPath();
+      c.ellipse(ballX, ballY + baseR + 2, baseR * 0.8, 1.5, 0, 0, Math.PI * 2);
+      c.fill();
+      // Outer glow — breathing
+      c.globalAlpha = 0.12 + Math.sin(t * 0.7) * 0.04;
       c.fillStyle = colors[0];
       c.beginPath();
-      c.arc(ballX, ballY, baseR + 2 + pulse, 0, Math.PI * 2);
+      c.arc(ballX, ballY, baseR + 2.5 + pulse, 0, Math.PI * 2);
       c.fill();
-      c.globalAlpha = 0.85;
+      // Main chrome sphere
+      c.globalAlpha = 0.88;
       c.fillStyle = '#d1d5db';
       c.beginPath();
       c.arc(ballX, ballY, baseR + pulse * 0.3, 0, Math.PI * 2);
       c.fill();
+      // Dark underside for depth
       c.fillStyle = '#6b7280';
-      c.globalAlpha = 0.5;
+      c.globalAlpha = 0.45;
       c.beginPath();
-      c.arc(ballX + cosF * 0.8, ballY + sinF * 0.8 + 1, baseR * 0.7, 0, Math.PI * 2);
+      c.arc(ballX + cosF * 0.6, ballY + sinF * 0.6 + 1.2, baseR * 0.65, 0, Math.PI * 2);
       c.fill();
-      c.globalAlpha = 0.35;
+      // Primary color swirl — orbiting inside
+      c.globalAlpha = 0.4;
       c.fillStyle = colors[0];
-      const swirlX: number = ballX + Math.cos(t * 1.3) * 1.2;
-      const swirlY: number = ballY + Math.sin(t * 1.3) * 1.2;
+      const swirlX: number = ballX + Math.cos(t * 1.3) * 1.4;
+      const swirlY: number = ballY + Math.sin(t * 1.3) * 1.4;
       c.beginPath();
       c.arc(swirlX, swirlY, 1.8, 0, Math.PI * 2);
       c.fill();
-      c.globalAlpha = 0.2;
+      // Secondary swirl
+      c.globalAlpha = 0.25;
       c.fillStyle = colors[1];
-      const swirl2X: number = ballX + Math.cos(t * 0.9 + 2.5) * 1.5;
-      const swirl2Y: number = ballY + Math.sin(t * 0.9 + 2.5) * 1.5;
+      const swirl2X: number = ballX + Math.cos(t * 0.9 + 2.5) * 1.6;
+      const swirl2Y: number = ballY + Math.sin(t * 0.9 + 2.5) * 1.6;
       c.beginPath();
       c.arc(swirl2X, swirl2Y, 1.2, 0, Math.PI * 2);
       c.fill();
-      c.globalAlpha = 0.9;
+      // Third swirl — slower, larger, fainter
+      c.globalAlpha = 0.15;
+      c.fillStyle = colors[0];
+      const swirl3X: number = ballX + Math.cos(t * 0.5 + 4.0) * 1.8;
+      const swirl3Y: number = ballY + Math.sin(t * 0.5 + 4.0) * 1.0;
+      c.beginPath();
+      c.arc(swirl3X, swirl3Y, 2.2, 0, Math.PI * 2);
+      c.fill();
+      // Specular highlights
+      c.globalAlpha = 0.92;
       c.fillStyle = '#ffffff';
       c.beginPath();
-      c.arc(ballX - 1.2, ballY - 1.2, 1.2, 0, Math.PI * 2);
+      c.arc(ballX - 1.3, ballY - 1.3, 1.2, 0, Math.PI * 2);
       c.fill();
-      c.globalAlpha = 0.4;
+      c.globalAlpha = 0.45;
       c.fillStyle = '#f9fafb';
       c.beginPath();
       c.arc(ballX + 0.8, ballY + 0.5, 0.6, 0, Math.PI * 2);
       c.fill();
-      c.globalAlpha = 0.25;
+      // Surface tension ripple
+      c.globalAlpha = 0.2;
       c.strokeStyle = '#e5e7eb';
       c.lineWidth = 0.5;
-      const rippleR: number = baseR * 0.6 + Math.sin(t * 2) * 0.5;
+      const rippleR: number = baseR * 0.55 + Math.sin(t * 2) * 0.4;
       c.beginPath();
-      c.arc(ballX + Math.cos(t) * 0.5, ballY + Math.sin(t) * 0.5, rippleR, 0, Math.PI * 1.5);
+      c.arc(ballX + Math.cos(t) * 0.4, ballY + Math.sin(t) * 0.4, rippleR, 0, Math.PI * 1.5);
       c.stroke();
+      // Satellite droplets — tiny drops orbiting the ball
+      for (let i: number = 0; i < 3; i++) {
+        const dropAng: number = t * 0.8 + (Math.PI * 2 / 3) * i;
+        const dropDist: number = baseR + 1.8 + Math.sin(t * 1.5 + i * 2) * 0.5;
+        const dropX: number = ballX + Math.cos(dropAng) * dropDist;
+        const dropY: number = ballY + Math.sin(dropAng) * dropDist * 0.7;
+        const dropR: number = 0.5 + Math.sin(t * 2 + i) * 0.2;
+        c.globalAlpha = 0.5 + Math.sin(t + i * 1.5) * 0.15;
+        c.fillStyle = '#d1d5db';
+        c.beginPath();
+        c.arc(dropX, dropY, dropR, 0, Math.PI * 2);
+        c.fill();
+        // Tiny color tint on droplet
+        c.globalAlpha = 0.25;
+        c.fillStyle = colors[0];
+        c.beginPath();
+        c.arc(dropX + 0.2, dropY + 0.2, dropR * 0.6, 0, Math.PI * 2);
+        c.fill();
+      }
+      // Ghostly weapon form hint — flickers inside the ball
+      const hintAlpha: number = 0.06 + Math.sin(t * 0.3) * 0.03;
+      c.globalAlpha = hintAlpha;
+      c.strokeStyle = colors[0];
+      c.lineWidth = 0.6;
+      if (form === WeaponForm.BLADE || form === WeaponForm.DUAL_BLADES) {
+        // Hint of a blade line
+        c.beginPath();
+        c.moveTo(ballX - 1, ballY + 1);
+        c.lineTo(ballX + 2, ballY - 2);
+        c.stroke();
+      } else if (form === WeaponForm.WHIP) {
+        c.beginPath();
+        c.arc(ballX, ballY, 1.5, 0, Math.PI);
+        c.stroke();
+      } else if (form === WeaponForm.HAMMER) {
+        c.beginPath();
+        c.moveTo(ballX - 1.5, ballY - 1);
+        c.lineTo(ballX + 1.5, ballY - 1);
+        c.lineTo(ballX + 1.5, ballY + 1);
+        c.lineTo(ballX - 1.5, ballY + 1);
+        c.closePath();
+        c.stroke();
+      } else if (form === WeaponForm.STAFF) {
+        c.beginPath();
+        c.arc(ballX, ballY - 1, 1.2, 0, Math.PI * 2);
+        c.stroke();
+      } else if (form === WeaponForm.GREAT_AXE) {
+        c.beginPath();
+        c.moveTo(ballX - 1, ballY + 1.5);
+        c.quadraticCurveTo(ballX + 2, ballY, ballX - 1, ballY - 1.5);
+        c.stroke();
+      }
       c.globalAlpha = 1.0;
       return;
+    }
+
+    // === Morphing transition: ball → weapon ===
+    const atkProgress: number = 1.0 - (p.attackTimer / ATTACK_DURATION);
+    if (atkProgress < 0.35) {
+      const morphAlpha: number = (1.0 - atkProgress / 0.35) * 0.6;
+      const formColors2: string[][] = [
+        ['#60a5fa', '#2563eb'], ['#a78bfa', '#7c3aed'], ['#9ca3af', '#4b5563'],
+        ['#7dd3fc', '#0284c7'], ['#fb923c', '#c2410c'], ['#ef4444', '#991b1b'],
+      ];
+      const mc: string[] = formColors2[form];
+      const stretchLen: number = 8 + (1.0 - atkProgress / 0.35) * 6;
+      // Liquid metal stretching streaks from ball to weapon direction
+      c.globalAlpha = morphAlpha * 0.5;
+      c.strokeStyle = '#d1d5db';
+      c.lineWidth = 2.5;
+      c.beginPath();
+      c.moveTo(handX + cosF * 2, handY + sinF * 2);
+      c.lineTo(handX + cosF * stretchLen, handY + sinF * stretchLen);
+      c.stroke();
+      c.globalAlpha = morphAlpha * 0.35;
+      c.strokeStyle = mc[0];
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.moveTo(handX + cosF * 2 + perpX * 1, handY + sinF * 2 + perpY * 1);
+      c.lineTo(handX + cosF * stretchLen * 0.8, handY + sinF * stretchLen * 0.8);
+      c.stroke();
+      c.beginPath();
+      c.moveTo(handX + cosF * 2 - perpX * 1, handY + sinF * 2 - perpY * 1);
+      c.lineTo(handX + cosF * stretchLen * 0.7, handY + sinF * stretchLen * 0.7);
+      c.stroke();
+      // Splash ring at materialization point
+      c.globalAlpha = morphAlpha * 0.3;
+      c.strokeStyle = mc[0];
+      c.lineWidth = 1;
+      const splashR: number = 3 + atkProgress / 0.35 * 5;
+      c.beginPath();
+      c.arc(handX + cosF * 5, handY + sinF * 5, splashR, 0, Math.PI * 2);
+      c.stroke();
+      // Tiny droplets flying outward
+      for (let i: number = 0; i < 4; i++) {
+        const dropAng: number = fAng + (i - 1.5) * 0.8;
+        const dropDist: number = 3 + atkProgress / 0.35 * 8;
+        const dx: number = handX + cosF * 4 + Math.cos(dropAng) * dropDist;
+        const dy: number = handY + sinF * 4 + Math.sin(dropAng) * dropDist;
+        c.globalAlpha = morphAlpha * 0.4;
+        c.fillStyle = '#d1d5db';
+        c.beginPath();
+        c.arc(dx, dy, 0.6, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.globalAlpha = 1.0;
     }
 
     if (form === WeaponForm.BLADE) {
@@ -585,6 +765,21 @@ export class PlayerRenderer {
       c.beginPath();
       c.moveTo(baseX + cosF * 2, baseY + sinF * 2);
       c.lineTo(handX + cosF * (len - 3), handY + sinF * (len - 3));
+      c.stroke();
+      // Chrome edge — liquid metal sheen along the blade spine
+      c.globalAlpha = 0.2;
+      c.strokeStyle = '#d1d5db';
+      c.lineWidth = 0.6;
+      c.beginPath();
+      c.moveTo(baseX + perpX * 0.3, baseY + perpY * 0.3);
+      c.lineTo(tipX + perpX * 0.2, tipY + perpY * 0.2);
+      c.stroke();
+      c.globalAlpha = 0.12;
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 0.4;
+      c.beginPath();
+      c.moveTo(baseX - perpX * 0.8, baseY - perpY * 0.8);
+      c.lineTo(tipX - perpX * 0.3, tipY - perpY * 0.3);
       c.stroke();
       c.globalAlpha = 1.0;
       const guardCx: number = handX + cosF * 3;
@@ -788,6 +983,14 @@ export class PlayerRenderer {
       c.moveTo(8, -5);
       c.lineTo(8, 5);
       c.stroke();
+      // Liquid metal sheen on hammer face
+      c.globalAlpha = 0.15;
+      c.fillStyle = '#e5e7eb';
+      c.fillRect(-1, -4, 8, 2);
+      c.globalAlpha = 0.08;
+      c.fillStyle = '#ffffff';
+      c.fillRect(0, -3, 5, 1);
+      c.globalAlpha = 1.0;
       c.restore();
     } else if (form === WeaponForm.STAFF) {
       const len: number = 18;
@@ -874,6 +1077,19 @@ export class PlayerRenderer {
       c.beginPath();
       c.arc(orbX + 1, orbY + 0.5, 0.6, 0, Math.PI * 2);
       c.fill();
+      // Chrome ring — liquid metal origin hint
+      c.globalAlpha = 0.15;
+      c.strokeStyle = '#d1d5db';
+      c.lineWidth = 0.5;
+      c.beginPath();
+      c.arc(orbX, orbY, 4.5, 0, Math.PI * 2);
+      c.stroke();
+      c.globalAlpha = 0.08;
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 0.3;
+      c.beginPath();
+      c.arc(orbX, orbY, 5.2, 0.3, Math.PI * 1.3);
+      c.stroke();
       c.globalAlpha = 1.0;
     } else if (form === WeaponForm.DUAL_BLADES) {
       const len: number = 11;
@@ -1081,6 +1297,22 @@ export class PlayerRenderer {
       c.beginPath();
       c.arc(1.5, -0.5, 0.4, 0, Math.PI * 2);
       c.fill();
+      // Liquid metal edge sheen
+      c.globalAlpha = 0.18;
+      c.strokeStyle = '#e5e7eb';
+      c.lineWidth = 0.6;
+      c.beginPath();
+      c.moveTo(2, -6);
+      c.quadraticCurveTo(8, -4, 10, 0);
+      c.stroke();
+      c.globalAlpha = 0.1;
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 0.4;
+      c.beginPath();
+      c.moveTo(3, -5);
+      c.quadraticCurveTo(7, -3, 9, 0);
+      c.stroke();
+      c.globalAlpha = 1.0;
       c.restore();
     }
   }

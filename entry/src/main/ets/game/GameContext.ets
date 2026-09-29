@@ -1,6 +1,6 @@
 import {
   TILE_SIZE, CHUNK_SIZE, CHUNK_LOAD_RADIUS, BOSS_ROOM_SIZE,
-  TileType, BiomeType,
+  TileType,
   ChunkData, PlayerState, SlimeState, XpOrb, Particle,
   InputState, GameSettings, AmbientParticle,
   GenderType, BossState, BossRoom, MaterialDrop, ChestState, BossType,
@@ -11,24 +11,10 @@ import {
 import { WorldGenerator } from './WorldGenerator';
 import { AudioManager } from './AudioManager';
 import { ParticleManager } from './ParticleSystem';
-import { PhysicsEngine } from './PhysicsEngine';
-import { TileBatchRenderer, GlowBatchRenderer } from '../engine/internal/SpriteBatch';
-
-export interface ChunkCacheEntry {
-  key: string;
-  poolIndex: number;
-  isShadow: boolean;
-}
 
 export class GameContext {
   ctx: CanvasRenderingContext2D | null = null;
   minimapCtx: CanvasRenderingContext2D | null = null;
-  cacheCtxs: CanvasRenderingContext2D[] = [];
-  chunkPixelSize: number = CHUNK_SIZE * TILE_SIZE;
-  cacheEntryPool: (ChunkCacheEntry | null)[] = [];
-  activeChunkCaches: Map<string, ChunkCacheEntry> = new Map();
-  freePoolIndices: number[] = [];
-  lastCacheIsShadow: boolean = false;
   worldGen: WorldGenerator = new WorldGenerator();
   chunks: Map<string, ChunkData> = new Map();
   player: PlayerState | null = null;
@@ -64,9 +50,6 @@ export class GameContext {
   transformUnlockNotifyForm: TransformForm = TransformForm.NONE;
   transformAnimIsRevert: boolean = false;
   particleMgr: ParticleManager = new ParticleManager();
-  physics: PhysicsEngine = new PhysicsEngine();
-  tileBatch: TileBatchRenderer = new TileBatchRenderer(TILE_SIZE);
-  glowBatch: GlowBatchRenderer = new GlowBatchRenderer();
   input: InputState = {
     joyActive: false, joyDx: 0, joyDy: 0,
     jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false,
@@ -157,25 +140,6 @@ export class GameContext {
     const lx: number = tx - cx * CHUNK_SIZE;
     const ly: number = ty - cy * CHUNK_SIZE;
     chunk.tiles[ly][lx] = tileType;
-    this.invalidateChunkCache(key);
-  }
-
-  invalidateChunkCache(key: string): void {
-    const entry: ChunkCacheEntry | undefined = this.activeChunkCaches.get(key);
-    if (entry !== undefined) {
-      this.cacheEntryPool[entry.poolIndex] = null;
-      this.freePoolIndices.push(entry.poolIndex);
-      this.activeChunkCaches.delete(key);
-    }
-  }
-
-  invalidateAllChunkCaches(): void {
-    this.activeChunkCaches.clear();
-    this.cacheEntryPool = new Array(this.cacheCtxs.length).fill(null);
-    this.freePoolIndices = [];
-    for (let i: number = 0; i < this.cacheCtxs.length; i++) {
-      this.freePoolIndices.push(i);
-    }
   }
 
   isWalkable(tile: number): boolean {
