@@ -6,6 +6,11 @@ export class PositionComponent implements Component {
   x: number = 0;
   y: number = 0;
 
+  constructor(x: number = 0, y: number = 0) {
+    this.x = x;
+    this.y = y;
+  }
+
   getType(): string {
     return 'Position';
   }
@@ -15,6 +20,11 @@ export class VelocityComponent implements Component {
   vx: number = 0;
   vy: number = 0;
 
+  constructor(vx: number = 0, vy: number = 0) {
+    this.vx = vx;
+    this.vy = vy;
+  }
+
   getType(): string {
     return 'Velocity';
   }
@@ -23,6 +33,11 @@ export class VelocityComponent implements Component {
 export class HealthComponent implements Component {
   current: number = 100;
   max: number = 100;
+
+  constructor(current: number = 100, max: number = 100) {
+    this.current = current;
+    this.max = max;
+  }
 
   getType(): string {
     return 'Health';
@@ -58,6 +73,15 @@ export class ColliderComponent implements Component {
   offsetX: number = 0;
   offsetY: number = 0;
   isSolid: boolean = true;
+
+  constructor(width: number = 16, height: number = 16, offsetX: number = 0,
+              offsetY: number = 0, isSolid: boolean = true) {
+    this.width = width;
+    this.height = height;
+    this.offsetX = offsetX;
+    this.offsetY = offsetY;
+    this.isSolid = isSolid;
+  }
 
   getType(): string {
     return 'Collider';
