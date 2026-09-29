@@ -1,7 +1,5 @@
-import { FRAME_INTERVAL } from '../game/GameConstants';
+import { FRAME_INTERVAL, GameSettings } from '../game/GameConstants';
 import { GameContext } from '../game/GameContext';
-import { AudioManager } from '../game/AudioManager';
-import { GameSettings } from '../game/GameConstants';
 
 export class EngineBase extends GameContext {
   protected gameLoopId: number = -1;
