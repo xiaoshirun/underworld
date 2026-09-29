@@ -1,74 +1,110 @@
-import {
-  MaterialType, PlayerState, MaterialDrop, TransformForm,
-} from '../GameConstants';
-import { GameContext } from '../GameContext';
+import { System, SystemContext, Entity, PositionComponent } from '@qiuyu/engine';
+import { MaterialPickupComponent } from '../components/MaterialPickupComponent';
+import { TransformCorePickupComponent } from '../components/TransformCorePickupComponent';
+import { InventoryComponent } from '../components/InventoryComponent';
+import { MaterialType, TransformForm } from '../GameConstants';
 
-export class MaterialDropSystem {
-  private g: GameContext;
+const PICKUP_RANGE: number = 30;
 
-  constructor(g: GameContext) {
-    this.g = g;
-  }
+interface AudioManager {
+  playXpCollect(): void;
+}
 
-  update(p: PlayerState): void {
-    const collectRange: number = 30;
-    for (let i: number = this.g.materialDrops.length - 1; i >= 0; i--) {
-      const drop: MaterialDrop = this.g.materialDrops[i];
-      if (!drop.active) continue;
+export class MaterialDropSystem extends System {
 
-      const dx: number = p.x - drop.x;
-      const dy: number = p.y - drop.y;
+  update(entities: Entity[], context: SystemContext): void {
+    const player: Entity | null = context.world.findEntityByTag("player");
+    if (player === null) return;
+
+    const playerPos: PositionComponent | null = player.getComponent<PositionComponent>("Position");
+    const inventory: InventoryComponent | null = player.getComponent<InventoryComponent>("inventory");
+    if (playerPos === null || inventory === null) return;
+
+    const audio: AudioManager = context.audio as AudioManager;
+
+    // Material pickup pass
+    for (let i: number = 0; i < entities.length; i++) {
+      const e: Entity = entities[i];
+      if (!e.active || e.tag !== "materialDrop") continue;
+
+      const pos: PositionComponent | null = e.getComponent<PositionComponent>("Position");
+      const mat: MaterialPickupComponent | null = e.getComponent<MaterialPickupComponent>("materialPickup");
+      if (pos === null || mat === null) continue;
+
+      const dx: number = playerPos.x - pos.x;
+      const dy: number = playerPos.y - pos.y;
       const dist: number = Math.sqrt(dx * dx + dy * dy);
 
-      if (dist < collectRange) {
-        drop.active = false;
-        if (drop.type === MaterialType.CRYSTAL_ORE) p.inventory.crystalOre += drop.count;
-        else if (drop.type === MaterialType.MUSHROOM_ORE) p.inventory.mushroomOre += drop.count;
-        else if (drop.type === MaterialType.FLAME_ORE) p.inventory.flameOre += drop.count;
-        else if (drop.type === MaterialType.ABYSS_ORE) p.inventory.abyssOre += drop.count;
-        else if (drop.type === MaterialType.VOID_ORE) p.inventory.voidOre += drop.count;
-        else if (drop.type === MaterialType.CORE_NORMAL) p.inventory.coreNormal += drop.count;
-        else if (drop.type === MaterialType.CORE_RARE) p.inventory.coreRare += drop.count;
-        else if (drop.type === MaterialType.FORM_CORE) p.inventory.formCore += drop.count;
-
-        for (let t: number = 0; t < this.g.transformCoreDrops.length; t++) {
-          if (this.g.transformCoreDrops[t].dropIndex === i) {
-            const form: TransformForm = this.g.transformCoreDrops[t].form;
-            if (p.unlockedTransforms.indexOf(form) === -1) {
-              p.unlockedTransforms.push(form);
-              this.g.transformUnlockNotifyTimer = 3000;
-              this.g.transformUnlockNotifyForm = form;
-            }
-            this.g.transformCoreDrops.splice(t, 1);
-            break;
-          }
-        }
-
-        this.g.audio.playXpCollect();
-        if (this.g.settings.effectsEnabled) {
-          this.g.particleMgr.sparks(drop.x, drop.y, '#ffd700', 6);
-        }
+      if (dist < PICKUP_RANGE) {
+        this.addMaterialToInventory(inventory, mat.materialType, mat.amount);
+        e.active = false;
+        audio.playXpCollect();
       }
     }
 
-    if (this.g.materialDrops.length > 50) {
-      const active: MaterialDrop[] = [];
-      const indexMap: Map<number, number> = new Map();
-      for (let i: number = 0; i < this.g.materialDrops.length; i++) {
-        if (this.g.materialDrops[i].active) {
-          indexMap.set(i, active.length);
-          active.push(this.g.materialDrops[i]);
-        }
+    // Transform core pickup pass
+    for (let i: number = 0; i < entities.length; i++) {
+      const e: Entity = entities[i];
+      if (!e.active || e.tag !== "transformCore") continue;
+
+      const pos: PositionComponent | null = e.getComponent<PositionComponent>("Position");
+      const core: TransformCorePickupComponent | null = e.getComponent<TransformCorePickupComponent>("transformCorePickup");
+      if (pos === null || core === null) continue;
+
+      const dx: number = playerPos.x - pos.x;
+      const dy: number = playerPos.y - pos.y;
+      const dist: number = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < PICKUP_RANGE) {
+        // Add transform core to inventory
+        this.addTransformCoreToInventory(inventory, core.form);
+
+        // Mark as unlocked by changing entity tag so it won't match "transformCore" next frame
+        e.tag = "transformCoreUnlocked";
+
+        audio.playXpCollect();
       }
-      this.g.materialDrops = active;
-      for (let t: number = this.g.transformCoreDrops.length - 1; t >= 0; t--) {
-        const newIdx: number | undefined = indexMap.get(this.g.transformCoreDrops[t].dropIndex);
-        if (newIdx !== undefined) {
-          this.g.transformCoreDrops[t].dropIndex = newIdx;
-        } else {
-          this.g.transformCoreDrops.splice(t, 1);
-        }
-      }
+    }
+  }
+
+  private addMaterialToInventory(inventory: InventoryComponent, materialType: number, amount: number): void {
+    switch (materialType) {
+      case MaterialType.CRYSTAL_ORE:
+        inventory.crystalOre += amount;
+        break;
+      case MaterialType.MUSHROOM_ORE:
+        inventory.mushroomOre += amount;
+        break;
+      case MaterialType.FLAME_ORE:
+        inventory.flameOre += amount;
+        break;
+      case MaterialType.ABYSS_ORE:
+        inventory.abyssOre += amount;
+        break;
+      case MaterialType.VOID_ORE:
+        inventory.voidOre += amount;
+        break;
+      case MaterialType.CORE_NORMAL:
+        inventory.coreNormal += amount;
+        break;
+      case MaterialType.CORE_RARE:
+        inventory.coreRare += amount;
+        break;
+      case MaterialType.FORM_CORE:
+        inventory.formCore += amount;
+        break;
+    }
+  }
+
+  private addTransformCoreToInventory(inventory: InventoryComponent, form: number): void {
+    if (form === TransformForm.SLIME) {
+      inventory.transformCoreSlime += 1;
+    } else if (form === TransformForm.GHOST) {
+      inventory.transformCoreGhost += 1;
+    } else if (form === TransformForm.ARMOR) {
+      inventory.transformCoreArmor += 1;
+    } else if (form === TransformForm.IRON_MAN) {
+      inventory.transformCoreIronMan += 1;
     }
   }
 }
