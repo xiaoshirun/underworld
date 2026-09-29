@@ -1,35 +1,52 @@
+import { World } from '@qiuyu/engine';
 import {
-  TILE_SIZE,
+  TILE_SIZE, CHUNK_SIZE,
   BiomeType, TileType,
-  COLOR_BG, COLOR_WALL, COLOR_WALL_EDGE, COLOR_FLOOR, COLOR_FLOOR_VAR,
+  COLOR_WALL, COLOR_WALL_EDGE, COLOR_FLOOR, COLOR_FLOOR_VAR,
   COLOR_WATER, COLOR_WATER_LIGHT, COLOR_LAVA, COLOR_LAVA_LIGHT,
   COLOR_CRYSTAL, COLOR_CRYSTAL_GLOW,
   COLOR_MUSHROOM_CAP, COLOR_MUSHROOM_STEM, COLOR_MUSHROOM_GLOW,
   COLOR_GLOW_STONE, COLOR_GLOW, COLOR_PLANT, COLOR_PLANT_LIGHT,
   COLOR_SHADOW_FLOOR, COLOR_SHADOW_WALL,
+  GameSettings, ChunkData,
 } from '../GameConstants';
-import { GameContext } from '../GameContext';
+import { WorldGenerator } from '../WorldGenerator';
 
 export class TileRenderer {
-  private g: GameContext;
 
-  constructor(g: GameContext) {
-    this.g = g;
+  render(world: World, ctx: CanvasRenderingContext2D, cameraX: number,
+         cameraY: number, screenW: number, screenH: number,
+         settings: GameSettings, frameCount: number): void {
+    const offX: number = -cameraX;
+    const offY: number = -cameraY;
+    this.renderBackground(ctx, offX, offY, world, cameraX, cameraY, screenW, screenH, frameCount);
+    this.renderWorld(ctx, offX, offY, world, cameraX, cameraY, screenW, screenH, frameCount);
   }
 
-  render(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    this.renderBackground(c, offX, offY);
-    this.renderWorld(c, offX, offY);
+  private getTile(chunks: Map<string, Object>, worldX: number, worldY: number): number {
+    const tx: number = Math.floor(worldX / TILE_SIZE);
+    const ty: number = Math.floor(worldY / TILE_SIZE);
+    const cx: number = Math.floor(tx / CHUNK_SIZE);
+    const cy: number = Math.floor(ty / CHUNK_SIZE);
+    const key: string = cx + ',' + cy;
+    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
+    if (chunk === undefined) return TileType.WALL;
+    const lx: number = tx - cx * CHUNK_SIZE;
+    const ly: number = ty - cy * CHUNK_SIZE;
+    return chunk.tiles[ly][lx];
   }
 
-  private renderBackground(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    const w: number = this.g.screenW;
-    const h: number = this.g.screenH;
-    const depth: number = Math.min(1.0, Math.max(0, this.g.cameraY / (TILE_SIZE * 30)));
+  private renderBackground(c: CanvasRenderingContext2D, offX: number, offY: number,
+    world: World, cameraX: number, cameraY: number,
+    screenW: number, screenH: number, frameCount: number): void {
+    const w: number = screenW;
+    const h: number = screenH;
+    const depth: number = Math.min(1.0, Math.max(0, cameraY / (TILE_SIZE * 30)));
 
-    const camWorldX: number = this.g.cameraX + this.g.screenW / 2;
-    const camWorldY: number = this.g.cameraY + this.g.screenH / 2;
-    const viewBiome: BiomeType = this.g.worldGen.getBiome(camWorldX, camWorldY);
+    const camWorldX: number = cameraX + screenW / 2;
+    const camWorldY: number = cameraY + screenH / 2;
+    const worldGen: WorldGenerator = world.worldGen as WorldGenerator;
+    const viewBiome: BiomeType = worldGen.getBiome(camWorldX, camWorldY);
 
     let topC: string;
     let midC: string;
@@ -78,8 +95,8 @@ export class TileRenderer {
     c.fillStyle = grad;
     c.fillRect(0, 0, w, h);
 
-    const farOffX: number = this.g.cameraX * 0.1;
-    const farOffY: number = this.g.cameraY * 0.1;
+    const farOffX: number = cameraX * 0.1;
+    const farOffY: number = cameraY * 0.1;
     c.fillStyle = farSilhouetteC;
     c.globalAlpha = 0.6;
     const farStep: number = 80;
@@ -105,8 +122,8 @@ export class TileRenderer {
     }
     c.globalAlpha = 1.0;
 
-    const midOffX: number = this.g.cameraX * 0.3;
-    const midOffY: number = this.g.cameraY * 0.3;
+    const midOffX: number = cameraX * 0.3;
+    const midOffY: number = cameraY * 0.3;
     c.fillStyle = midSilhouetteC;
     c.globalAlpha = 0.4;
     const midStep: number = 50;
@@ -136,15 +153,19 @@ export class TileRenderer {
     c.globalAlpha = 1.0;
   }
 
-  private renderWorld(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    const startTX: number = Math.floor(this.g.cameraX / TILE_SIZE) - 1;
-    const startTY: number = Math.floor(this.g.cameraY / TILE_SIZE) - 1;
-    const endTX: number = Math.ceil((this.g.cameraX + this.g.screenW) / TILE_SIZE) + 1;
-    const endTY: number = Math.ceil((this.g.cameraY + this.g.screenH) / TILE_SIZE) + 1;
+  private renderWorld(c: CanvasRenderingContext2D, offX: number, offY: number,
+    world: World, cameraX: number, cameraY: number,
+    screenW: number, screenH: number, frameCount: number): void {
+    const chunks: Map<string, Object> = world.chunks;
+    const startTX: number = Math.floor(cameraX / TILE_SIZE) - 1;
+    const startTY: number = Math.floor(cameraY / TILE_SIZE) - 1;
+    const endTX: number = Math.ceil((cameraX + screenW) / TILE_SIZE) + 1;
+    const endTY: number = Math.ceil((cameraY + screenH) / TILE_SIZE) + 1;
 
-    const camWorldX: number = this.g.cameraX + this.g.screenW / 2;
-    const camWorldY: number = this.g.cameraY + this.g.screenH / 2;
-    const viewBiome: BiomeType = this.g.worldGen.getBiome(camWorldX, camWorldY);
+    const camWorldX: number = cameraX + screenW / 2;
+    const camWorldY: number = cameraY + screenH / 2;
+    const worldGen: WorldGenerator = world.worldGen as WorldGenerator;
+    const viewBiome: BiomeType = worldGen.getBiome(camWorldX, camWorldY);
     const isShadow: boolean = viewBiome === BiomeType.SHADOW;
 
     const floorColor: string = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
@@ -155,12 +176,12 @@ export class TileRenderer {
       for (let tx: number = startTX; tx <= endTX; tx++) {
         const screenX: number = tx * TILE_SIZE + offX;
         const screenY: number = ty * TILE_SIZE + offY;
-        const tile: number = this.g.getTile(tx * TILE_SIZE, ty * TILE_SIZE);
+        const tile: number = this.getTile(chunks, tx * TILE_SIZE, ty * TILE_SIZE);
 
         if (tile === TileType.WALL) {
-          this.renderStaticWall(c, screenX, screenY, tx, ty, wallColor, isShadow);
+          this.renderStaticWall(c, screenX, screenY, tx, ty, wallColor, isShadow, chunks);
         } else if (tile === TileType.FLOOR) {
-          this.renderStaticFloor(c, screenX, screenY, tx, ty, floorColor, floorVarColor, isShadow);
+          this.renderStaticFloor(c, screenX, screenY, tx, ty, floorColor, floorVarColor, isShadow, chunks);
         } else if (tile === TileType.BROKEN_WALL) {
           this.renderStaticBrokenWall(c, screenX, screenY);
         } else if (tile === TileType.PLANT) {
@@ -168,7 +189,7 @@ export class TileRenderer {
         } else if (tile === TileType.GLOW_STONE) {
           c.fillStyle = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          const glowR: number = 20 + Math.sin(this.g.frameCount * 0.05 + tx) * 4;
+          const glowR: number = 20 + Math.sin(frameCount * 0.05 + tx) * 4;
           c.globalAlpha = 0.15;
           c.fillStyle = isShadow ? '#7c3aed' : COLOR_GLOW;
           c.beginPath();
@@ -184,8 +205,8 @@ export class TileRenderer {
           c.arc(screenX + TILE_SIZE / 2 - 1, screenY + TILE_SIZE / 2 - 1, 2, 0, Math.PI * 2);
           c.fill();
         } else if (tile === TileType.WATER) {
-          const waveOff: number = Math.sin(this.g.frameCount * 0.03 + tx * 0.5) * 2;
-          const waveOff2: number = Math.sin(this.g.frameCount * 0.05 + tx * 0.8) * 1.5;
+          const waveOff: number = Math.sin(frameCount * 0.03 + tx * 0.5) * 2;
+          const waveOff2: number = Math.sin(frameCount * 0.05 + tx * 0.8) * 1.5;
 
           c.globalAlpha = 0.75;
           c.fillStyle = COLOR_WATER;
@@ -197,7 +218,7 @@ export class TileRenderer {
           c.fillRect(screenX, screenY + TILE_SIZE - 8, TILE_SIZE, 8);
           c.globalAlpha = 1.0;
 
-          const aboveWater: number = this.g.getTile(tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
+          const aboveWater: number = this.getTile(chunks, tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
           if (aboveWater !== TileType.WATER) {
             c.fillStyle = COLOR_WATER_LIGHT;
             c.globalAlpha = 0.6;
@@ -218,7 +239,7 @@ export class TileRenderer {
 
           const bubbleHash: number = ((tx * 61 + ty * 113) % 23);
           if (bubbleHash < 3) {
-            const bubbleY: number = (this.g.frameCount * 0.3 + bubbleHash * 11) % TILE_SIZE;
+            const bubbleY: number = (frameCount * 0.3 + bubbleHash * 11) % TILE_SIZE;
             const bubbleX: number = 6 + bubbleHash * 9;
             c.fillStyle = '#ffffff';
             c.globalAlpha = 0.25;
@@ -230,7 +251,7 @@ export class TileRenderer {
         } else if (tile === TileType.CRYSTAL) {
           c.fillStyle = COLOR_FLOOR;
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          const glow: number = 12 + Math.sin(this.g.frameCount * 0.04 + tx + ty) * 4;
+          const glow: number = 12 + Math.sin(frameCount * 0.04 + tx + ty) * 4;
           c.globalAlpha = 0.2;
           c.fillStyle = COLOR_CRYSTAL_GLOW;
           c.beginPath();
@@ -272,8 +293,8 @@ export class TileRenderer {
           c.arc(screenX + 19, screenY + 9, 1.5, 0, Math.PI * 2);
           c.fill();
         } else if (tile === TileType.LAVA) {
-          const lavaOff: number = Math.sin(this.g.frameCount * 0.05 + tx * 0.7) * 3;
-          const lavaOff2: number = Math.sin(this.g.frameCount * 0.08 + tx * 1.2) * 2;
+          const lavaOff: number = Math.sin(frameCount * 0.05 + tx * 0.7) * 3;
+          const lavaOff2: number = Math.sin(frameCount * 0.08 + tx * 1.2) * 2;
 
           c.fillStyle = COLOR_LAVA;
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
@@ -298,10 +319,10 @@ export class TileRenderer {
             c.globalAlpha = 1.0;
           }
 
-          const aboveLava: number = this.g.getTile(tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
+          const aboveLava: number = this.getTile(chunks, tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
           if (aboveLava !== TileType.LAVA) {
             c.fillStyle = '#ff6600';
-            c.globalAlpha = 0.5 + Math.sin(this.g.frameCount * 0.06 + tx) * 0.15;
+            c.globalAlpha = 0.5 + Math.sin(frameCount * 0.06 + tx) * 0.15;
             c.fillRect(screenX, screenY, TILE_SIZE, 2);
             c.fillStyle = '#ffaa00';
             c.globalAlpha = 0.25;
@@ -311,7 +332,7 @@ export class TileRenderer {
 
           const emberHash: number = ((tx * 71 + ty * 127) % 19);
           if (emberHash < 2) {
-            const emberY: number = (this.g.frameCount * 0.5 + emberHash * 7) % TILE_SIZE;
+            const emberY: number = (frameCount * 0.5 + emberHash * 7) % TILE_SIZE;
             c.fillStyle = '#ffcc00';
             c.globalAlpha = 0.4;
             c.fillRect(screenX + 8 + emberHash * 10, screenY + TILE_SIZE - emberY, 1, 1);
@@ -323,7 +344,8 @@ export class TileRenderer {
   }
 
   private renderStaticWall(c: CanvasRenderingContext2D, screenX: number, screenY: number,
-    tx: number, ty: number, wallColor: string, isShadow: boolean): void {
+    tx: number, ty: number, wallColor: string, isShadow: boolean,
+    chunks: Map<string, Object>): void {
     c.fillStyle = wallColor;
     c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
 
@@ -384,7 +406,7 @@ export class TileRenderer {
       c.fillRect(screenX + 15, screenY + 15, 2, 2);
     }
 
-    const belowTile: number = this.g.getTile(tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
+    const belowTile: number = this.getTile(chunks, tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
     if (belowTile === TileType.FLOOR || belowTile === TileType.BROKEN_WALL) {
       c.fillStyle = isShadow ? '#4a1a6a' : '#2d6b3a';
       c.fillRect(screenX, screenY + TILE_SIZE - 3, TILE_SIZE, 3);
@@ -396,7 +418,7 @@ export class TileRenderer {
       c.fillRect(screenX + 28, screenY + TILE_SIZE - 5, 2, 3);
     }
 
-    const belowWall: number = this.g.getTile(tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
+    const belowWall: number = this.getTile(chunks, tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
     if (belowWall !== TileType.WALL && belowWall !== TileType.FLOOR) {
       const vineHash: number = ((tx * 41 + ty * 67) % 11);
       if (vineHash < 3) {
@@ -416,7 +438,8 @@ export class TileRenderer {
   }
 
   private renderStaticFloor(c: CanvasRenderingContext2D, screenX: number, screenY: number,
-    tx: number, ty: number, floorColor: string, floorVarColor: string, isShadow: boolean): void {
+    tx: number, ty: number, floorColor: string, floorVarColor: string, isShadow: boolean,
+    chunks: Map<string, Object>): void {
     const variant: number = ((tx * 7 + ty * 13) % 5);
     c.fillStyle = variant === 0 ? floorColor : variant === 1 ? floorVarColor : variant === 2 ? '#14142a' : variant === 3 ? '#10101e' : floorColor;
     c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
@@ -446,7 +469,7 @@ export class TileRenderer {
     c.fillRect(screenX + TILE_SIZE - 1, screenY, 1, TILE_SIZE);
     c.globalAlpha = 1.0;
 
-    const aboveTile: number = this.g.getTile(tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
+    const aboveTile: number = this.getTile(chunks, tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
     if (aboveTile === TileType.WALL) {
       c.fillStyle = isShadow ? '#1a0a2e' : '#1a1a28';
       c.fillRect(screenX, screenY, TILE_SIZE, 3);
@@ -468,7 +491,7 @@ export class TileRenderer {
       }
     }
 
-    const belowFloor: number = this.g.getTile(tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
+    const belowFloor: number = this.getTile(chunks, tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
     if (belowFloor !== TileType.FLOOR && belowFloor !== TileType.WALL) {
       const smHash: number = ((tx * 37 + ty * 79) % 17);
       if (smHash < 2) {

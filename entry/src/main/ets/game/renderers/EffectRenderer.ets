@@ -1,56 +1,93 @@
+import { World, Entity, PositionComponent, HealthComponent } from '@qiuyu/engine';
 import {
-  TrapInstance, TrapState, TrapType, TRAP_TELEGRAPH_TIME,
-  MechanismInstance, MechanismType,
+  TrapState, TrapType, TRAP_TELEGRAPH_TIME,
+  MechanismType,
   Particle, AmbientParticle,
-  PlayerState, PLAYER_MAX_HP,
-  BiomeType, TileType, TILE_SIZE,
-  ChestState, ChestType, CHEST_SIZE,
+  BiomeType, TileType, TILE_SIZE, CHUNK_SIZE,
+  ChestType, CHEST_SIZE,
   COLOR_TRAP_WARNING, COLOR_SPIKE, COLOR_SPIKE_TIP, COLOR_ROCK,
   COLOR_POISON_CLOUD, COLOR_LAVA, COLOR_LAVA_GEYSER,
   COLOR_VOID_CRACK, COLOR_VOID_PULL, COLOR_VORTEX,
   COLOR_PLATE_ACTIVE, COLOR_PRESSURE_PLATE, COLOR_LEVER, COLOR_LEVER_HANDLE,
   COLOR_PUSH_BLOCK, COLOR_REFLECTOR, COLOR_BREAKABLE_WALL,
   COLOR_TELEPORT_EXIT, COLOR_TELEPORT_ENTRY, COLOR_TELEPORT_RUNE,
-  COLOR_CHEST_GLOW, COLOR_CHEST_NORMAL, COLOR_CHEST_ELITE, COLOR_CHEST_BOSS
+  COLOR_CHEST_GLOW, COLOR_CHEST_NORMAL, COLOR_CHEST_ELITE, COLOR_CHEST_BOSS,
+  GameSettings, ChunkData,
 } from '../GameConstants';
-import { GameContext } from '../GameContext';
+import { TrapComponent } from '../components/TrapComponent';
+import { MechanismComponent } from '../components/MechanismComponent';
+import { ChestComponent } from '../components/ChestComponent';
+import { GameStateComponent } from '../components/GameStateComponent';
+import { WorldGenerator } from '../WorldGenerator';
 
 export class EffectRenderer {
-  private g: GameContext;
 
-  constructor(g: GameContext) {
-    this.g = g;
+  private getTile(chunks: Map<string, Object>, worldX: number, worldY: number): number {
+    const tx: number = Math.floor(worldX / TILE_SIZE);
+    const ty: number = Math.floor(worldY / TILE_SIZE);
+    const cx: number = Math.floor(tx / CHUNK_SIZE);
+    const cy: number = Math.floor(ty / CHUNK_SIZE);
+    const key: string = cx + ',' + cy;
+    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
+    if (chunk === undefined) return TileType.WALL;
+    const lx: number = tx - cx * CHUNK_SIZE;
+    const ly: number = ty - cy * CHUNK_SIZE;
+    return chunk.tiles[ly][lx];
   }
 
-  render(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    this.renderTraps(c, offX, offY);
-    this.renderMechanisms(c, offX, offY);
-    this.renderChests(c, offX, offY);
+  render(world: World, ctx: CanvasRenderingContext2D, cameraX: number,
+         cameraY: number, screenW: number, screenH: number,
+         settings: GameSettings, frameCount: number): void {
+    const offX: number = -cameraX;
+    const offY: number = -cameraY;
+    this.renderTraps(ctx, offX, offY, world, screenW, screenH, frameCount);
+    this.renderMechanisms(ctx, offX, offY, world, screenW, screenH, frameCount);
+    this.renderChests(ctx, offX, offY, world, screenW, screenH, settings, frameCount);
   }
 
-  renderParticles(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    this.renderParticlesInternal(c, offX, offY);
+  renderParticles(world: World, ctx: CanvasRenderingContext2D, cameraX: number,
+                  cameraY: number, screenW: number, screenH: number,
+                  settings: GameSettings, frameCount: number,
+                  particles: Particle[]): void {
+    const offX: number = -cameraX;
+    const offY: number = -cameraY;
+    this.renderParticlesInternal(ctx, offX, offY, particles);
   }
 
-  renderAmbient(c: CanvasRenderingContext2D): void {
-    this.renderAmbientParticles(c);
+  renderAmbient(world: World, ctx: CanvasRenderingContext2D, cameraX: number,
+                cameraY: number, screenW: number, screenH: number,
+                settings: GameSettings, frameCount: number,
+                ambientParticles: AmbientParticle[]): void {
+    this.renderAmbientParticles(ctx, settings, ambientParticles);
   }
 
-  renderVignetteAndDamage(c: CanvasRenderingContext2D, p: PlayerState): void {
-    this.renderVignette(c, p);
+  renderVignetteAndDamage(world: World, ctx: CanvasRenderingContext2D, cameraX: number,
+                          cameraY: number, screenW: number, screenH: number,
+                          settings: GameSettings, frameCount: number): void {
+    this.renderVignette(ctx, world, screenW, screenH, frameCount);
   }
 
-  renderLighting(c: CanvasRenderingContext2D, offX: number, offY: number, p: PlayerState): void {
-    this.renderLightingInternal(c, offX, offY, p);
+  renderLighting(world: World, ctx: CanvasRenderingContext2D, cameraX: number,
+                 cameraY: number, screenW: number, screenH: number,
+                 settings: GameSettings, frameCount: number): void {
+    const offX: number = -cameraX;
+    const offY: number = -cameraY;
+    this.renderLightingInternal(ctx, offX, offY, world, cameraX, cameraY, screenW, screenH, settings, frameCount);
   }
 
-  private renderTraps(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    for (let i: number = 0; i < this.g.traps.length; i++) {
-      const trap: TrapInstance = this.g.traps[i];
-      const screenX: number = trap.x + offX;
-      const screenY: number = trap.y + offY;
+  private renderTraps(c: CanvasRenderingContext2D, offX: number, offY: number,
+    world: World, screenW: number, screenH: number, frameCount: number): void {
+    const trapEntities: Entity[] = world.queryWithTag("trap");
+    for (let i: number = 0; i < trapEntities.length; i++) {
+      const entity: Entity = trapEntities[i];
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>("Position");
+      const trap: TrapComponent | null = entity.getComponent<TrapComponent>("trap");
+      if (pos === null || trap === null) continue;
 
-      if (screenX < -40 || screenX > this.g.screenW + 40 || screenY < -40 || screenY > this.g.screenH + 40) {
+      const screenX: number = pos.x + offX;
+      const screenY: number = pos.y + offY;
+
+      if (screenX < -40 || screenX > screenW + 40 || screenY < -40 || screenY > screenH + 40) {
         continue;
       }
 
@@ -60,7 +97,7 @@ export class EffectRenderer {
       const isTelegraph: boolean = trap.state === TrapState.TELEGRAPH;
 
       if (isTelegraph) {
-        const pulse: number = 0.3 + 0.3 * Math.sin(this.g.frameCount * 0.3);
+        const pulse: number = 0.3 + 0.3 * Math.sin(frameCount * 0.3);
         c.globalAlpha = pulse;
         c.fillStyle = COLOR_TRAP_WARNING;
         c.beginPath();
@@ -176,7 +213,7 @@ export class EffectRenderer {
             c.globalAlpha = 0.3;
             c.fillStyle = '#4ade80';
             for (let p: number = 0; p < 4; p++) {
-              const pAngle: number = (p / 4) * Math.PI * 2 + this.g.frameCount * 0.05;
+              const pAngle: number = (p / 4) * Math.PI * 2 + frameCount * 0.05;
               const pDist: number = trap.size * 0.5;
               const px: number = screenX + Math.cos(pAngle) * pDist;
               const py: number = screenY + Math.sin(pAngle) * pDist;
@@ -201,7 +238,7 @@ export class EffectRenderer {
 
         case TrapType.LAVA_GEYSER:
           if (isActive) {
-            const geyserH: number = 22 + Math.sin(this.g.frameCount * 0.2) * 6;
+            const geyserH: number = 22 + Math.sin(frameCount * 0.2) * 6;
             c.globalAlpha = 0.3;
             c.fillStyle = COLOR_LAVA;
             c.fillRect(screenX - 12, screenY - geyserH * 0.7, 24, geyserH * 0.7);
@@ -239,7 +276,7 @@ export class EffectRenderer {
         case TrapType.VOID_CRACK:
           c.fillStyle = COLOR_VOID_CRACK;
           if (isActive) {
-            c.globalAlpha = 0.7 + 0.3 * Math.sin(this.g.frameCount * 0.15);
+            c.globalAlpha = 0.7 + 0.3 * Math.sin(frameCount * 0.15);
             c.beginPath();
             c.arc(screenX, screenY, trap.size * 0.7, 0, Math.PI * 2);
             c.fill();
@@ -257,7 +294,7 @@ export class EffectRenderer {
             c.lineWidth = 1.5;
             c.globalAlpha = 0.5;
             for (let crack: number = 0; crack < 4; crack++) {
-              const cAngle: number = (crack / 4) * Math.PI * 2 + this.g.frameCount * 0.02;
+              const cAngle: number = (crack / 4) * Math.PI * 2 + frameCount * 0.02;
               c.beginPath();
               c.moveTo(screenX + Math.cos(cAngle) * trap.size * 0.4, screenY + Math.sin(cAngle) * trap.size * 0.4);
               c.lineTo(screenX + Math.cos(cAngle) * trap.size * 0.9, screenY + Math.sin(cAngle) * trap.size * 0.9);
@@ -281,7 +318,7 @@ export class EffectRenderer {
 
         case TrapType.WATER_VORTEX:
           if (isActive) {
-            const spin: number = this.g.frameCount * 0.12;
+            const spin: number = frameCount * 0.12;
             c.globalAlpha = 0.2;
             c.fillStyle = COLOR_VORTEX;
             c.beginPath();
@@ -323,13 +360,19 @@ export class EffectRenderer {
     c.globalAlpha = 1.0;
   }
 
-  private renderMechanisms(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    for (let i: number = 0; i < this.g.mechanisms.length; i++) {
-      const mech: MechanismInstance = this.g.mechanisms[i];
-      const screenX: number = mech.x + offX;
-      const screenY: number = mech.y + offY;
+  private renderMechanisms(c: CanvasRenderingContext2D, offX: number, offY: number,
+    world: World, screenW: number, screenH: number, frameCount: number): void {
+    const mechEntities: Entity[] = world.queryWithTag("mechanism");
+    for (let i: number = 0; i < mechEntities.length; i++) {
+      const entity: Entity = mechEntities[i];
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>("Position");
+      const mech: MechanismComponent | null = entity.getComponent<MechanismComponent>("mechanism");
+      if (pos === null || mech === null) continue;
 
-      if (screenX < -40 || screenX > this.g.screenW + 40 || screenY < -40 || screenY > this.g.screenH + 40) {
+      const screenX: number = pos.x + offX;
+      const screenY: number = pos.y + offY;
+
+      if (screenX < -40 || screenX > screenW + 40 || screenY < -40 || screenY > screenH + 40) {
         continue;
       }
 
@@ -453,7 +496,7 @@ export class EffectRenderer {
           c.closePath();
           c.stroke();
           c.fillStyle = '#ffffff';
-          c.globalAlpha = 0.5 + 0.3 * Math.sin(this.g.frameCount * 0.1);
+          c.globalAlpha = 0.5 + 0.3 * Math.sin(frameCount * 0.1);
           c.beginPath();
           c.arc(0, 0, 4, 0, Math.PI * 2);
           c.fill();
@@ -491,7 +534,7 @@ export class EffectRenderer {
 
         case MechanismType.TELEPORT_RUNE:
           const runeColor: string = mech.active ? COLOR_TELEPORT_EXIT : COLOR_TELEPORT_ENTRY;
-          const spin: number = this.g.frameCount * 0.04;
+          const spin: number = frameCount * 0.04;
           c.globalAlpha = 0.15;
           c.fillStyle = runeColor;
           c.beginPath();
@@ -517,7 +560,7 @@ export class EffectRenderer {
             c.fillRect(rx - 1.5, ry - 1.5, 3, 3);
           }
           c.fillStyle = COLOR_TELEPORT_RUNE;
-          c.globalAlpha = 0.3 + 0.2 * Math.sin(this.g.frameCount * 0.08);
+          c.globalAlpha = 0.3 + 0.2 * Math.sin(frameCount * 0.08);
           c.beginPath();
           c.arc(screenX, screenY, 6, 0, Math.PI * 2);
           c.fill();
@@ -534,9 +577,10 @@ export class EffectRenderer {
     c.globalAlpha = 1.0;
   }
 
-  private renderParticlesInternal(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    for (let i: number = 0; i < this.g.particles.length; i++) {
-      const pt: Particle = this.g.particles[i];
+  private renderParticlesInternal(c: CanvasRenderingContext2D, offX: number, offY: number,
+    particles: Particle[]): void {
+    for (let i: number = 0; i < particles.length; i++) {
+      const pt: Particle = particles[i];
       const alpha: number = pt.life / pt.maxLife;
       c.globalAlpha = alpha;
       c.fillStyle = pt.color;
@@ -546,10 +590,11 @@ export class EffectRenderer {
     c.globalAlpha = 1.0;
   }
 
-  private renderAmbientParticles(c: CanvasRenderingContext2D): void {
-    if (!this.g.settings.effectsEnabled) return;
-    for (let i: number = 0; i < this.g.ambientParticles.length; i++) {
-      const ap: AmbientParticle = this.g.ambientParticles[i];
+  private renderAmbientParticles(c: CanvasRenderingContext2D, settings: GameSettings,
+    ambientParticles: AmbientParticle[]): void {
+    if (!settings.effectsEnabled) return;
+    for (let i: number = 0; i < ambientParticles.length; i++) {
+      const ap: AmbientParticle = ambientParticles[i];
       const fadeRatio: number = ap.life / ap.maxLife;
       const alpha: number = ap.alpha * (fadeRatio < 0.2 ? fadeRatio / 0.2 : 1.0);
       c.globalAlpha = alpha;
@@ -561,45 +606,69 @@ export class EffectRenderer {
     c.globalAlpha = 1.0;
   }
 
-  private renderVignette(c: CanvasRenderingContext2D, p: PlayerState): void {
-    const cx: number = this.g.screenW / 2;
-    const cy: number = this.g.screenH / 2;
-    const radius: number = Math.max(this.g.screenW, this.g.screenH) * 0.7;
+  private renderVignette(c: CanvasRenderingContext2D, world: World,
+    screenW: number, screenH: number, frameCount: number): void {
+    const cx: number = screenW / 2;
+    const cy: number = screenH / 2;
+    const radius: number = Math.max(screenW, screenH) * 0.7;
 
-    const hpRatio: number = p.hp / PLAYER_MAX_HP;
+    // Get player health from ECS
+    const playerEntity: Entity | null = world.findEntityByTag("player");
+    let hpRatio: number = 1.0;
+    if (playerEntity !== null) {
+      const health: HealthComponent | null = playerEntity.getComponent<HealthComponent>("Health");
+      if (health !== null) {
+        hpRatio = health.current / health.max;
+      }
+    }
+
     const isLowHP: boolean = hpRatio < 0.3;
     const lowHPIntensity: number = isLowHP ? (1.0 - hpRatio / 0.3) : 0;
-    const pulse: number = isLowHP ? 0.5 + 0.5 * Math.sin(this.g.frameCount * 0.08) : 0;
+    const pulse: number = isLowHP ? 0.5 + 0.5 * Math.sin(frameCount * 0.08) : 0;
     const vignetteAlpha: number = 0.45 + lowHPIntensity * pulse * 0.25;
 
     const gradient: CanvasGradient = c.createRadialGradient(cx, cy, radius * 0.4, cx, cy, radius);
     gradient.addColorStop(0, 'rgba(0,0,0,0)');
     gradient.addColorStop(1, 'rgba(0,0,0,' + vignetteAlpha + ')');
     c.fillStyle = gradient;
-    c.fillRect(0, 0, this.g.screenW, this.g.screenH);
+    c.fillRect(0, 0, screenW, screenH);
 
     if (isLowHP) {
       const redGrad: CanvasGradient = c.createRadialGradient(cx, cy, radius * 0.3, cx, cy, radius);
       redGrad.addColorStop(0, 'rgba(0,0,0,0)');
       redGrad.addColorStop(1, 'rgba(180,0,0,' + (lowHPIntensity * pulse * 0.15) + ')');
       c.fillStyle = redGrad;
-      c.fillRect(0, 0, this.g.screenW, this.g.screenH);
+      c.fillRect(0, 0, screenW, screenH);
     }
 
-    if (this.g.damageFlashTimer > 0) {
-      const flashAlpha: number = (this.g.damageFlashTimer / 200) * 0.35;
+    // Get damage flash timer from GameStateComponent
+    const gameStateEntity: Entity | null = world.findEntityByTag("gameState");
+    let damageFlashTimer: number = 0;
+    if (gameStateEntity !== null) {
+      const gsComp: GameStateComponent | null = gameStateEntity.getComponent<GameStateComponent>("gameState");
+      if (gsComp !== null) {
+        damageFlashTimer = gsComp.damageFlashTimer;
+      }
+    }
+
+    if (damageFlashTimer > 0) {
+      const flashAlpha: number = (damageFlashTimer / 200) * 0.35;
       c.fillStyle = 'rgba(255,0,0,' + flashAlpha + ')';
-      c.fillRect(0, 0, this.g.screenW, this.g.screenH);
+      c.fillRect(0, 0, screenW, screenH);
     }
   }
 
-  private renderLightingInternal(c: CanvasRenderingContext2D, offX: number, offY: number, p: PlayerState): void {
-    if (!this.g.settings.effectsEnabled) return;
+  private renderLightingInternal(c: CanvasRenderingContext2D, offX: number, offY: number,
+    world: World, cameraX: number, cameraY: number,
+    screenW: number, screenH: number, settings: GameSettings, frameCount: number): void {
+    if (!settings.effectsEnabled) return;
 
-    const camWorldX: number = this.g.cameraX + this.g.screenW / 2;
-    const camWorldY: number = this.g.cameraY + this.g.screenH / 2;
-    const viewBiome: BiomeType = this.g.worldGen.getBiome(camWorldX, camWorldY);
-    const depth: number = Math.min(1.0, Math.max(0, this.g.cameraY / (TILE_SIZE * 30)));
+    const chunks: Map<string, Object> = world.chunks;
+    const camWorldX: number = cameraX + screenW / 2;
+    const camWorldY: number = cameraY + screenH / 2;
+    const worldGen: WorldGenerator = world.worldGen as WorldGenerator;
+    const viewBiome: BiomeType = worldGen.getBiome(camWorldX, camWorldY);
+    const depth: number = Math.min(1.0, Math.max(0, cameraY / (TILE_SIZE * 30)));
     const isShadow: boolean = viewBiome === BiomeType.SHADOW;
     const isLava: boolean = viewBiome === BiomeType.LAVA;
 
@@ -614,14 +683,23 @@ export class EffectRenderer {
     }
 
     c.fillStyle = 'rgba(' + darknessR + ',' + darknessG + ',' + darknessB + ',' + darknessAlpha + ')';
-    c.fillRect(0, 0, this.g.screenW, this.g.screenH);
+    c.fillRect(0, 0, screenW, screenH);
 
     const prevOp: string = c.globalCompositeOperation;
     c.globalCompositeOperation = 'lighter';
 
-    const playerSX: number = p.x + offX;
-    const playerSY: number = p.y + offY;
-    const playerRadius: number = 160 + Math.sin(this.g.frameCount * 0.02) * 10;
+    // Get player position from ECS
+    const playerEntity: Entity | null = world.findEntityByTag("player");
+    let playerSX: number = screenW / 2;
+    let playerSY: number = screenH / 2;
+    if (playerEntity !== null) {
+      const playerPos: PositionComponent | null = playerEntity.getComponent<PositionComponent>("Position");
+      if (playerPos !== null) {
+        playerSX = playerPos.x + offX;
+        playerSY = playerPos.y + offY;
+      }
+    }
+    const playerRadius: number = 160 + Math.sin(frameCount * 0.02) * 10;
     const playerGlow: CanvasGradient = c.createRadialGradient(
       playerSX, playerSY, 0, playerSX, playerSY, playerRadius
     );
@@ -631,18 +709,18 @@ export class EffectRenderer {
     c.fillStyle = playerGlow;
     c.fillRect(playerSX - playerRadius, playerSY - playerRadius, playerRadius * 2, playerRadius * 2);
 
-    const startTX: number = Math.floor(this.g.cameraX / TILE_SIZE) - 1;
-    const startTY: number = Math.floor(this.g.cameraY / TILE_SIZE) - 1;
-    const endTX: number = Math.ceil((this.g.cameraX + this.g.screenW) / TILE_SIZE) + 1;
-    const endTY: number = Math.ceil((this.g.cameraY + this.g.screenH) / TILE_SIZE) + 1;
+    const startTX: number = Math.floor(cameraX / TILE_SIZE) - 1;
+    const startTY: number = Math.floor(cameraY / TILE_SIZE) - 1;
+    const endTX: number = Math.ceil((cameraX + screenW) / TILE_SIZE) + 1;
+    const endTY: number = Math.ceil((cameraY + screenH) / TILE_SIZE) + 1;
 
     for (let ty: number = startTY; ty <= endTY; ty++) {
       for (let tx: number = startTX; tx <= endTX; tx++) {
-        const tile: number = this.g.getTile(tx * TILE_SIZE, ty * TILE_SIZE);
+        const tile: number = this.getTile(chunks, tx * TILE_SIZE, ty * TILE_SIZE);
         const sx: number = tx * TILE_SIZE + offX + TILE_SIZE / 2;
         const sy: number = ty * TILE_SIZE + offY + TILE_SIZE / 2;
 
-        if (sx < -80 || sx > this.g.screenW + 80 || sy < -80 || sy > this.g.screenH + 80) continue;
+        if (sx < -80 || sx > screenW + 80 || sy < -80 || sy > screenH + 80) continue;
 
         let radius: number = 0;
         let lr: number = 0;
@@ -661,7 +739,7 @@ export class EffectRenderer {
         }
 
         if (radius > 0) {
-          const flicker: number = Math.sin(this.g.frameCount * 0.03 + tx * 0.7 + ty * 1.3) * 4;
+          const flicker: number = Math.sin(frameCount * 0.03 + tx * 0.7 + ty * 1.3) * 4;
           const r: number = radius + flicker;
           const grad: CanvasGradient = c.createRadialGradient(sx, sy, 0, sx, sy, r);
           grad.addColorStop(0, 'rgba(' + lr + ',' + lg + ',' + lb + ',' + la + ')');
@@ -676,16 +754,34 @@ export class EffectRenderer {
     c.globalCompositeOperation = prevOp;
   }
 
-  private renderChests(c: CanvasRenderingContext2D, offX: number, offY: number): void {
-    for (let i: number = 0; i < this.g.chests.length; i++) {
-      const chest: ChestState = this.g.chests[i];
-      if (!chest.active) continue;
-      const sx: number = chest.x + offX;
-      const sy: number = chest.y + offY;
-      if (sx < -40 || sx > this.g.screenW + 40 || sy < -40 || sy > this.g.screenH + 40) continue;
+  private renderChests(c: CanvasRenderingContext2D, offX: number, offY: number,
+    world: World, screenW: number, screenH: number,
+    settings: GameSettings, frameCount: number): void {
+    const chestEntities: Entity[] = world.queryWithTag("chest");
+
+    // Determine if guardians are defeated (no active boss entities)
+    const bossEntities: Entity[] = world.queryWithTag("boss");
+    let bossActive: boolean = false;
+    for (let b: number = 0; b < bossEntities.length; b++) {
+      if (bossEntities[b].active) {
+        bossActive = true;
+        break;
+      }
+    }
+    const guardianDefeated: boolean = !bossActive;
+
+    for (let i: number = 0; i < chestEntities.length; i++) {
+      const entity: Entity = chestEntities[i];
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>("Position");
+      const chest: ChestComponent | null = entity.getComponent<ChestComponent>("chest");
+      if (pos === null || chest === null) continue;
+
+      const sx: number = pos.x + offX;
+      const sy: number = pos.y + offY;
+      if (sx < -40 || sx > screenW + 40 || sy < -40 || sy > screenH + 40) continue;
 
       const halfSize: number = CHEST_SIZE / 2;
-      const bob: number = Math.sin(this.g.frameCount * 0.04 + i * 1.3) * 1.5;
+      const bob: number = Math.sin(frameCount * 0.04 + i * 1.3) * 1.5;
       const drawY: number = sy + bob;
 
       // Ground shadow
@@ -697,11 +793,11 @@ export class EffectRenderer {
       c.globalAlpha = 1.0;
 
       if (chest.chestType === ChestType.NORMAL) {
-        this.renderNormalChest(c, sx, drawY, halfSize, chest);
+        this.renderNormalChest(c, sx, drawY, halfSize, chest, settings, frameCount);
       } else if (chest.chestType === ChestType.ELITE) {
-        this.renderEliteChest(c, sx, drawY, halfSize, chest);
+        this.renderEliteChest(c, sx, drawY, halfSize, chest, guardianDefeated, settings, frameCount);
       } else if (chest.chestType === ChestType.BOSS) {
-        this.renderBossChest(c, sx, drawY, halfSize, chest);
+        this.renderBossChest(c, sx, drawY, halfSize, chest, settings, frameCount);
       }
 
       // Open animation - lid lifting with sparkle
@@ -712,10 +808,10 @@ export class EffectRenderer {
         c.fillStyle = lidColor;
         c.fillRect(sx - halfSize, drawY - halfSize - lift - 4, CHEST_SIZE, 4);
         // Sparkle particles when opening
-        if (this.g.settings.effectsEnabled) {
-          const sparklePhase: number = (this.g.frameCount * 0.1 + i * 2) % 1;
+        if (settings.effectsEnabled) {
+          const sparklePhase: number = (frameCount * 0.1 + i * 2) % 1;
           for (let sp: number = 0; sp < 3; sp++) {
-            const spAngle: number = (sp / 3) * Math.PI * 2 + this.g.frameCount * 0.08;
+            const spAngle: number = (sp / 3) * Math.PI * 2 + frameCount * 0.08;
             const spDist: number = 4 + sparklePhase * 8;
             const spx: number = sx + Math.cos(spAngle) * spDist;
             const spy: number = drawY - halfSize - lift + Math.sin(spAngle) * spDist * 0.5 - 4;
@@ -731,10 +827,10 @@ export class EffectRenderer {
   }
 
   private renderNormalChest(c: CanvasRenderingContext2D, sx: number, sy: number,
-    halfSize: number, chest: ChestState): void {
+    halfSize: number, chest: ChestComponent, settings: GameSettings, frameCount: number): void {
     // Glow aura
-    if (this.g.settings.effectsEnabled && !chest.opened) {
-      c.globalAlpha = 0.15 + Math.sin(this.g.frameCount * 0.05) * 0.05;
+    if (settings.effectsEnabled && !chest.opened) {
+      c.globalAlpha = 0.15 + Math.sin(frameCount * 0.05) * 0.05;
       c.fillStyle = COLOR_CHEST_GLOW;
       c.beginPath();
       c.arc(sx, sy, halfSize + 8, 0, Math.PI * 2);
@@ -796,12 +892,13 @@ export class EffectRenderer {
   }
 
   private renderEliteChest(c: CanvasRenderingContext2D, sx: number, sy: number,
-    halfSize: number, chest: ChestState): void {
+    halfSize: number, chest: ChestComponent, guardianDefeated: boolean,
+    settings: GameSettings, frameCount: number): void {
     const eHalf: number = halfSize + 1;
 
     // Rune glow aura
-    if (this.g.settings.effectsEnabled && !chest.opened) {
-      const runeGlow: number = 0.2 + Math.sin(this.g.frameCount * 0.06) * 0.1;
+    if (settings.effectsEnabled && !chest.opened) {
+      const runeGlow: number = 0.2 + Math.sin(frameCount * 0.06) * 0.1;
       c.globalAlpha = runeGlow;
       c.fillStyle = '#67e8f9';
       c.beginPath();
@@ -835,7 +932,7 @@ export class EffectRenderer {
     // Rune engravings (X pattern)
     c.strokeStyle = '#67e8f9';
     c.lineWidth = 1;
-    c.globalAlpha = 0.3 + Math.sin(this.g.frameCount * 0.04) * 0.15;
+    c.globalAlpha = 0.3 + Math.sin(frameCount * 0.04) * 0.15;
     c.beginPath();
     c.moveTo(sx - halfSize + 1, sy - halfSize + 1);
     c.lineTo(sx + halfSize - 1, sy + halfSize - 1);
@@ -846,7 +943,7 @@ export class EffectRenderer {
 
     // Center gem
     if (!chest.opened) {
-      const gemPulse: number = 0.6 + 0.4 * Math.sin(this.g.frameCount * 0.07);
+      const gemPulse: number = 0.6 + 0.4 * Math.sin(frameCount * 0.07);
       c.globalAlpha = 0.3 * gemPulse;
       c.fillStyle = '#67e8f9';
       c.beginPath();
@@ -894,9 +991,9 @@ export class EffectRenderer {
     c.globalAlpha = 1.0;
 
     // Guardian status indicator
-    if (!chest.guardianDefeated) {
+    if (!guardianDefeated) {
       // Locked indicator - red pulsing
-      const lockPulse: number = 0.5 + 0.5 * Math.sin(this.g.frameCount * 0.1);
+      const lockPulse: number = 0.5 + 0.5 * Math.sin(frameCount * 0.1);
       c.fillStyle = '#ff3333';
       c.globalAlpha = 0.3 * lockPulse;
       c.beginPath();
@@ -924,12 +1021,12 @@ export class EffectRenderer {
   }
 
   private renderBossChest(c: CanvasRenderingContext2D, sx: number, sy: number,
-    halfSize: number, chest: ChestState): void {
+    halfSize: number, chest: ChestComponent, settings: GameSettings, frameCount: number): void {
     const bHalf: number = halfSize + 2;
 
     // Dramatic golden aura
-    if (this.g.settings.effectsEnabled && !chest.opened) {
-      const auraPulse: number = 0.25 + Math.sin(this.g.frameCount * 0.04) * 0.1;
+    if (settings.effectsEnabled && !chest.opened) {
+      const auraPulse: number = 0.25 + Math.sin(frameCount * 0.04) * 0.1;
       c.globalAlpha = auraPulse;
       c.fillStyle = COLOR_CHEST_BOSS;
       c.beginPath();
@@ -944,12 +1041,12 @@ export class EffectRenderer {
 
       // Orbiting sparkles
       for (let sp: number = 0; sp < 4; sp++) {
-        const spAngle: number = (sp / 4) * Math.PI * 2 + this.g.frameCount * 0.03;
+        const spAngle: number = (sp / 4) * Math.PI * 2 + frameCount * 0.03;
         const spDist: number = bHalf + 10;
         const spx: number = sx + Math.cos(spAngle) * spDist;
         const spy: number = sy + Math.sin(spAngle) * spDist * 0.6;
         c.fillStyle = '#ffd700';
-        c.globalAlpha = 0.5 + 0.3 * Math.sin(this.g.frameCount * 0.08 + sp);
+        c.globalAlpha = 0.5 + 0.3 * Math.sin(frameCount * 0.08 + sp);
         c.fillRect(spx - 1, spy - 1, 2, 2);
       }
       c.globalAlpha = 1.0;
