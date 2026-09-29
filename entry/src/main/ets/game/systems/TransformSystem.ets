@@ -98,7 +98,7 @@ export class TransformSystem extends System {
     }
 
     // --- Form-specific movement ---
-    this.updateMovement(movement, vel, pos, transform, context);
+    this.updateMovement(entities, movement, vel, pos, transform, audio, context);
 
     // --- Form-specific collision ---
     this.applyCollision(pos, vel, transform, chunks);
@@ -106,7 +106,7 @@ export class TransformSystem extends System {
     // --- Form-specific attack ---
     if (context.input.attackPressed && combat.attackTimer <= 0) {
       context.input.attackPressed = false;
-      this.handleAttack(entities, pos, vel, movement, combat, transform, health, audio, chunks, context);
+      this.handleAttack(entities, pos, movement, combat, transform, audio, context);
     }
 
     // --- Combat attack timer ---
@@ -161,10 +161,12 @@ export class TransformSystem extends System {
   }
 
   private updateMovement(
+    entities: Entity[],
     movement: MovementComponent,
     vel: VelocityComponent,
     pos: PositionComponent,
     transform: TransformComponent,
+    audio: AudioManager,
     context: SystemContext
   ): void {
     const form: TransformForm = transform.transformForm as TransformForm;
@@ -207,7 +209,7 @@ export class TransformSystem extends System {
         vel.vy = moveY * speed;
       }
     } else {
-      // Armor: slow but powerful, dash with extra speed
+      // Armor: slow but powerful, dash with extra speed and dash damage
       if (movement.isDashing) {
         movement.dashTimer -= context.dt;
         if (movement.dashTimer <= 0) {
@@ -215,6 +217,8 @@ export class TransformSystem extends System {
         } else {
           vel.vx = movement.dashDirX * DASH_SPEED * 1.5;
           vel.vy = movement.dashDirY * DASH_SPEED * 1.5;
+          // Armor dash damage: 1 damage to enemies within 30px
+          this.damageEnemiesAt(entities, pos.x, pos.y, 30, 1, transform, audio, context);
         }
       } else {
         vel.vx = moveX * speed;
@@ -314,13 +318,10 @@ export class TransformSystem extends System {
   private handleAttack(
     entities: Entity[],
     pos: PositionComponent,
-    vel: VelocityComponent,
     movement: MovementComponent,
     combat: CombatComponent,
     transform: TransformComponent,
-    health: HealthComponent,
     audio: AudioManager,
-    chunks: Map<string, Object>,
     context: SystemContext
   ): void {
     const form: TransformForm = transform.transformForm as TransformForm;

@@ -12,7 +12,7 @@ import {
   INVINCIBLE_DURATION,
   TRANSFORM_ENERGY_KILL_BOSS,
   TileType, BossType, BossRole, BossPhase, MaterialType, TransformForm,
-  ChunkData, GameSettings,
+  ChunkData,
 } from '../GameConstants';
 
 interface AudioManager {
@@ -44,7 +44,6 @@ export class BossSystem extends System {
       ? gsEntity.getComponent<GameStateComponent>("gameState") : null;
 
     const audio: AudioManager = context.audio as AudioManager;
-    const settings: GameSettings = context.settings as GameSettings;
     const dt: number = context.dt;
     const chunks: Map<string, Object> = context.world.chunks;
 
@@ -134,8 +133,8 @@ export class BossSystem extends System {
 
       // --- Death check ---
       if (health.current <= 0 && !ai.defeated) {
-        this.onBossDeath(e, pos, health, ai, playerPos, playerTransform,
-          gs, audio, settings, chunks, context);
+        this.onBossDeath(e, pos, ai, playerTransform,
+          gs, audio, chunks, context);
       }
 
       // --- Hit flash decay ---
@@ -148,13 +147,10 @@ export class BossSystem extends System {
   private onBossDeath(
     bossEntity: Entity,
     bossPos: PositionComponent,
-    bossHealth: HealthComponent,
     ai: BossAIComponent,
-    playerPos: PositionComponent,
     playerTransform: TransformComponent,
     gs: GameStateComponent | null,
     audio: AudioManager,
-    settings: GameSettings,
     chunks: Map<string, Object>,
     context: SystemContext
   ): void {
