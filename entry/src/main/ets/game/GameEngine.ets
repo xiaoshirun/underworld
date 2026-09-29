@@ -9,7 +9,7 @@ import {
   COLOR_BG, TransformForm, TRANSFORM_MAX_ENERGY,
   GameState, SaveData, AUTO_SAVE_INTERVAL,
 } from './GameConstants';
-import { GameContext } from './GameContext';
+import { EngineBase } from '../engine/EngineBase';
 import { PlayerMovementSystem, MovementBridge } from './systems/PlayerMovementSystem';
 import { PlayerCombatSystem } from './systems/PlayerCombatSystem';
 import { TransformSystem, TransformBridge } from './systems/TransformSystem';
@@ -31,7 +31,7 @@ import { BossRenderer } from './renderers/BossRenderer';
 import { EffectRenderer } from './renderers/EffectRenderer';
 import { UIRenderer } from './renderers/UIRenderer';
 
-export class GameEngine extends GameContext implements MovementBridge, TransformBridge, BossBridge, MechanismBridge, DamageBridge, ChestBridge, SaveLoadBridge {
+export class GameEngine extends EngineBase implements MovementBridge, TransformBridge, BossBridge, MechanismBridge, DamageBridge, ChestBridge, SaveLoadBridge {
   private movementSystem: PlayerMovementSystem | null = null;
   private combatSystem: PlayerCombatSystem | null = null;
   private transformSystem: TransformSystem | null = null;
@@ -52,24 +52,8 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
   private bossRenderer: BossRenderer | null = null;
   private effectRenderer: EffectRenderer | null = null;
   private uiRenderer: UIRenderer | null = null;
-  private externalLoop: boolean = false;
 
-  setExternalLoop(enabled: boolean): void {
-    this.externalLoop = enabled;
-  }
-
-  init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D, screenW: number, screenH: number,
-    appContext?: Object): void {
-    this.ctx = ctx;
-    this.minimapCtx = minimapCtx;
-    this.screenW = screenW;
-    this.screenH = screenH;
-    if (appContext) {
-      this.context = appContext;
-    }
-
-    this.audio.init();
-
+  protected onInit(): void {
     this.loadChunksAround(0, 0);
 
     const startX: number = CHUNK_SIZE * TILE_SIZE / 2;
@@ -146,42 +130,6 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     this.bossRenderer = new BossRenderer(this);
     this.effectRenderer = new EffectRenderer(this);
     this.uiRenderer = new UIRenderer(this);
-    this.startLoop();
-  }
-
-  private startLoop(): void {
-    if (this.externalLoop) return;
-    this.gameLoopId = setInterval(() => {
-      this.update(FRAME_INTERVAL);
-      this.render();
-      this.frameCount++;
-    }, FRAME_INTERVAL);
-  }
-
-  destroy(): void {
-    if (this.gameLoopId !== -1) {
-      clearInterval(this.gameLoopId);
-      this.gameLoopId = -1;
-    }
-    this.audio.destroy();
-  }
-
-  setInputJoy(active: boolean, dx: number, dy: number): void {
-    this.input.joyActive = active;
-    this.input.joyDx = dx;
-    this.input.joyDy = dy;
-  }
-
-  setInputJump(pressed: boolean): void {
-    this.input.jumpPressed = pressed;
-  }
-
-  setInputAttack(pressed: boolean): void {
-    this.input.attackPressed = pressed;
-  }
-
-  setInputDash(pressed: boolean): void {
-    this.input.dashPressed = pressed;
   }
 
   getPlayerHp(): number {
@@ -211,20 +159,11 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     return LEVEL_UP_XP;
   }
 
-  setSettings(s: GameSettings): void {
-    this.settings = s;
-    this.audio.setSettings(s);
-  }
-
   setGender(g: GenderType): void {
     this.playerGender = g;
     if (this.player !== null) {
       this.player.gender = g;
     }
-  }
-
-  setInputTool(pressed: boolean): void {
-    this.input.toolPressed = pressed;
   }
 
   cycleWeaponForm(): void {
@@ -672,10 +611,7 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
     if (this.state !== GameState.PLAYING) return;
     this.autoSave();
     this.setState(GameState.PAUSED);
-    if (this.gameLoopId !== -1) {
-      clearInterval(this.gameLoopId);
-      this.gameLoopId = -1;
-    }
+    this.stopLoop();
   }
 
   resume(): void {
@@ -686,18 +622,12 @@ export class GameEngine extends GameContext implements MovementBridge, Transform
 
   quit(): void {
     this.autoSave();
-    if (this.gameLoopId !== -1) {
-      clearInterval(this.gameLoopId);
-      this.gameLoopId = -1;
-    }
+    this.stopLoop();
     this.setState(GameState.LOADING);
   }
 
   restart(): void {
-    if (this.gameLoopId !== -1) {
-      clearInterval(this.gameLoopId);
-      this.gameLoopId = -1;
-    }
+    this.stopLoop();
     this.chunks.clear();
     this.enemies = [];
     this.xpOrbs = [];
