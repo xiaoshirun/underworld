@@ -149,12 +149,4 @@ export class EvolutionSystem extends System {
     else if (oreType === MaterialType.ABYSS_ORE) inventory.abyssOre -= count;
   }
 
-  private getBranchColor(branch: EvolutionBranch): string {
-    if (branch === EvolutionBranch.CRYSTAL) return '#00ced1';
-    if (branch === EvolutionBranch.FLAME) return '#ff4500';
-    if (branch === EvolutionBranch.SHADOW) return '#6b21a8';
-    if (branch === EvolutionBranch.TOXIN) return '#32cd32';
-    if (branch === EvolutionBranch.TIDE) return '#4169e1';
-    return '#ffffff';
-  }
 }
