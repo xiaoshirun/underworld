@@ -24,6 +24,7 @@ export class TrapSystem extends System {
     const playerHealth: HealthComponent | null = player.getComponent<HealthComponent>("Health");
     const playerCombat: CombatComponent | null = player.getComponent<CombatComponent>("combat");
     const playerTransform: TransformComponent | null = player.getComponent<TransformComponent>("transform");
+    const playerVel: VelocityComponent | null = player.getComponent<VelocityComponent>("Velocity");
     if (playerPos === null || playerHealth === null || playerCombat === null || playerTransform === null) return;
 
     if (playerHealth.isDead()) return;
@@ -63,7 +64,6 @@ export class TrapSystem extends System {
         case TrapState.ACTIVE: {
           // Void crack pull effect — applies every frame while active
           if (trap.trapType === TrapType.VOID_CRACK && dist < trap.triggerRadius * 1.5 && dist > 1) {
-            const playerVel: VelocityComponent | null = player.getComponent<VelocityComponent>("Velocity");
             if (playerVel !== null) {
               const pullStrength: number = 0.8 * (1.0 - dist / (trap.triggerRadius * 1.5));
               playerVel.vx -= (dx / dist) * pullStrength;

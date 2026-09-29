@@ -2,6 +2,7 @@ import { System, SystemContext, Entity, PositionComponent } from '@qiuyu/engine'
 import { MaterialPickupComponent } from '../components/MaterialPickupComponent';
 import { TransformCorePickupComponent } from '../components/TransformCorePickupComponent';
 import { InventoryComponent } from '../components/InventoryComponent';
+import { GameStateComponent } from '../components/GameStateComponent';
 import { MaterialType, TransformForm } from '../GameConstants';
 
 const PICKUP_RANGE: number = 30;
@@ -59,9 +60,17 @@ export class MaterialDropSystem extends System {
         // Add transform core to inventory
         this.addTransformCoreToInventory(inventory, core.form);
 
-        // Mark as unlocked by changing entity tag so it won't match "transformCore" next frame
-        e.tag = "transformCoreUnlocked";
+        // Write unlock notification state for UI
+        const gsEntity: Entity | null = context.world.findEntityByTag("gameState");
+        if (gsEntity !== null) {
+          const gs: GameStateComponent | null = gsEntity.getComponent<GameStateComponent>("gameState");
+          if (gs !== null) {
+            gs.transformUnlockNotifyTimer = 3000;
+            gs.transformUnlockNotifyForm = core.form;
+          }
+        }
 
+        e.active = false;
         audio.playXpCollect();
       }
     }

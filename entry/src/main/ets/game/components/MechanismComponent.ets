@@ -8,6 +8,7 @@ export class MechanismComponent implements Component {
   pushable: boolean = false;
   posX: number = 0;
   posY: number = 0;
+  extraData: number[] = [];
 
   getType(): string { return "mechanism"; }
 }
