@@ -22,14 +22,13 @@ export class EnemyFactory {
   }
 
   private static getHpForType(enemyType: number): number {
-    // 根据 EnemyType 返回不同 HP，参考现有 SlimeState 初始化逻辑
     switch (enemyType) {
-      case EnemyType.CRYSTAL: return SLIME_HP;
-      case EnemyType.MUSHROOM: return SLIME_HP + 1;
-      case EnemyType.FLAME: return SLIME_HP;
-      case EnemyType.ABYSS: return SLIME_HP + 2;
-      case EnemyType.VOID: return SLIME_HP + 1;
-      case EnemyType.TOXIC: return SLIME_HP;
+      case EnemyType.GRAY_SLIME: return SLIME_HP;
+      case EnemyType.PURPLE_SLIME: return SLIME_HP + 1;
+      case EnemyType.RED_SLIME: return SLIME_HP + 2;
+      case EnemyType.BLUE_SLIME: return SLIME_HP;
+      case EnemyType.YELLOW_SLIME: return SLIME_HP + 1;
+      case EnemyType.GHOST_SLIME: return SLIME_HP + 1;
       default: return SLIME_HP;
     }
   }
