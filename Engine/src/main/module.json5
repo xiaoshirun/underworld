@@ -1,24 +1,10 @@
 {
   "module": {
     "name": "Engine",
-    "type": "feature",
-    "description": "$string:module_desc",
-    "mainElement": "EngineAbility",
-    "deviceTypes":  ["phone","tablet"],
-    "deliveryWithInstall": true,
-    "installationFree": false,
-    "pages": "$profile:main_pages",
-    "abilities": [
-    {
-        "name": "EngineAbility",
-        "srcEntry": "./ets/engineability/EngineAbility.ets",
-        "description": "$string:EngineAbility_desc",
-          "icon": "$media:layered_image",
-        "label": "$string:EngineAbility_label",
-        "startWindowIcon" : "$media:startIcon",
-        "startWindowBackground" : "$color:start_window_background"
-          ,
-        "exported": true
-      }]
+    "type": "har",
+    "deviceTypes": [
+      "phone",
+      "tablet"
+    ]
   }
 }

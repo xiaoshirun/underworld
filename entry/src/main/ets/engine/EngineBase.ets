@@ -1,13 +1,24 @@
 import { FRAME_INTERVAL, GameSettings } from '../game/GameConstants';
 import { GameContext } from '../game/GameContext';
+import { Engine, EngineDelegate } from 'engine';
+import { common } from '@kit.AbilityKit';
+
+class EngineBaseDelegate implements EngineDelegate {
+  private owner: EngineBase;
+  constructor(owner: EngineBase) {
+    this.owner = owner;
+  }
+  onInit(): void {}
+  onUpdate(dt: number): void { this.owner.update(dt); }
+  onRender(): void { this.owner.render(); }
+  onDestroy(): void {}
+}
 
 export class EngineBase extends GameContext {
-  protected gameLoopId: number = -1;
-  protected frameCount: number = 0;
-  protected externalLoop: boolean = false;
+  protected engine: Engine = new Engine();
 
   setExternalLoop(enabled: boolean): void {
-    this.externalLoop = enabled;
+    this.engine.setExternalLoop(enabled);
   }
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D,
@@ -18,10 +29,20 @@ export class EngineBase extends GameContext {
     this.screenH = screenH;
     if (appContext) {
       this.context = appContext;
+      const abilityCtx: common.UIAbilityContext = appContext as common.UIAbilityContext;
+      if (abilityCtx.resourceManager) {
+        this.engine.resources.setFileProvider(abilityCtx.resourceManager);
+      }
     }
     this.audio.init();
+    this.engine.ctx = ctx;
+    this.engine.minimapCtx = minimapCtx;
+    this.engine.screenW = screenW;
+    this.engine.screenH = screenH;
+    this.engine.tickInterval = FRAME_INTERVAL;
     this.onInit();
-    this.startLoop();
+    this.engine.setDelegate(new EngineBaseDelegate(this));
+    this.engine.init(ctx, minimapCtx, screenW, screenH);
   }
 
   protected onInit(): void {}
@@ -30,25 +51,21 @@ export class EngineBase extends GameContext {
 
   render(): void {}
 
-  protected startLoop(): void {
-    if (this.externalLoop) return;
-    this.gameLoopId = setInterval(() => {
-      this.update(FRAME_INTERVAL);
-      this.render();
-      this.frameCount++;
-    }, FRAME_INTERVAL);
-  }
-
-  protected stopLoop(): void {
-    if (this.gameLoopId !== -1) {
-      clearInterval(this.gameLoopId);
-      this.gameLoopId = -1;
-    }
-  }
-
   destroy(): void {
-    this.stopLoop();
+    this.engine.stop();
     this.audio.destroy();
+  }
+
+  startLoop(): void {
+    this.engine.startLoop();
+  }
+
+  stopLoop(): void {
+    this.engine.stop();
+  }
+
+  protected getEngine(): Engine {
+    return this.engine;
   }
 
   setInputJoy(active: boolean, dx: number, dy: number): void {

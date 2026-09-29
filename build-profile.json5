@@ -51,6 +51,18 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Engine",
+      "srcPath": "./Engine",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
     }
   ]
 }

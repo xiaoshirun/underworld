@@ -91,8 +91,8 @@ export class GameEngine extends EngineBase implements MovementBridge, TransformB
       transformFormAttackCooldown: 0
     };
 
-    this.cameraX = startX - screenW / 2;
-    this.cameraY = startY - screenH / 2;
+    this.cameraX = startX - this.screenW / 2;
+    this.cameraY = startY - this.screenH / 2;
 
     // Clear spawn area so player isn't stuck in walls
     const spawnRadius: number = 3;
@@ -198,6 +198,7 @@ export class GameEngine extends EngineBase implements MovementBridge, TransformB
     }
     const p: PlayerState = this.player;
 
+    this.rebuildSpatialGrids();
     this.chunkLoadSystem!.update();
     this.damageSystem!.update(dt);
 

@@ -11,6 +11,7 @@ import {
 import { WorldGenerator } from './WorldGenerator';
 import { AudioManager } from './AudioManager';
 import { ParticleManager } from './ParticleSystem';
+import { SpatialGrid } from 'engine';
 
 export class GameContext {
   ctx: CanvasRenderingContext2D | null = null;
@@ -50,6 +51,10 @@ export class GameContext {
   transformUnlockNotifyForm: TransformForm = TransformForm.NONE;
   transformAnimIsRevert: boolean = false;
   particleMgr: ParticleManager = new ParticleManager();
+  enemyGrid: SpatialGrid<SlimeState> = new SpatialGrid<SlimeState>(128);
+  bossGrid: SpatialGrid<BossState> = new SpatialGrid<BossState>(128);
+  xpOrbGrid: SpatialGrid<XpOrb> = new SpatialGrid<XpOrb>(128);
+  materialGrid: SpatialGrid<MaterialDrop> = new SpatialGrid<MaterialDrop>(128);
   input: InputState = {
     joyActive: false, joyDx: 0, joyDy: 0,
     jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false,
@@ -170,6 +175,32 @@ export class GameContext {
     if (bossType === BossType.LAVA_BEAST) return COLOR_BOSS_LAVA;
     if (bossType === BossType.ABYSS_SIREN) return COLOR_BOSS_ABYSS;
     return COLOR_BOSS_VOID;
+  }
+
+  rebuildSpatialGrids(): void {
+    this.enemyGrid.clear();
+    this.bossGrid.clear();
+    this.xpOrbGrid.clear();
+    this.materialGrid.clear();
+    for (let i: number = 0; i < this.enemies.length; i++) {
+      const s: SlimeState = this.enemies[i];
+      if (s.active) this.enemyGrid.insert(s.x, s.y, s);
+    }
+    for (let i: number = 0; i < this.bosses.length; i++) {
+      const b: BossState = this.bosses[i];
+      if (b.active && !b.defeated) this.bossGrid.insert(b.x, b.y, b);
+    }
+    for (let i: number = 0; i < this.xpOrbs.length; i++) {
+      const o: XpOrb = this.xpOrbs[i];
+      if (o.active) {
+        o.bobPhase += 0.08;
+        this.xpOrbGrid.insert(o.x, o.y, o);
+      }
+    }
+    for (let i: number = 0; i < this.materialDrops.length; i++) {
+      const d: MaterialDrop = this.materialDrops[i];
+      if (d.active) this.materialGrid.insert(d.x, d.y, d);
+    }
   }
 
   getEntranceDir(cx: number, cy: number): number {

@@ -1,24 +1,40 @@
 import { display, router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
-import { GameEngine } from '../game/GameEngine';
+import { Engine, Entity, HealthComponent } from '@qiuyu/engine';
+import { GameScene } from '../game/GameScene';
+import { AudioManager } from '../game/AudioManager';
 import { SaveManager } from '../game/SaveManager';
+import { EvolutionSystem } from '../game/systems/EvolutionSystem';
 import {
   PLAYER_MAX_HP, JOYSTICK_RADIUS, MINIMAP_SIZE,
   COLOR_HP_FULL, COLOR_HP_EMPTY,
   COLOR_JOY_BASE, COLOR_JOY_KNOB,
   COLOR_BTN_JUMP, COLOR_BTN_ATTACK, COLOR_BTN_DASH, COLOR_TOOL_BTN,
   COLOR_XP_ORB, DASH_COOLDOWN, GenderType, WeaponForm,
-  EvolutionBranch, FORM_UNLOCK_COST, Inventory,
+  EvolutionBranch, FORM_UNLOCK_COST,
   TransformForm, TRANSFORM_MAX_ENERGY,
   COLOR_TRANSFORM_BTN_LOCKED, COLOR_TRANSFORM_BTN_READY, COLOR_TRANSFORM_ENERGY_BG,
   COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_IRON_GOLD,
-  GameState, SaveData
+  GameState, LEVEL_UP_XP,
 } from '../game/GameConstants';
+
+// Components
+import { XpComponent } from '../game/components/XpComponent';
+import { InventoryComponent } from '../game/components/InventoryComponent';
+import { TransformComponent } from '../game/components/TransformComponent';
+import { EvolutionComponent } from '../game/components/EvolutionComponent';
+import { MovementComponent } from '../game/components/MovementComponent';
+import { CombatComponent } from '../game/components/CombatComponent';
+import { GameStateComponent } from '../game/components/GameStateComponent';
 
 @Entry
 @Component
 struct Index {
-  private gameEngine: GameEngine = new GameEngine();
+  private engine: Engine = new Engine();
+  private gameScene: GameScene | null = null;
+  private audio: AudioManager = new AudioManager();
+  private settings: { soundEnabled: boolean; effectsEnabled: boolean } = { soundEnabled: true, effectsEnabled: true };
+  private evolutionSystem: EvolutionSystem = new EvolutionSystem();
   private gameCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private minimapCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private gameCanvasReady: boolean = false;
@@ -74,6 +90,7 @@ struct Index {
   @State deathLevel: number = 1;
   @State deathChunks: number = 0;
   private branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
+  private weaponFormNames: string[] = ['刃', '鞭', '锤', '杖', '双刃', '巨斧'];
 
   aboutToAppear(): void {
     try {
@@ -106,7 +123,8 @@ struct Index {
   }
 
   aboutToDisappear(): void {
-    this.gameEngine.destroy();
+    this.engine.stop();
+    this.audio.destroy();
   }
 
   build() {
@@ -190,7 +208,7 @@ struct Index {
   WeaponFormView() {
     Stack() {
       Column() {
-        Text(this.gameEngine.getWeaponFormName(this.currentWeaponForm))
+        Text(this.getWeaponFormName(this.currentWeaponForm))
           .fontSize(10)
           .fontWeight(FontWeight.Bold)
           .fontColor('#fbbf24')
@@ -202,8 +220,7 @@ struct Index {
     }
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
-        this.gameEngine.cycleWeaponForm();
-        this.currentWeaponForm = this.gameEngine.getCurrentWeaponForm();
+        this.cycleWeaponForm();
       }
     })
     .position({ x: 10, y: this.screenH * 0.50 })
@@ -328,7 +345,7 @@ struct Index {
               .border({ width: 1, color: '#1e293b' })
 
             Row()
-              .width(this.playerLevel > 0 ? 80 * (this.playerXp / this.gameEngine.getLevelUpXp()) : 0)
+              .width(this.playerLevel > 0 ? 80 * (this.playerXp / LEVEL_UP_XP) : 0)
               .height(5)
               .backgroundColor('#fbbf24')
               .borderRadius(2)
@@ -336,7 +353,7 @@ struct Index {
           .width(80)
           .height(5)
 
-          Text(this.playerXp + '/' + this.gameEngine.getLevelUpXp())
+          Text(this.playerXp + '/' + LEVEL_UP_XP)
             .fontSize(9)
             .fontColor('#94a3b8')
             .margin({ left: 4 })
@@ -368,7 +385,7 @@ struct Index {
     .position({ x: this.screenW - 74, y: 10 })
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
-        this.gameEngine.pause();
+        this.pauseGame();
       }
     })
 
@@ -476,7 +493,7 @@ struct Index {
       .position({ x: this.screenW - 66, y: this.screenH * 0.82 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
-          this.gameEngine.setInputAttack(true);
+          this.engine.setInputAttack(true);
         }
       })
 
@@ -505,7 +522,7 @@ struct Index {
       .position({ x: this.screenW - 120, y: this.screenH * 0.73 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
-          this.gameEngine.setInputJump(true);
+          this.engine.setInputJump(true);
         }
       })
 
@@ -534,7 +551,7 @@ struct Index {
       .position({ x: this.screenW - 120, y: this.screenH * 0.88 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down && this.dashReady) {
-          this.gameEngine.setInputDash(true);
+          this.engine.setInputDash(true);
           this.dashReady = false;
           setTimeout(() => {
             this.dashReady = true;
@@ -566,7 +583,7 @@ struct Index {
       .position({ x: this.screenW - 66, y: this.screenH * 0.66 })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down && this.toolReady) {
-          this.gameEngine.setInputTool(true);
+          this.engine.setInputTool(true);
           this.toolReady = false;
           setTimeout(() => {
             this.toolReady = true;
@@ -664,10 +681,8 @@ struct Index {
             .onTouch((event: TouchEvent) => {
               if (event.type === TouchType.Down) {
                 this.soundEnabled = !this.soundEnabled;
-                this.gameEngine.setSettings({
-                  soundEnabled: this.soundEnabled,
-                  effectsEnabled: this.effectsEnabled
-                });
+                this.settings.soundEnabled = this.soundEnabled;
+                this.audio.setSettings(this.settings);
               }
             })
           }
@@ -703,10 +718,8 @@ struct Index {
             .onTouch((event: TouchEvent) => {
               if (event.type === TouchType.Down) {
                 this.effectsEnabled = !this.effectsEnabled;
-                this.gameEngine.setSettings({
-                  soundEnabled: this.soundEnabled,
-                  effectsEnabled: this.effectsEnabled
-                });
+                this.settings.effectsEnabled = this.effectsEnabled;
+                this.audio.setSettings(this.settings);
               }
             })
           }
@@ -758,7 +771,8 @@ struct Index {
         .margin({ top: 14 })
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down) {
-            this.gameEngine.destroy();
+            this.engine.stop();
+            this.audio.destroy();
             router.replaceUrl({ url: 'pages/LoginPage' });
           }
         })
@@ -829,7 +843,7 @@ struct Index {
           Text('形态')
             .fontSize(11)
             .fontColor('#64748b')
-          Text(this.gameEngine.getWeaponFormName(this.currentWeaponForm))
+          Text(this.getWeaponFormName(this.currentWeaponForm))
             .fontSize(12)
             .fontWeight(FontWeight.Bold)
             .fontColor('#fbbf24')
@@ -854,7 +868,10 @@ struct Index {
             .onTouch((event: TouchEvent) => {
               if (event.type === TouchType.Down) {
                 this.evoBranch = index;
-                this.evoOreHave = this.gameEngine.getEvoOreHaveForBranch(index);
+                const player: Entity | null = this.getPlayerEntity();
+                if (player !== null) {
+                  this.evoOreHave = this.evolutionSystem.getEvoOreHaveForBranch(player, index);
+                }
               }
             })
           })
@@ -952,8 +969,11 @@ struct Index {
           .margin({ top: 10 })
           .onTouch((event: TouchEvent) => {
             if (event.type === TouchType.Down && this.canEvolveNow()) {
-              if (this.gameEngine.tryEvolveWeapon()) {
-                this.refreshEvoState();
+              const player: Entity | null = this.getPlayerEntity();
+              if (player !== null) {
+                if (this.evolutionSystem.tryEvolveWeapon(player)) {
+                  this.refreshEvoState();
+                }
               }
             }
           })
@@ -990,7 +1010,7 @@ struct Index {
 
           ForEach(this.lockedForms, (formIndex: number) => {
             Row() {
-              Text(this.gameEngine.getWeaponFormName(formIndex as WeaponForm))
+              Text(this.getWeaponFormName(formIndex as WeaponForm))
                 .fontSize(10)
                 .fontColor('#94a3b8')
               Blank()
@@ -1006,8 +1026,11 @@ struct Index {
               .border({ width: 2, color: this.evoFormCore >= FORM_UNLOCK_COST ? '#7c3aed' : '#1e293b' })
               .onTouch((event: TouchEvent) => {
                 if (event.type === TouchType.Down && this.evoFormCore >= FORM_UNLOCK_COST) {
-                  this.gameEngine.unlockWeaponForm(formIndex as WeaponForm);
-                  this.refreshEvoState();
+                  const player: Entity | null = this.getPlayerEntity();
+                  if (player !== null) {
+                    this.evolutionSystem.unlockWeaponForm(player, formIndex as WeaponForm);
+                    this.refreshEvoState();
+                  }
                 }
               })
             }
@@ -1051,51 +1074,52 @@ struct Index {
   }
 
   private refreshEvoState(): void {
-    this.evoBranch = this.gameEngine.getEvoBranch();
-    this.evoLevel = this.gameEngine.getEvoLevel();
-    this.evoOreHave = this.gameEngine.getEvoOreHave();
-    this.evoOreNeed = this.gameEngine.getEvoOreNeed();
-    this.evoNormalHave = this.gameEngine.getEvoNormalHave();
-    this.evoNormalNeed = this.gameEngine.getEvoNormalNeed();
-    this.evoRareHave = this.gameEngine.getEvoRareHave();
-    this.evoRareNeed = this.gameEngine.getEvoRareNeed();
-    this.evoFormCore = this.gameEngine.getEvoFormCore();
+    const player: Entity | null = this.getPlayerEntity();
+    if (player === null) return;
+
+    this.evoBranch = this.evolutionSystem.getEvoBranch(player);
+    this.evoLevel = this.evolutionSystem.getEvoLevel(player);
+    this.evoOreHave = this.evolutionSystem.getEvoOreHave(player);
+
+    const evo: EvolutionComponent | null = player.getComponent<EvolutionComponent>("evolution");
+    if (evo !== null) {
+      const level: number = evo.evolutionLevel;
+      if (level >= 3) {
+        this.evoOreNeed = 0;
+        this.evoNormalNeed = 0;
+        this.evoRareNeed = 0;
+      } else {
+        const EVOLUTION_COST_ORE: number[] = [0, 2, 4, 6];
+        const EVOLUTION_COST_NORMAL: number[] = [0, 3, 0, 0];
+        const EVOLUTION_COST_RARE: number[] = [0, 0, 1, 2];
+        this.evoOreNeed = EVOLUTION_COST_ORE[level + 1];
+        this.evoNormalNeed = EVOLUTION_COST_NORMAL[level + 1];
+        this.evoRareNeed = EVOLUTION_COST_RARE[level + 1];
+      }
+
+      const unlocked: number[] = evo.unlockedForms.slice();
+      const allForms: number[] = [0, 1, 2, 3, 4, 5];
+      this.lockedForms = allForms.filter((f: number) => unlocked.indexOf(f) < 0);
+    }
+
+    const inv: InventoryComponent | null = player.getComponent<InventoryComponent>("inventory");
+    if (inv !== null) {
+      this.evoNormalHave = inv.coreNormal;
+      this.evoRareHave = inv.coreRare;
+      this.evoFormCore = inv.formCore;
+    }
+
     this.evoMaxLevel = this.evoLevel >= 3;
-    const unlocked: number[] = this.gameEngine.getUnlockedForms();
-    const allForms: number[] = [0, 1, 2, 3, 4, 5];
-    this.lockedForms = allForms.filter((f: number) => unlocked.indexOf(f) < 0);
   }
 
   private tryInitEngine(): void {
     if (this.gameCanvasReady && this.minimapCanvasReady) {
-      const ctx = getContext(this) as common.UIAbilityContext;
-      this.gameEngine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH,
-        ctx);
-      this.gameEngine.setGender(this.playerGender);
-      this.gameEngine.setSettings({
-        soundEnabled: this.soundEnabled,
-        effectsEnabled: this.effectsEnabled
-      });
-      this.gameEngine.setOnStateChange((state: GameState) => {
-        this.gameState = state;
-        if (state === GameState.PAUSED) {
-          this.showPauseMenu = true;
-        } else if (state === GameState.GAME_OVER) {
-          this.showGameOver = true;
-          if (this.gameEngine.getPlayer()) {
-            this.deathLevel = this.gameEngine.getPlayer()!.level;
-            this.deathChunks = this.gameEngine.getExploredChunks().length;
-          }
-        }
-      });
-      this.gameEngine.setOnSave(() => {
-        this.showSaveIndicator = true;
-        setTimeout(() => {
-          this.showSaveIndicator = false;
-        }, 1500);
-      });
+      this.gameScene = new GameScene(this.audio, this.settings);
+      this.gameScene.setPlayerGender(this.playerGender);
+      this.engine.sceneManager.pushScene(this.gameScene);
+      this.engine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH);
 
-      console.log('[Index] Engine initialized directly, screenW:', this.screenW, 'screenH:', this.screenH);
+      console.log('[Index] Engine initialized with GameScene, screenW:', this.screenW, 'screenH:', this.screenH);
       this.startStatusMonitor();
     }
   }
@@ -1108,7 +1132,7 @@ struct Index {
       this.joyActive = true;
       this.joyKnobX = 0;
       this.joyKnobY = 0;
-      this.gameEngine.setInputJoy(true, 0, 0);
+      this.engine.setInputJoy(true, 0, 0);
     } else if (event.type === TouchType.Move && this.joyActive) {
       const touch = event.touches[0];
       let dx: number = touch.x - this.joyCenterX;
@@ -1120,62 +1144,131 @@ struct Index {
       }
       this.joyKnobX = dx;
       this.joyKnobY = dy;
-      this.gameEngine.setInputJoy(true, dx / JOYSTICK_RADIUS, dy / JOYSTICK_RADIUS);
+      this.engine.setInputJoy(true, dx / JOYSTICK_RADIUS, dy / JOYSTICK_RADIUS);
     } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
       this.joyActive = false;
       this.joyKnobX = 0;
       this.joyKnobY = 0;
-      this.gameEngine.setInputJoy(false, 0, 0);
+      this.engine.setInputJoy(false, 0, 0);
     }
   }
 
   private startStatusMonitor(): void {
     setInterval(() => {
-      const hp: number = this.gameEngine.getPlayerHp();
-      if (hp !== this.playerHp) {
-        this.playerHp = hp;
+      if (this.gameScene === null) return;
+      const world = this.gameScene.getWorld();
+
+      // Game state
+      const gsEntity: Entity | null = world.findEntityByTag("gameState");
+      if (gsEntity !== null) {
+        const gs: GameStateComponent | null = gsEntity.getComponent<GameStateComponent>("gameState");
+        if (gs !== null) {
+          if (gs.state !== this.gameState) {
+            this.gameState = gs.state;
+            if (gs.state === GameState.PAUSED) {
+              this.showPauseMenu = true;
+            } else if (gs.state === GameState.GAME_OVER) {
+              this.showGameOver = true;
+              const player: Entity | null = this.getPlayerEntity();
+              if (player !== null) {
+                const xp: XpComponent | null = player.getComponent<XpComponent>("xp");
+                if (xp !== null) {
+                  this.deathLevel = xp.level;
+                }
+              }
+              this.deathChunks = world.chunks.size;
+            }
+          }
+
+          // Transform unlock notification
+          if (gs.transformUnlockNotifyTimer > 0 && !this.transformUnlockActive) {
+            this.transformUnlockActive = true;
+            this.transformUnlockForm = gs.transformUnlockNotifyForm as TransformForm;
+            setTimeout(() => { this.transformUnlockActive = false; }, 3000);
+          }
+        }
       }
-      const xp: number = this.gameEngine.getPlayerXp();
-      if (xp !== this.playerXp) {
-        this.playerXp = xp;
+
+      // Player state
+      const player: Entity | null = this.getPlayerEntity();
+      if (player === null) return;
+
+      const health: HealthComponent | null = player.getComponent<HealthComponent>("Health");
+      if (health !== null) {
+        const hp: number = health.current;
+        if (hp !== this.playerHp) {
+          this.playerHp = hp;
+        }
       }
-      const level: number = this.gameEngine.getPlayerLevel();
-      if (level !== this.playerLevel) {
-        this.playerLevel = level;
+
+      const xp: XpComponent | null = player.getComponent<XpComponent>("xp");
+      if (xp !== null) {
+        if (xp.xp !== this.playerXp) {
+          this.playerXp = xp.xp;
+        }
+        if (xp.level !== this.playerLevel) {
+          this.playerLevel = xp.level;
+        }
       }
-      const inv: Inventory = this.gameEngine.getInventory();
-      const branchOre: number = this.gameEngine.getEvoOreHave();
-      if (branchOre !== this.invOre) {
-        this.invOre = branchOre;
+
+      const inv: InventoryComponent | null = player.getComponent<InventoryComponent>("inventory");
+      if (inv !== null) {
+        const branchOre: number = this.evolutionSystem.getEvoOreHave(player);
+        if (branchOre !== this.invOre) {
+          this.invOre = branchOre;
+        }
+        if (inv.coreNormal !== this.invNormal) {
+          this.invNormal = inv.coreNormal;
+        }
+        if (inv.coreRare !== this.invRare) {
+          this.invRare = inv.coreRare;
+        }
+        if (inv.formCore !== this.invFormCore) {
+          this.invFormCore = inv.formCore;
+        }
+
+        // Compute unlocked transforms
+        const unlocked: number[] = [];
+        if (inv.transformCoreSlime > 0) unlocked.push(TransformForm.SLIME);
+        if (inv.transformCoreGhost > 0) unlocked.push(TransformForm.GHOST);
+        if (inv.transformCoreArmor > 0) unlocked.push(TransformForm.ARMOR);
+        if (inv.transformCoreIronMan > 0) unlocked.push(TransformForm.IRON_MAN);
+        if (unlocked.length !== this.unlockedTransforms.length) {
+          this.unlockedTransforms = unlocked;
+        }
       }
-      if (inv.coreNormal !== this.invNormal) {
-        this.invNormal = inv.coreNormal;
-      }
-      if (inv.coreRare !== this.invRare) {
-        this.invRare = inv.coreRare;
-      }
-      if (inv.formCore !== this.invFormCore) {
-        this.invFormCore = inv.formCore;
-      }
+
       // Transform state
-      const isT: boolean = this.gameEngine.getIsTransformed();
-      if (isT !== this.isTransformed) { this.isTransformed = isT; }
-      if (isT) {
-        const e: number = this.gameEngine.getTransformEnergy();
-        if (e !== this.transformEnergy) { this.transformEnergy = e; }
-        const f: TransformForm = this.gameEngine.getTransformForm();
-        if (f !== this.transformForm) { this.transformForm = f; }
+      const transform: TransformComponent | null = player.getComponent<TransformComponent>("transform");
+      if (transform !== null) {
+        const isT: boolean = transform.isTransformed;
+        if (isT !== this.isTransformed) {
+          this.isTransformed = isT;
+        }
+        if (isT) {
+          if (transform.transformEnergy !== this.transformEnergy) {
+            this.transformEnergy = transform.transformEnergy;
+          }
+          if (transform.transformForm !== this.transformForm) {
+            this.transformForm = transform.transformForm as TransformForm;
+          }
+        }
+        if (transform.transformCooldown !== this.transformCooldown) {
+          this.transformCooldown = transform.transformCooldown;
+        }
+
+        // Update current weapon form
+        if (transform.currentWeaponForm !== this.currentWeaponForm) {
+          this.currentWeaponForm = transform.currentWeaponForm as WeaponForm;
+        }
       }
-      const cd: number = this.gameEngine.getTransformCooldown();
-      if (cd !== this.transformCooldown) { this.transformCooldown = cd; }
-      const ut: number[] = this.gameEngine.getUnlockedTransforms();
-      if (ut.length !== this.unlockedTransforms.length) { this.unlockedTransforms = ut; }
-      // Unlock notification
-      const notify = this.gameEngine.getTransformUnlockNotify();
-      if (notify.active && !this.transformUnlockActive) {
-        this.transformUnlockActive = true;
-        this.transformUnlockForm = notify.form;
-        setTimeout(() => { this.transformUnlockActive = false; }, 3000);
+
+      // Engulf warning
+      const movement: MovementComponent | null = player.getComponent<MovementComponent>("movement");
+      if (movement !== null) {
+        if (movement.isEngulfed !== this.engulfWarning) {
+          this.engulfWarning = movement.isEngulfed;
+        }
       }
     }, 100);
   }
@@ -1205,10 +1298,16 @@ struct Index {
     }
     .position({ x: this.screenW - 180, y: this.screenH * 0.57 })
     .onClick(() => {
+      const player: Entity | null = this.getPlayerEntity();
+      if (player === null) return;
+
+      const transform: TransformComponent | null = player.getComponent<TransformComponent>("transform");
+      if (transform === null) return;
+
       if (this.isTransformed) {
-        this.gameEngine.deactivateTransform();
+        transform.transformForm = TransformForm.NONE;
       } else if (this.unlockedTransforms.length === 1) {
-        this.gameEngine.activateTransform(this.unlockedTransforms[0] as TransformForm);
+        transform.transformForm = this.unlockedTransforms[0];
       } else if (this.unlockedTransforms.length > 1) {
         this.showFormSelect = true;
       }
@@ -1270,7 +1369,13 @@ struct Index {
             .justifyContent(FlexAlign.Center)
             .onClick(() => {
               this.showFormSelect = false;
-              this.gameEngine.activateTransform(formId as TransformForm);
+              const player: Entity | null = this.getPlayerEntity();
+              if (player !== null) {
+                const transform: TransformComponent | null = player.getComponent<TransformComponent>("transform");
+                if (transform !== null) {
+                  transform.transformForm = formId;
+                }
+              }
             })
           })
         }
@@ -1380,7 +1485,7 @@ struct Index {
           .margin({ bottom: 12 })
           .onClick(() => {
             this.showPauseMenu = false;
-            this.gameEngine.resume();
+            this.resumeGame();
           })
 
         Button('读取存档')
@@ -1395,10 +1500,16 @@ struct Index {
           .onClick(async () => {
             const ctx = getContext(this) as common.UIAbilityContext;
             const data = await SaveManager.load(ctx);
-            if (data) {
-              this.gameEngine.applySaveData(data);
-              this.showPauseMenu = false;
-              this.gameEngine.resume();
+            if (data && this.gameScene !== null) {
+              const world = this.gameScene.getWorld();
+              const player: Entity | null = world.findEntityByTag("player");
+              if (player !== null) {
+                const saveSystem = this.gameScene.getSaveLoadSystem();
+                const sysCtx = this.buildSystemContext();
+                saveSystem.applySaveData(player, data, sysCtx);
+                this.showPauseMenu = false;
+                this.resumeGame();
+              }
             }
           })
 
@@ -1411,8 +1522,7 @@ struct Index {
           .backgroundColor('#ef4444')
           .borderRadius(8)
           .onClick(() => {
-            this.gameEngine.quit();
-            router.replaceUrl({ url: 'pages/LoginPage' });
+            this.quitGame();
           })
       }
       .width(240)
@@ -1470,7 +1580,7 @@ struct Index {
             const ctx = getContext(this) as common.UIAbilityContext;
             await SaveManager.deleteSave(ctx);
             this.showGameOver = false;
-            this.gameEngine.restart();
+            this.restartGame();
           })
 
         Button('读取存档')
@@ -1485,10 +1595,16 @@ struct Index {
           .onClick(async () => {
             const ctx = getContext(this) as common.UIAbilityContext;
             const data = await SaveManager.load(ctx);
-            if (data) {
-              this.showGameOver = false;
-              this.gameEngine.applySaveData(data);
-              this.gameEngine.resume();
+            if (data && this.gameScene !== null) {
+              const world = this.gameScene.getWorld();
+              const player: Entity | null = world.findEntityByTag("player");
+              if (player !== null) {
+                const saveSystem = this.gameScene.getSaveLoadSystem();
+                const sysCtx = this.buildSystemContext();
+                saveSystem.applySaveData(player, data, sysCtx);
+                this.showGameOver = false;
+                this.resumeGame();
+              }
             }
           })
 
@@ -1501,8 +1617,7 @@ struct Index {
           .backgroundColor('#6b7280')
           .borderRadius(8)
           .onClick(() => {
-            this.gameEngine.quit();
-            router.replaceUrl({ url: 'pages/LoginPage' });
+            this.quitGame();
           })
       }
       .width(260)
@@ -1526,5 +1641,110 @@ struct Index {
       .borderRadius(6)
       .position({ x: this.screenW - 80, y: 50 })
       .opacity(0.9)
+  }
+
+  private getPlayerEntity(): Entity | null {
+    if (this.gameScene === null) return null;
+    return this.gameScene.getWorld().findEntityByTag("player");
+  }
+
+  private getWeaponFormName(form: WeaponForm): string {
+    return this.weaponFormNames[form] || 'Unknown';
+  }
+
+  private cycleWeaponForm(): void {
+    const player: Entity | null = this.getPlayerEntity();
+    if (player === null) return;
+
+    const transform: TransformComponent | null = player.getComponent<TransformComponent>("transform");
+    const evo: EvolutionComponent | null = player.getComponent<EvolutionComponent>("evolution");
+    if (transform === null || evo === null) return;
+
+    const forms: number[] = evo.unlockedForms;
+    if (forms.length <= 1) return;
+
+    let idx: number = 0;
+    for (let i: number = 0; i < forms.length; i++) {
+      if (forms[i] === transform.currentWeaponForm) {
+        idx = i;
+        break;
+      }
+    }
+    const nextIdx: number = (idx + 1) % forms.length;
+    transform.currentWeaponForm = forms[nextIdx];
+    this.currentWeaponForm = forms[nextIdx] as WeaponForm;
+  }
+
+  private buildSystemContext(): Object {
+    if (this.gameScene === null) {
+      return {} as Object;
+    }
+    const world = this.gameScene.getWorld();
+    return {
+      world: world,
+      ctx: this.gameCtx,
+      minimapCtx: this.minimapCtx,
+      screenW: this.screenW,
+      screenH: this.screenH,
+      cameraX: world.cameraX,
+      cameraY: world.cameraY,
+      input: this.engine.input,
+      resources: this.engine.resources,
+      audio: this.audio as Object,
+      settings: this.settings as Object,
+      frameCount: this.engine.getFrameCount(),
+      dt: 0
+    } as Object;
+  }
+
+  private pauseGame(): void {
+    if (this.gameScene === null) return;
+    const gsEntity: Entity | null = this.gameScene.getWorld().findEntityByTag("gameState");
+    if (gsEntity !== null) {
+      const gs: GameStateComponent | null = gsEntity.getComponent<GameStateComponent>("gameState");
+      if (gs !== null && gs.state === GameState.PLAYING) {
+        gs.state = GameState.PAUSED;
+        this.engine.stop();
+      }
+    }
+  }
+
+  private resumeGame(): void {
+    if (this.gameScene === null) return;
+    const gsEntity: Entity | null = this.gameScene.getWorld().findEntityByTag("gameState");
+    if (gsEntity !== null) {
+      const gs: GameStateComponent | null = gsEntity.getComponent<GameStateComponent>("gameState");
+      if (gs !== null && gs.state === GameState.PAUSED) {
+        gs.state = GameState.PLAYING;
+        this.engine.startLoop();
+      }
+    }
+  }
+
+  private quitGame(): void {
+    this.engine.stop();
+    this.audio.destroy();
+    router.replaceUrl({ url: 'pages/LoginPage' });
+  }
+
+  private restartGame(): void {
+    if (this.gameScene === null) return;
+
+    const newScene: GameScene = new GameScene(this.audio, this.settings);
+    newScene.setPlayerGender(this.playerGender);
+    this.engine.sceneManager.replaceScene(newScene);
+    this.gameScene = newScene;
+
+    this.gameState = GameState.PLAYING;
+    this.showPauseMenu = false;
+    this.showGameOver = false;
+    this.playerHp = PLAYER_MAX_HP;
+    this.playerXp = 0;
+    this.playerLevel = 1;
+    this.isTransformed = false;
+    this.transformForm = TransformForm.NONE;
+    this.transformEnergy = TRANSFORM_MAX_ENERGY;
+    this.transformCooldown = 0;
+    this.currentWeaponForm = WeaponForm.BLADE;
   }
 }
