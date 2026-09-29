@@ -10,7 +10,6 @@ import {
 } from '../GameConstants';
 import { BossAIComponent } from '../components/BossAIComponent';
 import { MaterialPickupComponent } from '../components/MaterialPickupComponent';
-import { TransformCorePickupComponent } from '../components/TransformCorePickupComponent';
 
 function getBossColor(bossType: number): string {
   if (bossType === BossType.CRYSTAL_GUARDIAN) return '#00ced1';

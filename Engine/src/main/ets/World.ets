@@ -1,6 +1,6 @@
 import { Entity } from './Entity';
 import { System, SystemContext } from './System';
-import { Component, PositionComponent } from './Component';
+import { PositionComponent } from './Component';
 import { SpatialGrid } from './SpatialGrid';
 
 export class World {

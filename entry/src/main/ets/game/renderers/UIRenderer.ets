@@ -7,7 +7,6 @@ import {
   ChunkData,
 } from '../GameConstants';
 import { MovementComponent } from '../components/MovementComponent';
-import { EnemyAIComponent } from '../components/EnemyAIComponent';
 import { BossAIComponent } from '../components/BossAIComponent';
 import { ChestComponent } from '../components/ChestComponent';
 import { WorldGenerator } from '../WorldGenerator';
