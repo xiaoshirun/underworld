@@ -4,6 +4,7 @@ import { CombatComponent } from '../components/CombatComponent';
 import { TransformComponent } from '../components/TransformComponent';
 import { EnemyAIComponent } from '../components/EnemyAIComponent';
 import { CameraComponent } from '../components/CameraComponent';
+import { GameStateComponent } from '../components/GameStateComponent';
 import {
   PLAYER_SIZE, SLIME_SIZE, SLIME_SPEED, PURPLE_SLIME_SPEED, PURPLE_SLIME_DETECT,
   RED_SLIME_SPEED, RED_SLIME_DETECT, BLUE_SLIME_SPEED,
@@ -203,6 +204,13 @@ export class EnemyAISystem extends System {
           playerPos.y -= Math.sin(knockAngle) * knockBack;
           this.shakeCamera(context, 150);
           audio.playPlayerDamage();
+          const gsEntity: Entity | null = context.world.findEntityByTag("gameState");
+          if (gsEntity !== null) {
+            const gs: GameStateComponent | null = gsEntity.getComponent<GameStateComponent>("gameState");
+            if (gs !== null) {
+              gs.damageFlashTimer = 200;
+            }
+          }
         }
       }
     }

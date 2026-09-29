@@ -4,6 +4,7 @@ import { CombatComponent } from '../components/CombatComponent';
 import { TransformComponent } from '../components/TransformComponent';
 import { CameraComponent } from '../components/CameraComponent';
 import { EnemyAIComponent } from '../components/EnemyAIComponent';
+import { GameStateComponent } from '../components/GameStateComponent';
 import {
   TILE_SIZE, CHUNK_SIZE, PLAYER_SIZE, PLAYER_SPEED,
   DASH_SPEED, DASH_DURATION, DASH_COOLDOWN,
@@ -261,6 +262,13 @@ export class PlayerMovementSystem extends System {
       movement.engulfDamageTimer = ENGULF_DAMAGE_INTERVAL;
       audio.playPlayerDamage();
       this.shakeCamera(context, 100);
+      const gsEntity: Entity | null = context.world.findEntityByTag("gameState");
+      if (gsEntity !== null) {
+        const gs: GameStateComponent | null = gsEntity.getComponent<GameStateComponent>("gameState");
+        if (gs !== null) {
+          gs.damageFlashTimer = 200;
+        }
+      }
     }
 
     if (movement.engulfEscapeCount >= ENGULF_ESCAPE_ATTACKS) {
