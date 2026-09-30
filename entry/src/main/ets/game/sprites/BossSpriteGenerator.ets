@@ -2,8 +2,11 @@ import {
   BOSS_SIZE,
   COLOR_MUSHROOM_STEM,
   COLOR_WATER_LIGHT,
+  BossType,
+  getBossColor,
 } from '../GameConstants';
 import { BossAIComponent } from '../components/BossAIComponent';
+import { SpriteAtlas } from './SpriteAtlas';
 
 export function drawCrystalGuardian(
   c: CanvasRenderingContext2D,
@@ -596,4 +599,57 @@ export function drawVoidRift(
 
   c.globalAlpha = 1.0;
   c.lineWidth = 1;
+}
+
+const BOSS_CELL_W: number = 128;
+const BOSS_CELL_H: number = 128;
+const BOSS_FRAMES: number = 12;
+
+export function generateBossAtlas(type: BossType): SpriteAtlas {
+  const cols: number = Math.ceil(Math.sqrt(BOSS_FRAMES));
+  const rows: number = Math.ceil(BOSS_FRAMES / cols);
+  const atlas: OffscreenCanvas = new OffscreenCanvas(cols * BOSS_CELL_W, rows * BOSS_CELL_H);
+  const actx: CanvasRenderingContext2D = atlas.getContext('2d') as CanvasRenderingContext2D;
+
+  const halfSize: number = BOSS_SIZE / 2;
+  const bossColor: string = getBossColor(type);
+
+  // Create a minimal BossAIComponent for generation
+  const genAI: BossAIComponent = new BossAIComponent();
+  genAI.bossType = type;
+  genAI.phase = 0; // PHASE_1
+
+  for (let i: number = 0; i < BOSS_FRAMES; i++) {
+    const t: number = i * 11;
+    const pulse: number = Math.sin(t * 0.05) * 2;
+    const col: number = i % cols;
+    const row: number = Math.floor(i / cols);
+    const cx: number = col * BOSS_CELL_W + BOSS_CELL_W / 2;
+    const cy: number = row * BOSS_CELL_H + BOSS_CELL_H / 2;
+
+    actx.save();
+    actx.translate(cx, cy);
+
+    switch (type) {
+      case BossType.CRYSTAL_GUARDIAN:
+        drawCrystalGuardian(actx, halfSize, pulse, bossColor, genAI, t);
+        break;
+      case BossType.MUSHROOM_KING:
+        drawMushroomKing(actx, halfSize, pulse, bossColor, genAI, t);
+        break;
+      case BossType.LAVA_BEAST:
+        drawLavaBeast(actx, halfSize, pulse, bossColor, genAI, t);
+        break;
+      case BossType.ABYSS_SIREN:
+        drawAbyssSiren(actx, halfSize, pulse, bossColor, genAI, t);
+        break;
+      case BossType.VOID_RIFT:
+        drawVoidRift(actx, halfSize, pulse, bossColor, genAI, t);
+        break;
+    }
+
+    actx.restore();
+  }
+
+  return new SpriteAtlas(atlas, BOSS_CELL_W, BOSS_CELL_H, BOSS_FRAMES);
 }

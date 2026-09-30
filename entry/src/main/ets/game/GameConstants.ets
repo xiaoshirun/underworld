@@ -671,6 +671,15 @@ export const SAVE_PREF_NAME: string = 'game_prefs';
 export const SAVE_VERSION: number = 1;
 export const AUTO_SAVE_INTERVAL: number = 3750;
 
+export function getBossColor(bossType: number): string {
+  if (bossType === BossType.CRYSTAL_GUARDIAN) return '#00ced1';
+  if (bossType === BossType.MUSHROOM_KING) return '#cd3278';
+  if (bossType === BossType.LAVA_BEAST) return '#ff4500';
+  if (bossType === BossType.ABYSS_SIREN) return '#4169e1';
+  if (bossType === BossType.VOID_RIFT) return '#6b21a8';
+  return '#ffffff';
+}
+
 export interface SaveData {
   version: number;
   timestamp: number;
