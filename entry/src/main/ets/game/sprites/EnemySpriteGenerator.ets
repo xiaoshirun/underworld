@@ -3,7 +3,9 @@ import {
   COLOR_SLIME_RED, COLOR_SLIME_RED_LIGHT, COLOR_SLIME_BLUE, COLOR_SLIME_BLUE_LIGHT,
   COLOR_SLIME_YELLOW, COLOR_SLIME_YELLOW_LIGHT, COLOR_SLIME_GHOST, COLOR_SLIME_GHOST_LIGHT,
   COLOR_SLIME_PUPIL,
+  EnemyType,
 } from '../GameConstants';
+import { SpriteAtlas } from './SpriteAtlas';
 
 export function drawGraySlime(
   c: CanvasRenderingContext2D,
@@ -736,6 +738,84 @@ export function drawGhostSlime(
     c.beginPath();
     c.ellipse(0, 3 * sc, 3 * sc, (2.5 + Math.sin(frameCount * 0.04)) * sc, 0, 0, Math.PI * 2);
     c.fill();
+  }
+
+  c.restore();
+}
+
+const ENEMY_CELL_W: number = 64;
+const ENEMY_CELL_H: number = 64;
+const ENEMY_CANONICAL_SIZE: number = 48; // sc = 1.0
+const ENEMY_BOUNCE_FRAMES: number = 8;
+const ENEMY_TOTAL_FRAMES: number = 16; // All types get 16 frames
+
+export function generateEnemyAtlas(type: EnemyType): SpriteAtlas {
+  const cols: number = 4;
+  const rows: number = 4;
+  const atlas: OffscreenCanvas = new OffscreenCanvas(cols * ENEMY_CELL_W, rows * ENEMY_CELL_H);
+  const actx: CanvasRenderingContext2D = atlas.getContext('2d') as CanvasRenderingContext2D;
+
+  for (let i: number = 0; i < ENEMY_BOUNCE_FRAMES; i++) {
+    const bp: number = i * Math.PI / 4;
+    const col: number = i % cols;
+    const row: number = Math.floor(i / cols);
+    const ox: number = col * ENEMY_CELL_W + ENEMY_CELL_W / 2;
+    const oy: number = row * ENEMY_CELL_H + ENEMY_CELL_H / 2;
+
+    // Frames 0-7: normal bounce cycle
+    drawEnemyFrame(actx, type, ox, oy, bp, false, i, false, false);
+
+    // Frames 8-15: variant bounce cycle (type-dependent)
+    const vcol: number = (i + ENEMY_BOUNCE_FRAMES) % cols;
+    const vrow: number = Math.floor((i + ENEMY_BOUNCE_FRAMES) / cols);
+    const vox: number = vcol * ENEMY_CELL_W + ENEMY_CELL_W / 2;
+    const voy: number = vrow * ENEMY_CELL_H + ENEMY_CELL_H / 2;
+
+    if (type === EnemyType.PURPLE_SLIME) {
+      drawEnemyFrame(actx, type, vox, voy, bp, false, i, false, true);
+    } else if (type === EnemyType.RED_SLIME) {
+      drawEnemyFrame(actx, type, vox, voy, bp, false, i, true, false);
+    } else {
+      drawEnemyFrame(actx, type, vox, voy, bp, true, i, false, false);
+    }
+  }
+
+  return new SpriteAtlas(atlas, ENEMY_CELL_W, ENEMY_CELL_H, ENEMY_TOTAL_FRAMES);
+}
+
+function drawEnemyFrame(
+  c: CanvasRenderingContext2D,
+  type: EnemyType,
+  cx: number,
+  cy: number,
+  bouncePhase: number,
+  flash: boolean,
+  animFrame: number,
+  isCharging: boolean,
+  isEngulfing: boolean
+): void {
+  c.save();
+  c.translate(cx, cy);
+
+  switch (type) {
+    case EnemyType.GRAY_SLIME:
+      drawGraySlime(c, bouncePhase, ENEMY_CANONICAL_SIZE, flash, animFrame);
+      break;
+    case EnemyType.PURPLE_SLIME:
+      drawPurpleSlime(c, bouncePhase, ENEMY_CANONICAL_SIZE, flash, animFrame, isEngulfing);
+      break;
+    case EnemyType.RED_SLIME:
+      drawRedSlime(c, bouncePhase, ENEMY_CANONICAL_SIZE, flash, animFrame, isCharging);
+      break;
+    case EnemyType.BLUE_SLIME:
+      drawBlueSlime(c, bouncePhase, ENEMY_CANONICAL_SIZE, flash, animFrame);
+      break;
+    case EnemyType.YELLOW_SLIME:
+      drawYellowSlime(c, bouncePhase, ENEMY_CANONICAL_SIZE, flash, animFrame);
+      break;
+    case EnemyType.GHOST_SLIME:
+      drawGhostSlime(c, bouncePhase, ENEMY_CANONICAL_SIZE, flash, animFrame);
+      break;
   }
 
   c.restore();
