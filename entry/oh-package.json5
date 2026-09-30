@@ -1,0 +1,12 @@
+{
+  "modelVersion": "5.0.0",
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "地下世界探索像素游戏",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "engine": "file:../Engine"
+  }
+}
