@@ -6,6 +6,7 @@ import {
   EvolutionBranch, EvolutionLevel, WeaponForm, MaterialType,
 } from '../GameConstants';
 
+// @deprecated — Use PassiveTreeSystem instead
 export class EvolutionSystem extends System {
 
   update(entities: Entity[], context: SystemContext): void {

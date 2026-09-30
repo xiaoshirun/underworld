@@ -4,25 +4,21 @@ import { MovementComponent } from '../components/MovementComponent';
 import { CombatComponent } from '../components/CombatComponent';
 import { EnemyAIComponent } from '../components/EnemyAIComponent';
 import { BossAIComponent } from '../components/BossAIComponent';
-import { CameraComponent } from '../components/CameraComponent';
 import { InventoryComponent } from '../components/InventoryComponent';
 import { DropFactory } from '../factories/DropFactory';
 import {
-  TILE_SIZE, CHUNK_SIZE, PLAYER_SIZE,
+  PLAYER_SIZE,
   DASH_SPEED, ATTACK_DURATION,
   TransformForm,
   TRANSFORM_COOLDOWN, TRANSFORM_PASSIVE_REGEN,
   TRANSFORM_ACTIVATE_ANIM, TRANSFORM_REVERT_ANIM,
   TRANSFORM_DRAIN_RATES, TRANSFORM_SPEEDS, TRANSFORM_ATTACK_COSTS, TRANSFORM_ATTACK_COOLDOWNS,
   TRANSFORM_ENERGY_KILL_SLIME,
-  TileType, ChunkData,
 } from '../GameConstants';
+import { shakeCamera, getTile, isWalkable } from '../helpers/SystemHelpers';
+import { IAudioService } from '../interfaces/IAudioService';
 
-interface AudioManager {
-  playEnemyHit(): void;
-  playEnemyDeath(): void;
-}
-
+// @deprecated — Use HumanFormSystem instead
 export class TransformSystem extends System {
 
   update(entities: Entity[], context: SystemContext): void {
@@ -41,7 +37,7 @@ export class TransformSystem extends System {
     if (health.isDead()) return;
 
     const dt: number = context.dt;
-    const audio: AudioManager = context.audio as AudioManager;
+    const audio: IAudioService = context.audio as IAudioService;
     const chunks: Map<string, Object> = context.world.chunks;
 
     // --- Cooldown decay (when not transformed) ---
@@ -140,7 +136,7 @@ export class TransformSystem extends System {
     transform.transformAnimTimer = TRANSFORM_ACTIVATE_ANIM;
     transform.transformFormAttackCooldown = 0;
 
-    this.shakeCamera(context, 200);
+    shakeCamera(context, 200);
   }
 
   private deactivate(
@@ -166,7 +162,7 @@ export class TransformSystem extends System {
     vel: VelocityComponent,
     pos: PositionComponent,
     transform: TransformComponent,
-    audio: AudioManager,
+    audio: IAudioService,
     context: SystemContext
   ): void {
     const form: TransformForm = transform.transformForm as TransformForm;
@@ -321,7 +317,7 @@ export class TransformSystem extends System {
     movement: MovementComponent,
     combat: CombatComponent,
     transform: TransformComponent,
-    audio: AudioManager,
+    audio: IAudioService,
     context: SystemContext
   ): void {
     const form: TransformForm = transform.transformForm as TransformForm;
@@ -366,7 +362,7 @@ export class TransformSystem extends System {
       // Move player forward
       pos.x += cosF * chargeDist;
       pos.y += sinF * chargeDist;
-      this.shakeCamera(context, 150);
+      shakeCamera(context, 150);
     } else if (form === TransformForm.IRON_MAN) {
       // IronMan: beam attack
       const beamLen: number = 150;
@@ -383,7 +379,7 @@ export class TransformSystem extends System {
     x: number, y: number,
     radius: number, damage: number,
     transform: TransformComponent,
-    audio: AudioManager,
+    audio: IAudioService,
     context: SystemContext
   ): void {
     for (let i: number = 0; i < entities.length; i++) {
@@ -430,7 +426,7 @@ export class TransformSystem extends System {
     cx: number, cy: number,
     radius: number, damage: number,
     transform: TransformComponent,
-    audio: AudioManager,
+    audio: IAudioService,
     context: SystemContext
   ): void {
     this.damageEnemiesAt(entities, cx, cy, radius, damage, transform, audio, context);
@@ -440,7 +436,7 @@ export class TransformSystem extends System {
     enemy: Entity,
     enemyPos: PositionComponent,
     transform: TransformComponent,
-    audio: AudioManager,
+    audio: IAudioService,
     context: SystemContext
   ): void {
     enemy.active = false;
@@ -475,35 +471,10 @@ export class TransformSystem extends System {
     const cornersY: number[] = [y - halfSize, y + halfSize];
     for (let i: number = 0; i < 2; i++) {
       for (let j: number = 0; j < 2; j++) {
-        const tile: number = this.getTile(chunks, cornersX[i], cornersY[j]);
-        if (!this.isWalkable(tile)) return true;
+        const tile: number = getTile(chunks, cornersX[i], cornersY[j]);
+        if (!isWalkable(tile)) return true;
       }
     }
     return false;
-  }
-
-  private getTile(chunks: Map<string, Object>, worldX: number, worldY: number): number {
-    const tx: number = Math.floor(worldX / TILE_SIZE);
-    const ty: number = Math.floor(worldY / TILE_SIZE);
-    const cx: number = Math.floor(tx / CHUNK_SIZE);
-    const cy: number = Math.floor(ty / CHUNK_SIZE);
-    const key: string = cx + ',' + cy;
-    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
-    if (chunk === undefined) return TileType.WALL;
-    const lx: number = tx - cx * CHUNK_SIZE;
-    const ly: number = ty - cy * CHUNK_SIZE;
-    return chunk.tiles[ly][lx];
-  }
-
-  private isWalkable(tile: number): boolean {
-    return tile !== TileType.WALL && tile !== TileType.VOID;
-  }
-
-  private shakeCamera(context: SystemContext, duration: number): void {
-    const cameraEntity: Entity | null = context.world.findEntityByTag("camera");
-    if (cameraEntity !== null) {
-      const cam: CameraComponent = cameraEntity.getComponent<CameraComponent>("camera")!;
-      cam.shakeTimer = duration;
-    }
   }
 }

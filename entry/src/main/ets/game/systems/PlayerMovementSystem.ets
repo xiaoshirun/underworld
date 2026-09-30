@@ -2,28 +2,20 @@ import { System, SystemContext, Entity, PositionComponent, VelocityComponent, He
 import { MovementComponent } from '../components/MovementComponent';
 import { CombatComponent } from '../components/CombatComponent';
 import { TransformComponent } from '../components/TransformComponent';
-import { CameraComponent } from '../components/CameraComponent';
 import { EnemyAIComponent } from '../components/EnemyAIComponent';
-import { GameStateComponent } from '../components/GameStateComponent';
 import {
-  TILE_SIZE, CHUNK_SIZE, PLAYER_SIZE, PLAYER_SPEED,
+  TILE_SIZE, PLAYER_SIZE, PLAYER_SPEED,
   DASH_SPEED, DASH_DURATION, DASH_COOLDOWN,
   DRILL_BREAK_HITS,
   SLIME_DAMAGE, ENGULF_DAMAGE_INTERVAL, ENGULF_ESCAPE_ATTACKS,
   INVINCIBLE_DURATION,
   TileType, TransformForm,
   WEAPON_FORM_STATS,
-  ChunkData,
+  HUMAN_FORM_SPEED_BONUS,
 } from '../GameConstants';
-
-interface AudioManager {
-  playJump(): void;
-  playDash(): void;
-  playDrillHit(): void;
-  playWallBreak(): void;
-  playEngulf(): void;
-  playPlayerDamage(): void;
-}
+import { HumanFormComponent } from '../components/HumanFormComponent';
+import { shakeCamera, triggerDamageFlash, getTile, setTile, isWalkable } from '../helpers/SystemHelpers';
+import { IAudioService } from '../interfaces/IAudioService';
 
 export class PlayerMovementSystem extends System {
 
@@ -37,6 +29,7 @@ export class PlayerMovementSystem extends System {
     const movement: MovementComponent | null = player.getComponent<MovementComponent>("movement");
     const combat: CombatComponent | null = player.getComponent<CombatComponent>("combat");
     const transform: TransformComponent | null = player.getComponent<TransformComponent>("transform");
+    const humanForm: HumanFormComponent | null = player.getComponent<HumanFormComponent>("humanForm");
     if (pos === null || vel === null || health === null || movement === null || combat === null || transform === null) return;
 
     if (health.isDead()) return;
@@ -44,7 +37,13 @@ export class PlayerMovementSystem extends System {
     // Transform movement is handled by TransformSystem
     if (transform.isTransformed) return;
 
-    const audio: AudioManager = context.audio as AudioManager;
+    // Human form speed bonus
+    let speedMult: number = 1.0;
+    if (humanForm !== null && humanForm.isHumanForm && humanForm.humanFormStage >= 0) {
+      speedMult = 1.0 + HUMAN_FORM_SPEED_BONUS[humanForm.humanFormStage];
+    }
+
+    const audio: IAudioService = context.audio as IAudioService;
     const chunks: Map<string, Object> = context.world.chunks;
 
     // Engulfed player logic
@@ -88,12 +87,12 @@ export class PlayerMovementSystem extends System {
       if (movement.dashTimer <= 0) {
         movement.isDashing = false;
       } else {
-        vel.vx = movement.dashDirX * DASH_SPEED;
-        vel.vy = movement.dashDirY * DASH_SPEED;
+        vel.vx = movement.dashDirX * DASH_SPEED * speedMult;
+        vel.vy = movement.dashDirY * DASH_SPEED * speedMult;
       }
     } else {
-      vel.vx = moveX * PLAYER_SPEED;
-      vel.vy = moveY * PLAYER_SPEED;
+      vel.vx = moveX * PLAYER_SPEED * speedMult;
+      vel.vy = moveY * PLAYER_SPEED * speedMult;
     }
 
     // Collision resolution
@@ -160,7 +159,7 @@ export class PlayerMovementSystem extends System {
           for (let oy: number = -1; oy <= 1; oy++) {
             const ttx: number = ctx2 + ox;
             const tty: number = cty + oy;
-            if (this.getTile(chunks, ttx * TILE_SIZE, tty * TILE_SIZE) === TileType.WALL) {
+            if (getTile(chunks, ttx * TILE_SIZE, tty * TILE_SIZE) === TileType.WALL) {
               const dx: number = (ttx * TILE_SIZE + TILE_SIZE / 2) - pos.x;
               const dy: number = (tty * TILE_SIZE + TILE_SIZE / 2) - pos.y;
               const dist: number = dx * dx + dy * dy;
@@ -215,7 +214,7 @@ export class PlayerMovementSystem extends System {
     pos: PositionComponent,
     movement: MovementComponent,
     chunks: Map<string, Object>,
-    audio: AudioManager,
+    audio: IAudioService,
     context: SystemContext
   ): void {
     const wallWorldX: number = movement.drillTargetX * TILE_SIZE + TILE_SIZE / 2;
@@ -239,7 +238,7 @@ export class PlayerMovementSystem extends System {
 
     const breakTime: number = DRILL_BREAK_HITS * 300;
     if (movement.drillHitCount >= breakTime) {
-      this.setTile(chunks, wallWorldX, wallWorldY, TileType.BROKEN_WALL);
+      setTile(chunks, wallWorldX, wallWorldY, TileType.BROKEN_WALL);
       audio.playWallBreak();
       movement.isDrilling = false;
       movement.drillHitCount = 0;
@@ -253,7 +252,7 @@ export class PlayerMovementSystem extends System {
     health: HealthComponent,
     movement: MovementComponent,
     combat: CombatComponent,
-    audio: AudioManager,
+    audio: IAudioService,
     context: SystemContext
   ): void {
     movement.engulfDamageTimer -= context.dt;
@@ -261,14 +260,8 @@ export class PlayerMovementSystem extends System {
       health.damage(SLIME_DAMAGE);
       movement.engulfDamageTimer = ENGULF_DAMAGE_INTERVAL;
       audio.playPlayerDamage();
-      this.shakeCamera(context, 100);
-      const gsEntity: Entity | null = context.world.findEntityByTag("gameState");
-      if (gsEntity !== null) {
-        const gs: GameStateComponent | null = gsEntity.getComponent<GameStateComponent>("gameState");
-        if (gs !== null) {
-          gs.damageFlashTimer = 200;
-        }
-      }
+      shakeCamera(context, 100);
+      triggerDamageFlash(context);
     }
 
     if (movement.engulfEscapeCount >= ENGULF_ESCAPE_ATTACKS) {
@@ -312,48 +305,10 @@ export class PlayerMovementSystem extends System {
     const cornersY: number[] = [y - halfSize, y + halfSize];
     for (let i: number = 0; i < 2; i++) {
       for (let j: number = 0; j < 2; j++) {
-        const tile: number = this.getTile(chunks, cornersX[i], cornersY[j]);
-        if (!this.isWalkable(tile)) return true;
+        const tile: number = getTile(chunks, cornersX[i], cornersY[j]);
+        if (!isWalkable(tile)) return true;
       }
     }
     return false;
-  }
-
-  private getTile(chunks: Map<string, Object>, worldX: number, worldY: number): number {
-    const tx: number = Math.floor(worldX / TILE_SIZE);
-    const ty: number = Math.floor(worldY / TILE_SIZE);
-    const cx: number = Math.floor(tx / CHUNK_SIZE);
-    const cy: number = Math.floor(ty / CHUNK_SIZE);
-    const key: string = cx + ',' + cy;
-    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
-    if (chunk === undefined) return TileType.WALL;
-    const lx: number = tx - cx * CHUNK_SIZE;
-    const ly: number = ty - cy * CHUNK_SIZE;
-    return chunk.tiles[ly][lx];
-  }
-
-  private isWalkable(tile: number): boolean {
-    return tile !== TileType.WALL && tile !== TileType.VOID;
-  }
-
-  private setTile(chunks: Map<string, Object>, worldX: number, worldY: number, tileType: number): void {
-    const tx: number = Math.floor(worldX / TILE_SIZE);
-    const ty: number = Math.floor(worldY / TILE_SIZE);
-    const cx: number = Math.floor(tx / CHUNK_SIZE);
-    const cy: number = Math.floor(ty / CHUNK_SIZE);
-    const key: string = cx + ',' + cy;
-    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
-    if (chunk === undefined) return;
-    const lx: number = tx - cx * CHUNK_SIZE;
-    const ly: number = ty - cy * CHUNK_SIZE;
-    chunk.tiles[ly][lx] = tileType;
-  }
-
-  private shakeCamera(context: SystemContext, duration: number): void {
-    const cameraEntity: Entity | null = context.world.findEntityByTag("camera");
-    if (cameraEntity !== null) {
-      const cam: CameraComponent = cameraEntity.getComponent<CameraComponent>("camera")!;
-      cam.shakeTimer = duration;
-    }
   }
 }
