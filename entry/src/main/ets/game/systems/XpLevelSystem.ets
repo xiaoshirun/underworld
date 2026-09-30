@@ -1,16 +1,13 @@
 import { System, SystemContext, Entity, PositionComponent, HealthComponent } from '@qiuyu/engine';
-import { XpComponent } from '../components/XpComponent';
+import { LevelComponent } from '../components/LevelComponent';
 import { XpPickupComponent } from '../components/XpPickupComponent';
-import { TransformComponent } from '../components/TransformComponent';
+import { HumanFormComponent } from '../components/HumanFormComponent';
 import {
-  PLAYER_MAX_HP, XP_COLLECT_RANGE, XP_MAGNET_RANGE, LEVEL_UP_XP,
+  XP_COLLECT_RANGE, XP_MAGNET_RANGE,
+  PLAYER_HP_PER_LEVEL,
   TRANSFORM_ENERGY_XP_ORB,
 } from '../GameConstants';
-
-interface AudioManager {
-  playXpCollect(): void;
-  playLevelUp(): void;
-}
+import { IAudioService } from '../interfaces/IAudioService';
 
 export class XpLevelSystem extends System {
 
@@ -19,12 +16,12 @@ export class XpLevelSystem extends System {
     if (player === null) return;
 
     const playerPos: PositionComponent | null = player.getComponent<PositionComponent>("Position");
-    const xp: XpComponent | null = player.getComponent<XpComponent>("xp");
+    const level: LevelComponent | null = player.getComponent<LevelComponent>("level");
     const health: HealthComponent | null = player.getComponent<HealthComponent>("Health");
-    const transform: TransformComponent | null = player.getComponent<TransformComponent>("transform");
-    if (playerPos === null || xp === null || health === null) return;
+    const humanForm: HumanFormComponent | null = player.getComponent<HumanFormComponent>("humanForm");
+    if (playerPos === null || level === null || health === null) return;
 
-    const audio: AudioManager = context.audio as AudioManager;
+    const audio: IAudioService = context.audio as IAudioService;
 
     for (let i: number = 0; i < entities.length; i++) {
       const orb: Entity = entities[i];
@@ -38,7 +35,7 @@ export class XpLevelSystem extends System {
       const dy: number = playerPos.y - orbPos.y;
       const dist: number = Math.sqrt(dx * dx + dy * dy);
 
-      // Magnet effect: pull orb toward player
+      // Magnet effect
       if (dist < XP_MAGNET_RANGE && dist > 1) {
         const pullSpeed: number = 3.0 * (1.0 - dist / XP_MAGNET_RANGE);
         orbPos.x += (dx / dist) * pullSpeed;
@@ -48,26 +45,29 @@ export class XpLevelSystem extends System {
       // Collect XP
       if (dist < XP_COLLECT_RANGE) {
         orb.active = false;
-        xp.xp += pickup.xpValue;
+        level.xp += pickup.xpValue;
 
-        // Transform energy bonus
-        if (transform !== null && transform.isTransformed) {
-          transform.transformEnergy += TRANSFORM_ENERGY_XP_ORB;
-          if (transform.transformEnergy > transform.transformMaxEnergy) {
-            transform.transformEnergy = transform.transformMaxEnergy;
+        // Human form energy bonus
+        if (humanForm !== null && humanForm.isHumanForm) {
+          humanForm.formEnergy += TRANSFORM_ENERGY_XP_ORB;
+          if (humanForm.formEnergy > humanForm.formMaxEnergy) {
+            humanForm.formEnergy = humanForm.formMaxEnergy;
           }
         }
 
         audio.playXpCollect();
 
-        // Level up check
-        if (xp.xp >= LEVEL_UP_XP) {
-          xp.xp -= LEVEL_UP_XP;
-          xp.level++;
-          health.heal(1);
-          if (health.current > PLAYER_MAX_HP) {
-            health.current = PLAYER_MAX_HP;
+        // Level up check (scaling XP curve)
+        const xpNeeded: number = level.getXpNeeded();
+        if (level.xp >= xpNeeded) {
+          level.xp -= xpNeeded;
+          level.level++;
+          health.heal(PLAYER_HP_PER_LEVEL);
+          if (health.current > health.max) {
+            health.current = health.max;
           }
+          // Increase max HP on level up
+          health.max += PLAYER_HP_PER_LEVEL;
           audio.playLevelUp();
         }
       }
