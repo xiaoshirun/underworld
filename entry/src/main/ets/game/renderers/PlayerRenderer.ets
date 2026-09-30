@@ -1,13 +1,11 @@
 import {
   COLOR_DRILL_TIP,
-  COLOR_PLAYER_BODY,
-  COLOR_PLAYER_BODY_DARK,
-  COLOR_PLAYER_FEMALE_BODY,
-  COLOR_PLAYER_FEMALE_BODY_DARK,
-  COLOR_PLAYER_FEMALE_HAIR,
-  COLOR_PLAYER_HAIR,
-  COLOR_PLAYER_SKIN,
+  COLOR_SLIME_BLUE,
+  COLOR_SLIME_BLUE_LIGHT,
+  COLOR_SLIME_EYE,
+  COLOR_SLIME_PUPIL,
   EvolutionLevel,
+  HumanFormStage,
   PLAYER_SIZE,
   TransformForm,
   GameSettings,
@@ -17,10 +15,9 @@ import { MovementComponent } from '../components/MovementComponent';
 import { CombatComponent } from '../components/CombatComponent';
 import { TransformComponent } from '../components/TransformComponent';
 import { EvolutionComponent } from '../components/EvolutionComponent';
+import { HumanFormComponent } from '../components/HumanFormComponent';
 import { WeaponRenderer } from './WeaponRenderer';
 import { TransformFormRenderer } from './TransformFormRenderer';
-import { SpriteManager } from '../sprites/SpriteManager';
-import { SpriteCache } from '../sprites/SpriteCache';
 
 interface PComp {
   pos: PositionComponent;
@@ -29,6 +26,7 @@ interface PComp {
   combat: CombatComponent;
   transform: TransformComponent;
   evolution: EvolutionComponent;
+  humanForm: HumanFormComponent;
   frameCount: number;
   transformAnimIsRevert: boolean;
 }
@@ -37,7 +35,7 @@ export class PlayerRenderer {
   private weaponRenderer: WeaponRenderer = new WeaponRenderer();
   private transformRenderer: TransformFormRenderer = new TransformFormRenderer();
 
-  render(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number, screenW: number, screenH: number, settings: GameSettings, frameCount: number, spriteManager: SpriteManager | null = null): void {
+  render(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number, screenW: number, screenH: number, settings: GameSettings, frameCount: number): void {
     const player: Entity | null = world.findEntityByTag('player');
     if (player === null) return;
     const pos: PositionComponent | null = player.getComponent<PositionComponent>('Position');
@@ -46,7 +44,8 @@ export class PlayerRenderer {
     const combat: CombatComponent | null = player.getComponent<CombatComponent>('combat');
     const transform: TransformComponent | null = player.getComponent<TransformComponent>('transform');
     const evolution: EvolutionComponent | null = player.getComponent<EvolutionComponent>('evolution');
-    if (pos === null || vel === null || movement === null || combat === null || transform === null || evolution === null) return;
+    const humanForm: HumanFormComponent | null = player.getComponent<HumanFormComponent>('humanForm');
+    if (pos === null || vel === null || movement === null || combat === null || transform === null || evolution === null || humanForm === null) return;
     const pc: PComp = {
       pos: pos,
       vel: vel,
@@ -54,22 +53,23 @@ export class PlayerRenderer {
       combat: combat,
       transform: transform,
       evolution: evolution,
+      humanForm: humanForm,
       frameCount: frameCount,
       transformAnimIsRevert: transform.transformForm === -1,
     };
     const offX: number = -cameraX;
     const offY: number = -cameraY;
-    this.renderPlayer(ctx, offX, offY, pc, spriteManager);
+    this.renderPlayer(ctx, offX, offY, pc);
   }
 
-  private renderPlayer(c: CanvasRenderingContext2D, offX: number, offY: number, pc: PComp, spriteManager: SpriteManager | null = null): void {
+  private renderPlayer(c: CanvasRenderingContext2D, offX: number, offY: number, pc: PComp): void {
     const screenX: number = pc.pos.x + offX;
     const screenY: number = pc.pos.y + offY - pc.movement.jumpHeight;
     const half: number = PLAYER_SIZE / 2;
 
     if (pc.movement.isEngulfed) {
       c.globalAlpha = 0.5 + Math.sin(pc.frameCount * 0.2) * 0.3;
-      const engulfBodyColor: string = COLOR_PLAYER_BODY;
+      const engulfBodyColor: string = COLOR_SLIME_BLUE;
       c.fillStyle = engulfBodyColor;
       c.beginPath();
       c.arc(screenX, screenY, half * 0.6, 0, Math.PI * 2);
@@ -79,6 +79,12 @@ export class PlayerRenderer {
     }
 
     if (pc.combat.invincibleTimer > 0 && Math.floor(pc.frameCount / 3) % 2 === 0) {
+      return;
+    }
+
+    // Human form rendering
+    if (pc.humanForm.isHumanForm) {
+      this.renderHumanForm(c, screenX, screenY, pc);
       return;
     }
 
@@ -108,168 +114,366 @@ export class PlayerRenderer {
       c.globalAlpha = 1.0;
     }
 
-    // Determine sprite cache key
-    const isMoving: boolean = Math.abs(pc.vel.vx) > 0.1 || Math.abs(pc.vel.vy) > 0.1;
-    const facingRight: boolean = Math.cos(pc.movement.facing) >= 0;
-    const dir: string = facingRight ? 'R' : 'L';
-    let cachedBobY: number;
-
-    if (spriteManager !== null && spriteManager.isReady()) {
-      const playerCache: SpriteCache = spriteManager.getPlayerCache();
-      let cacheKey: string;
-      if (!isMoving) {
-        cacheKey = `body_idle_${dir}`;
-        cachedBobY = 0;
-      } else {
-        const walkFrame: number = Math.floor(((pc.combat.animFrame % (Math.PI * 2)) / (Math.PI * 2)) * 4) % 4;
-        cacheKey = `body_walk_${dir}_${walkFrame}`;
-        cachedBobY = Math.sin(walkFrame * Math.PI / 2) * 1.5;
-      }
-
-      const cachedFrame: OffscreenCanvas | undefined = playerCache.get(cacheKey);
-      if (cachedFrame !== undefined) {
-        c.drawImage(cachedFrame, screenX - 32, screenY - 32);
-      } else {
-        this.drawPlayerBodyProcedural(c, screenX, screenY, pc);
-        cachedBobY = Math.sin(pc.combat.animFrame) * 1.5;
-      }
-    } else {
-      this.drawPlayerBodyProcedural(c, screenX, screenY, pc);
-      cachedBobY = Math.sin(pc.combat.animFrame) * 1.5;
-    }
-
-    this.renderDrill(c, screenX, screenY, pc, cachedBobY);
-    this.weaponRenderer.renderWeaponOnPlayer(c, screenX, screenY, pc, cachedBobY);
-    this.renderEvolutionEffects(c, screenX, screenY, pc, cachedBobY);
+    const bobY: number = pc.movement.isJumping ? -pc.movement.jumpHeight : Math.sin(pc.frameCount * 0.08) * 1.5;
+    this.renderSlimeBody(c, screenX, screenY, pc, bobY);
+    this.renderDrill(c, screenX, screenY, pc, bobY);
+    this.renderEvolutionEffects(c, screenX, screenY, pc, bobY);
   }
 
-  private drawPlayerBodyProcedural(c: CanvasRenderingContext2D, screenX: number, screenY: number, pc: PComp): void {
-    const bobY: number = Math.sin(pc.combat.animFrame) * 1.5;
-    const walkPhase: number = Math.sin(pc.combat.animFrame * 2);
+  private renderSlimeBody(c: CanvasRenderingContext2D, screenX: number, screenY: number, pc: PComp, bobY: number): void {
     const isMoving: boolean = Math.abs(pc.vel.vx) > 0.1 || Math.abs(pc.vel.vy) > 0.1;
     const facingRight: boolean = Math.cos(pc.movement.facing) >= 0;
+    const squish: number = isMoving ? Math.sin(pc.frameCount * 0.15) * 1.5 : Math.sin(pc.frameCount * 0.05) * 0.8;
+    const bodyW: number = 12 + squish;
+    const bodyH: number = 10 - squish * 0.5;
 
-    const bodyColor: string = COLOR_PLAYER_BODY;
-    const bodyDarkColor: string = COLOR_PLAYER_BODY_DARK;
-    const hairColor: string = COLOR_PLAYER_HAIR;
-
+    // Shadow
     if (!pc.movement.isJumping) {
       c.globalAlpha = 0.25;
       c.fillStyle = '#000000';
       c.beginPath();
-      c.ellipse(screenX, screenY + 13 + bobY, 7, 2.5, 0, 0, Math.PI * 2);
+      c.ellipse(screenX, screenY + bodyH * 0.5 + bobY, bodyW * 0.6, 3, 0, 0, Math.PI * 2);
       c.fill();
       c.globalAlpha = 1.0;
     }
 
-    const legSwing: number = isMoving ? walkPhase * 3 : 0;
-    c.fillStyle = '#4a3728';
-    c.fillRect(screenX - 4, screenY + 5 + bobY, 3, 7);
-    c.fillStyle = '#3d2b1a';
-    c.fillRect(screenX - 3, screenY + 6 + bobY, 1, 5);
-    c.fillStyle = '#4a3728';
-    c.fillRect(screenX + 1, screenY + 5 + bobY, 3, 7);
-    c.fillStyle = '#3d2b1a';
-    c.fillRect(screenX + 2, screenY + 6 + bobY, 1, 5);
-    c.fillStyle = '#3d2b1a';
-    c.fillRect(screenX - 5, screenY + 10 + bobY + (isMoving ? legSwing : 0), 4, 3);
-    c.fillRect(screenX + 1, screenY + 10 + bobY + (isMoving ? -legSwing : 0), 4, 3);
-    c.fillStyle = '#5a4530';
-    c.fillRect(screenX - 5, screenY + 10 + bobY + (isMoving ? legSwing : 0), 4, 1);
-    c.fillRect(screenX + 1, screenY + 10 + bobY + (isMoving ? -legSwing : 0), 4, 1);
-    c.fillStyle = '#2a1a0a';
-    c.fillRect(screenX - 5, screenY + 12 + bobY + (isMoving ? legSwing : 0), 4, 1);
-    c.fillRect(screenX + 1, screenY + 12 + bobY + (isMoving ? -legSwing : 0), 4, 1);
+    // Main body (blob shape)
+    c.fillStyle = COLOR_SLIME_BLUE;
+    c.beginPath();
+    c.ellipse(screenX, screenY + bobY, bodyW, bodyH, 0, 0, Math.PI * 2);
+    c.fill();
 
-    c.fillStyle = bodyColor;
-    c.fillRect(screenX - 5, screenY - 3 + bobY, 10, 9);
-    c.fillStyle = bodyDarkColor;
-    c.fillRect(screenX - 5, screenY + 3 + bobY, 10, 3);
-    c.fillStyle = bodyDarkColor;
-    c.globalAlpha = 0.4;
-    c.fillRect(screenX - 3, screenY - 1 + bobY, 1, 5);
-    c.fillRect(screenX + 2, screenY + 0 + bobY, 1, 4);
-    c.globalAlpha = 1.0;
-    c.fillStyle = '#ffffff';
-    c.globalAlpha = 0.1;
-    c.fillRect(screenX - 2, screenY - 2 + bobY, 4, 2);
-    c.globalAlpha = 1.0;
-    c.fillStyle = '#8b6914';
-    c.fillRect(screenX - 5, screenY + 4 + bobY, 10, 2);
-    c.fillStyle = '#6b4f0e';
-    c.fillRect(screenX - 5, screenY + 4 + bobY, 10, 1);
-    c.fillStyle = '#ffd700';
-    c.fillRect(screenX - 1, screenY + 4 + bobY, 2, 2);
-    c.fillStyle = '#fff8dc';
-    c.fillRect(screenX - 1, screenY + 4 + bobY, 1, 1);
-
-    const armSwing: number = isMoving ? walkPhase * 2 : 0;
-    c.fillStyle = bodyColor;
-    c.fillRect(screenX - 7, screenY - 2 + bobY + (isMoving ? -armSwing : 0), 3, 7);
-    c.fillStyle = bodyDarkColor;
-    c.fillRect(screenX - 7, screenY - 2 + bobY + (isMoving ? -armSwing : 0), 3, 1);
-    c.fillStyle = bodyColor;
-    c.fillRect(screenX + 4, screenY - 2 + bobY + (isMoving ? armSwing : 0), 3, 7);
-    c.fillStyle = bodyDarkColor;
-    c.fillRect(screenX + 4, screenY - 2 + bobY + (isMoving ? armSwing : 0), 3, 1);
-    c.fillStyle = COLOR_PLAYER_SKIN;
-    c.fillRect(screenX - 7, screenY + 4 + bobY + (isMoving ? -armSwing : 0), 3, 2);
-    c.fillRect(screenX + 4, screenY + 4 + bobY + (isMoving ? armSwing : 0), 3, 2);
-    c.fillStyle = '#e0b090';
-    c.fillRect(screenX - 7, screenY + 5 + bobY + (isMoving ? -armSwing : 0), 3, 1);
-    c.fillRect(screenX + 4, screenY + 5 + bobY + (isMoving ? armSwing : 0), 3, 1);
-
-    c.fillStyle = COLOR_PLAYER_SKIN;
-    c.fillRect(screenX - 4, screenY - 10 + bobY, 8, 7);
-    c.fillStyle = '#e8c0a0';
+    // Body highlight (top)
+    c.fillStyle = COLOR_SLIME_BLUE_LIGHT;
     c.globalAlpha = 0.5;
-    c.fillRect(screenX - 3, screenY - 5 + bobY, 2, 1);
-    c.fillRect(screenX + 1, screenY - 5 + bobY, 2, 1);
+    c.beginPath();
+    c.ellipse(screenX - 2, screenY - 3 + bobY, bodyW * 0.5, bodyH * 0.4, -0.3, 0, Math.PI * 2);
+    c.fill();
     c.globalAlpha = 1.0;
-    c.fillStyle = '#e0b090';
-    c.fillRect(screenX - 3, screenY - 4 + bobY, 6, 1);
-    c.fillStyle = '#d4a882';
-    c.fillRect(screenX, screenY - 6 + bobY, 1, 2);
 
-    c.fillStyle = hairColor;
-    c.fillRect(screenX - 5, screenY - 12 + bobY, 10, 4);
-    c.fillRect(screenX - 6, screenY - 10 + bobY, 2, 5);
-    c.fillRect(screenX + 4, screenY - 10 + bobY, 2, 5);
-    const hairHighlight: string = '#9a5a3a';
-    c.fillStyle = hairHighlight;
-    c.fillRect(screenX - 4, screenY - 11 + bobY, 2, 1);
-    c.fillRect(screenX + 1, screenY - 12 + bobY, 3, 1);
-    c.fillRect(screenX - 2, screenY - 10 + bobY, 1, 2);
-    c.fillStyle = '#4a2a10';
-    c.fillRect(screenX - 3, screenY - 9 + bobY, 1, 3);
-    c.fillRect(screenX + 3, screenY - 10 + bobY, 1, 2);
-    c.fillRect(screenX, screenY - 11 + bobY, 1, 1);
-
-    const eyeOffX: number = facingRight ? 0 : -1;
+    // Body shine
     c.fillStyle = '#ffffff';
-    c.fillRect(screenX - 2 + eyeOffX, screenY - 8 + bobY, 3, 3);
-    c.fillRect(screenX + 1 + eyeOffX, screenY - 8 + bobY, 3, 3);
-    c.fillStyle = '#4a90d9';
-    c.fillRect(screenX - 1 + eyeOffX, screenY - 7 + bobY, 2, 2);
-    c.fillRect(screenX + 2 + eyeOffX, screenY - 7 + bobY, 2, 2);
-    c.fillStyle = '#1a1a2e';
-    c.fillRect(screenX - 1 + eyeOffX, screenY - 7 + bobY, 1, 1);
-    c.fillRect(screenX + 2 + eyeOffX, screenY - 7 + bobY, 1, 1);
-    c.fillStyle = '#ffffff';
-    c.fillRect(screenX - 1 + eyeOffX, screenY - 8 + bobY, 1, 1);
-    c.fillRect(screenX + 2 + eyeOffX, screenY - 8 + bobY, 1, 1);
-    c.globalAlpha = 0.6;
-    c.fillRect(screenX + eyeOffX, screenY - 6 + bobY, 1, 1);
-    c.fillRect(screenX + 3 + eyeOffX, screenY - 6 + bobY, 1, 1);
+    c.globalAlpha = 0.3;
+    c.beginPath();
+    c.ellipse(screenX - 3, screenY - 4 + bobY, 3, 2, -0.4, 0, Math.PI * 2);
+    c.fill();
     c.globalAlpha = 1.0;
-    c.fillStyle = hairColor;
-    c.fillRect(screenX - 2 + eyeOffX, screenY - 9 + bobY, 3, 1);
-    c.fillRect(screenX + 1 + eyeOffX, screenY - 9 + bobY, 3, 1);
 
-    c.fillStyle = '#c0846a';
-    c.fillRect(screenX, screenY - 4 + bobY, 2, 1);
-    c.fillStyle = '#a06850';
-    c.fillRect(screenX, screenY - 4 + bobY, 2, 1);
+    // Bottom darker area
+    c.fillStyle = '#1e40af';
+    c.globalAlpha = 0.3;
+    c.beginPath();
+    c.ellipse(screenX, screenY + 3 + bobY, bodyW * 0.8, bodyH * 0.4, 0, 0, Math.PI);
+    c.fill();
+    c.globalAlpha = 1.0;
+
+    // Eyes
+    const eyeSpacing: number = 4;
+    const eyeY: number = screenY - 2 + bobY;
+    const eyeOffX: number = facingRight ? 1 : -1;
+
+    // Eye whites
+    c.fillStyle = COLOR_SLIME_EYE;
+    c.beginPath();
+    c.ellipse(screenX - eyeSpacing + eyeOffX, eyeY, 2.5, 3, 0, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.ellipse(screenX + eyeSpacing + eyeOffX, eyeY, 2.5, 3, 0, 0, Math.PI * 2);
+    c.fill();
+
+    // Pupils
+    c.fillStyle = COLOR_SLIME_PUPIL;
+    const pupilOff: number = facingRight ? 0.8 : -0.8;
+    c.beginPath();
+    c.arc(screenX - eyeSpacing + eyeOffX + pupilOff, eyeY + 0.5, 1.2, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(screenX + eyeSpacing + eyeOffX + pupilOff, eyeY + 0.5, 1.2, 0, Math.PI * 2);
+    c.fill();
+
+    // Eye shine
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.arc(screenX - eyeSpacing + eyeOffX + pupilOff - 0.5, eyeY - 0.8, 0.6, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(screenX + eyeSpacing + eyeOffX + pupilOff - 0.5, eyeY - 0.8, 0.6, 0, Math.PI * 2);
+    c.fill();
+
+    // Mouth (small smile)
+    c.strokeStyle = '#1e3a5f';
+    c.lineWidth = 0.8;
+    c.beginPath();
+    c.arc(screenX + eyeOffX, screenY + 2 + bobY, 2, 0.1, Math.PI - 0.1);
+    c.stroke();
+  }
+
+  private renderHumanForm(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp): void {
+    const stage: HumanFormStage = pc.humanForm.humanFormStage as HumanFormStage;
+    const bobY: number = Math.sin(pc.frameCount * 0.06) * 1.5;
+    const facingRight: boolean = Math.cos(pc.movement.facing) >= 0;
+
+    if (stage === HumanFormStage.PROTO) {
+      this.renderHumanProto(c, sx, sy, pc, bobY, facingRight);
+    } else if (stage === HumanFormStage.PHANTOM) {
+      this.renderHumanPhantom(c, sx, sy, pc, bobY, facingRight);
+    } else if (stage === HumanFormStage.ARMORED) {
+      this.renderHumanArmored(c, sx, sy, pc, bobY, facingRight);
+    } else if (stage === HumanFormStage.COMPLETE) {
+      this.renderHumanComplete(c, sx, sy, pc, bobY, facingRight);
+    }
+  }
+
+  private renderHumanProto(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number, facingRight: boolean): void {
+    // Basic translucent humanoid outline — unstable form
+    c.globalAlpha = 0.4 + Math.sin(pc.frameCount * 0.1) * 0.1;
+
+    // Body
+    c.fillStyle = '#8bb4d6';
+    c.fillRect(sx - 4, sy - 6 + bobY, 8, 12);
+
+    // Head
+    c.beginPath();
+    c.arc(sx, sy - 10 + bobY, 4, 0, Math.PI * 2);
+    c.fill();
+
+    // Legs
+    c.fillRect(sx - 3, sy + 6 + bobY, 2, 6);
+    c.fillRect(sx + 1, sy + 6 + bobY, 2, 6);
+
+    // Arms
+    c.fillRect(sx - 7, sy - 4 + bobY, 3, 8);
+    c.fillRect(sx + 4, sy - 4 + bobY, 3, 8);
+
+    // Eyes (simple dots)
+    c.fillStyle = '#ffffff';
+    c.globalAlpha = 0.7;
+    c.fillRect(sx - 2, sy - 11 + bobY, 2, 2);
+    c.fillRect(sx + 1, sy - 11 + bobY, 2, 2);
+
+    c.globalAlpha = 1.0;
+  }
+
+  private renderHumanPhantom(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number, facingRight: boolean): void {
+    // Ghost-like translucent humanoid with trailing wisps
+    const t: number = pc.frameCount * 0.08;
+
+    // Ghost trail
+    c.globalAlpha = 0.15;
+    c.fillStyle = '#a0c4e8';
+    for (let i: number = 0; i < 3; i++) {
+      const trailY: number = sy + 8 + i * 4 + Math.sin(t + i) * 2;
+      c.beginPath();
+      c.ellipse(sx + Math.sin(t + i * 0.5) * 2, trailY + bobY, 5 - i, 3, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // Body (semi-transparent)
+    c.globalAlpha = 0.55 + Math.sin(t) * 0.1;
+    c.fillStyle = '#7db8e0';
+    c.fillRect(sx - 5, sy - 6 + bobY, 10, 14);
+
+    // Head
+    c.beginPath();
+    c.arc(sx, sy - 10 + bobY, 5, 0, Math.PI * 2);
+    c.fill();
+
+    // Legs (wispy)
+    c.globalAlpha = 0.35;
+    c.fillRect(sx - 3, sy + 8 + bobY, 2, 5);
+    c.fillRect(sx + 1, sy + 8 + bobY, 2, 5);
+
+    // Arms
+    c.globalAlpha = 0.45;
+    c.fillRect(sx - 8, sy - 4 + bobY, 3, 9);
+    c.fillRect(sx + 5, sy - 4 + bobY, 3, 9);
+
+    // Eyes (glowing)
+    c.fillStyle = '#ffffff';
+    c.globalAlpha = 0.9;
+    c.beginPath();
+    c.arc(sx - 2, sy - 10 + bobY, 1.5, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(sx + 2, sy - 10 + bobY, 1.5, 0, Math.PI * 2);
+    c.fill();
+
+    // Glow aura
+    c.globalAlpha = 0.1;
+    c.fillStyle = '#60a5fa';
+    c.beginPath();
+    c.arc(sx, sy + bobY, 18, 0, Math.PI * 2);
+    c.fill();
+
+    c.globalAlpha = 1.0;
+  }
+
+  private renderHumanArmored(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number, facingRight: boolean): void {
+    // Armored humanoid with metallic colors
+    const isMoving: boolean = Math.abs(pc.vel.vx) > 0.1 || Math.abs(pc.vel.vy) > 0.1;
+    const walkPhase: number = isMoving ? Math.sin(pc.frameCount * 0.15) * 3 : 0;
+
+    // Shadow
+    c.globalAlpha = 0.3;
+    c.fillStyle = '#000000';
+    c.beginPath();
+    c.ellipse(sx, sy + 14 + bobY, 8, 3, 0, 0, Math.PI * 2);
+    c.fill();
+    c.globalAlpha = 1.0;
+
+    // Legs (armored)
+    c.fillStyle = '#4b5563';
+    c.fillRect(sx - 4, sy + 6 + bobY + walkPhase, 3, 8);
+    c.fillRect(sx + 1, sy + 6 + bobY - walkPhase, 3, 8);
+    // Boots
+    c.fillStyle = '#374151';
+    c.fillRect(sx - 5, sy + 12 + bobY + walkPhase, 4, 2);
+    c.fillRect(sx + 1, sy + 12 + bobY - walkPhase, 4, 2);
+
+    // Body (armor)
+    c.fillStyle = '#6b7280';
+    c.fillRect(sx - 6, sy - 6 + bobY, 12, 13);
+    // Chest plate highlight
+    c.fillStyle = '#9ca3af';
+    c.fillRect(sx - 5, sy - 5 + bobY, 10, 3);
+    // Belt
+    c.fillStyle = '#92400e';
+    c.fillRect(sx - 6, sy + 4 + bobY, 12, 2);
+    c.fillStyle = '#fbbf24';
+    c.fillRect(sx - 1, sy + 4 + bobY, 2, 2);
+
+    // Arms (armored)
+    c.fillStyle = '#6b7280';
+    c.fillRect(sx - 9, sy - 4 + bobY, 3, 9);
+    c.fillRect(sx + 6, sy - 4 + bobY, 3, 9);
+    // Gauntlets
+    c.fillStyle = '#4b5563';
+    c.fillRect(sx - 9, sy + 3 + bobY, 3, 3);
+    c.fillRect(sx + 6, sy + 3 + bobY, 3, 3);
+
+    // Head (helmet)
+    c.fillStyle = '#6b7280';
+    c.beginPath();
+    c.arc(sx, sy - 10 + bobY, 5, 0, Math.PI * 2);
+    c.fill();
+    // Visor
+    c.fillStyle = '#1e3a5f';
+    c.fillRect(sx - 3, sy - 11 + bobY, 6, 3);
+    // Eyes through visor
+    c.fillStyle = '#60a5fa';
+    c.fillRect(sx - 2, sy - 10 + bobY, 2, 1);
+    c.fillRect(sx + 1, sy - 10 + bobY, 2, 1);
+  }
+
+  private renderHumanComplete(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number, facingRight: boolean): void {
+    // Fully armored with glowing effects
+    const t: number = pc.frameCount * 0.05;
+    const isMoving: boolean = Math.abs(pc.vel.vx) > 0.1 || Math.abs(pc.vel.vy) > 0.1;
+    const walkPhase: number = isMoving ? Math.sin(pc.frameCount * 0.15) * 3 : 0;
+
+    // Glow aura
+    c.globalAlpha = 0.15 + Math.sin(t) * 0.05;
+    c.fillStyle = '#60a5fa';
+    c.beginPath();
+    c.arc(sx, sy + bobY, 22, 0, Math.PI * 2);
+    c.fill();
+    c.globalAlpha = 1.0;
+
+    // Shadow
+    c.globalAlpha = 0.35;
+    c.fillStyle = '#000000';
+    c.beginPath();
+    c.ellipse(sx, sy + 14 + bobY, 9, 3, 0, 0, Math.PI * 2);
+    c.fill();
+    c.globalAlpha = 1.0;
+
+    // Legs (enhanced armor)
+    c.fillStyle = '#374151';
+    c.fillRect(sx - 4, sy + 6 + bobY + walkPhase, 3, 8);
+    c.fillRect(sx + 1, sy + 6 + bobY - walkPhase, 3, 8);
+    // Leg glow lines
+    c.fillStyle = '#60a5fa';
+    c.globalAlpha = 0.5;
+    c.fillRect(sx - 3, sy + 7 + bobY + walkPhase, 1, 6);
+    c.fillRect(sx + 2, sy + 7 + bobY - walkPhase, 1, 6);
+    c.globalAlpha = 1.0;
+    // Boots
+    c.fillStyle = '#1f2937';
+    c.fillRect(sx - 5, sy + 12 + bobY + walkPhase, 4, 2);
+    c.fillRect(sx + 1, sy + 12 + bobY - walkPhase, 4, 2);
+
+    // Body (enhanced armor)
+    c.fillStyle = '#4b5563';
+    c.fillRect(sx - 7, sy - 6 + bobY, 14, 13);
+    // Chest plate
+    c.fillStyle = '#6b7280';
+    c.fillRect(sx - 6, sy - 5 + bobY, 12, 4);
+    // Chest glow
+    c.fillStyle = '#60a5fa';
+    c.globalAlpha = 0.6 + Math.sin(t * 2) * 0.2;
+    c.beginPath();
+    c.arc(sx, sy - 1 + bobY, 2, 0, Math.PI * 2);
+    c.fill();
+    c.globalAlpha = 1.0;
+    // Belt
+    c.fillStyle = '#78350f';
+    c.fillRect(sx - 7, sy + 4 + bobY, 14, 2);
+    c.fillStyle = '#fbbf24';
+    c.fillRect(sx - 1, sy + 4 + bobY, 2, 2);
+
+    // Arms (enhanced)
+    c.fillStyle = '#4b5563';
+    c.fillRect(sx - 10, sy - 4 + bobY, 3, 10);
+    c.fillRect(sx + 7, sy - 4 + bobY, 3, 10);
+    // Arm glow lines
+    c.fillStyle = '#60a5fa';
+    c.globalAlpha = 0.4;
+    c.fillRect(sx - 9, sy - 3 + bobY, 1, 8);
+    c.fillRect(sx + 8, sy - 3 + bobY, 1, 8);
+    c.globalAlpha = 1.0;
+    // Gauntlets
+    c.fillStyle = '#374151';
+    c.fillRect(sx - 10, sy + 4 + bobY, 3, 3);
+    c.fillRect(sx + 7, sy + 4 + bobY, 3, 3);
+
+    // Head (enhanced helmet)
+    c.fillStyle = '#4b5563';
+    c.beginPath();
+    c.arc(sx, sy - 10 + bobY, 6, 0, Math.PI * 2);
+    c.fill();
+    // Helmet crest
+    c.fillStyle = '#60a5fa';
+    c.fillRect(sx - 1, sy - 16 + bobY, 2, 4);
+    // Visor
+    c.fillStyle = '#1e3a5f';
+    c.fillRect(sx - 4, sy - 11 + bobY, 8, 3);
+    // Eyes (glowing)
+    c.fillStyle = '#60a5fa';
+    c.fillRect(sx - 3, sy - 10 + bobY, 2, 1);
+    c.fillRect(sx + 1, sy - 10 + bobY, 2, 1);
+    // Eye glow
+    c.globalAlpha = 0.3;
+    c.beginPath();
+    c.arc(sx - 2, sy - 10 + bobY, 3, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(sx + 2, sy - 10 + bobY, 3, 0, Math.PI * 2);
+    c.fill();
+    c.globalAlpha = 1.0;
+
+    // Orbiting particles
+    for (let i: number = 0; i < 4; i++) {
+      const angle: number = t * 2 + (i * Math.PI * 2 / 4);
+      const orbR: number = 16;
+      const ox: number = sx + Math.cos(angle) * orbR;
+      const oy: number = sy + bobY + Math.sin(angle) * orbR;
+      c.globalAlpha = 0.5;
+      c.fillStyle = '#60a5fa';
+      c.beginPath();
+      c.arc(ox, oy, 1.5, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.globalAlpha = 1.0;
   }
 
   private renderDrill(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number): void {
