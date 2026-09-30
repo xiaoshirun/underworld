@@ -139,11 +139,6 @@ export enum BiomeType {
   SHADOW = 5
 }
 
-export enum GenderType {
-  MALE = 0,
-  FEMALE = 1
-}
-
 export enum WeaponForm {
   BLADE = 0,
   WHIP = 1,
@@ -265,7 +260,6 @@ export interface PlayerState {
   drillTargetX: number;
   drillTargetY: number;
   drillHitCount: number;
-  gender: GenderType;
   currentWeaponForm: WeaponForm;
   unlockedForms: number[];
   evolutionBranch: EvolutionBranch;
@@ -818,7 +812,6 @@ export interface SaveData {
   hp: number;
   xp: number;
   level: number;
-  gender: number;
   currentWeaponForm: number;
   unlockedForms: number[];
   evolutionBranch: number;

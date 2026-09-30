@@ -56,8 +56,6 @@ export class GameScene extends Scene {
   private uiRenderer: UIRenderer = new UIRenderer();
   private spriteManager: SpriteManager = new SpriteManager();
 
-  private playerGender: number = 0;
-
   constructor(audio: AudioManager, settings: GameSettings, harmonyContext: Object | null = null) {
     super();
     this.audio = audio;
@@ -180,14 +178,6 @@ export class GameScene extends Scene {
 
   getSettings(): GameSettings {
     return this.settings;
-  }
-
-  setPlayerGender(gender: number): void {
-    this.playerGender = gender;
-  }
-
-  getPlayerGender(): number {
-    return this.playerGender;
   }
 
   getEvolutionSystem(): EvolutionSystem {

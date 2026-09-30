@@ -19,7 +19,6 @@ export function drawPlayerBody(
   const legSwing: number = isMoving ? walkPhaseSin * 3 : 0;
   const armSwing: number = isMoving ? walkPhaseSin * 2 : 0;
 
-  // Gender hardcoded to MALE (matches current PlayerRenderer behavior)
   const bodyColor: string = COLOR_PLAYER_BODY;
   const bodyDarkColor: string = COLOR_PLAYER_BODY_DARK;
   const hairColor: string = COLOR_PLAYER_HAIR;

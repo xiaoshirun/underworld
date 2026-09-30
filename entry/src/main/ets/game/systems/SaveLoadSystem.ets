@@ -67,7 +67,6 @@ export class SaveLoadSystem extends System {
       hp: health.current,
       xp: level !== null ? level.xp : xp.xp,
       level: level !== null ? level.level : xp.level,
-      gender: 0,
       currentWeaponForm: transform.currentWeaponForm,
       unlockedForms: evo.unlockedForms.slice(),
       evolutionBranch: evo.evolutionBranch,

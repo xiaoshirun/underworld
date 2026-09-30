@@ -8,7 +8,6 @@ import {
   COLOR_PLAYER_HAIR,
   COLOR_PLAYER_SKIN,
   EvolutionLevel,
-  GenderType,
   PLAYER_SIZE,
   TransformForm,
   GameSettings,
@@ -70,7 +69,7 @@ export class PlayerRenderer {
 
     if (pc.movement.isEngulfed) {
       c.globalAlpha = 0.5 + Math.sin(pc.frameCount * 0.2) * 0.3;
-      const engulfBodyColor: string = (0 === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY : COLOR_PLAYER_BODY);
+      const engulfBodyColor: string = COLOR_PLAYER_BODY;
       c.fillStyle = engulfBodyColor;
       c.beginPath();
       c.arc(screenX, screenY, half * 0.6, 0, Math.PI * 2);
@@ -150,10 +149,9 @@ export class PlayerRenderer {
     const isMoving: boolean = Math.abs(pc.vel.vx) > 0.1 || Math.abs(pc.vel.vy) > 0.1;
     const facingRight: boolean = Math.cos(pc.movement.facing) >= 0;
 
-    const gender: number = 0;
-    const bodyColor: string = gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY : COLOR_PLAYER_BODY;
-    const bodyDarkColor: string = gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_BODY_DARK : COLOR_PLAYER_BODY_DARK;
-    const hairColor: string = gender === GenderType.FEMALE ? COLOR_PLAYER_FEMALE_HAIR : COLOR_PLAYER_HAIR;
+    const bodyColor: string = COLOR_PLAYER_BODY;
+    const bodyDarkColor: string = COLOR_PLAYER_BODY_DARK;
+    const hairColor: string = COLOR_PLAYER_HAIR;
 
     if (!pc.movement.isJumping) {
       c.globalAlpha = 0.25;
@@ -237,29 +235,15 @@ export class PlayerRenderer {
     c.fillRect(screenX - 5, screenY - 12 + bobY, 10, 4);
     c.fillRect(screenX - 6, screenY - 10 + bobY, 2, 5);
     c.fillRect(screenX + 4, screenY - 10 + bobY, 2, 5);
-    const hairHighlight: string = gender === GenderType.FEMALE ? '#7a3a9a' : '#9a5a3a';
+    const hairHighlight: string = '#9a5a3a';
     c.fillStyle = hairHighlight;
     c.fillRect(screenX - 4, screenY - 11 + bobY, 2, 1);
     c.fillRect(screenX + 1, screenY - 12 + bobY, 3, 1);
     c.fillRect(screenX - 2, screenY - 10 + bobY, 1, 2);
-    c.fillStyle = gender === GenderType.FEMALE ? '#3a1050' : '#4a2a10';
+    c.fillStyle = '#4a2a10';
     c.fillRect(screenX - 3, screenY - 9 + bobY, 1, 3);
     c.fillRect(screenX + 3, screenY - 10 + bobY, 1, 2);
     c.fillRect(screenX, screenY - 11 + bobY, 1, 1);
-    if (gender === GenderType.FEMALE) {
-      c.fillStyle = hairColor;
-      c.fillRect(screenX - 7, screenY - 8 + bobY, 2, 10);
-      c.fillRect(screenX + 5, screenY - 8 + bobY, 2, 10);
-      c.fillStyle = '#7a3a9a';
-      c.fillRect(screenX - 7, screenY - 6 + bobY, 1, 3);
-      c.fillRect(screenX + 6, screenY - 7 + bobY, 1, 4);
-      c.fillStyle = '#3a1050';
-      c.fillRect(screenX - 6, screenY - 4 + bobY, 1, 5);
-      c.fillRect(screenX + 5, screenY - 3 + bobY, 1, 4);
-      c.fillStyle = hairColor;
-      c.fillRect(screenX - 7, screenY + 1 + bobY, 1, 2);
-      c.fillRect(screenX + 6, screenY + 1 + bobY, 1, 2);
-    }
 
     const eyeOffX: number = facingRight ? 0 : -1;
     c.fillStyle = '#ffffff';

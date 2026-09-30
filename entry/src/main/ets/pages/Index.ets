@@ -3,9 +3,10 @@ import { common } from '@kit.AbilityKit';
 import { Engine, Entity, HealthComponent, SystemContext, World } from '@qiuyu/engine';
 import { GameScene } from '../game/GameScene';
 import { AudioManager } from '../game/AudioManager';
+import { SaveManager } from '../game/SaveManager';
 import {
   PLAYER_MAX_HP, JOYSTICK_RADIUS, MINIMAP_SIZE,
-  DASH_COOLDOWN, GenderType, WeaponForm,
+  DASH_COOLDOWN, WeaponForm,
   TransformForm, TRANSFORM_MAX_ENERGY,
   COLOR_TRANSFORM_BTN_LOCKED, COLOR_TRANSFORM_BTN_READY,
   COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_IRON_GOLD,
@@ -52,9 +53,9 @@ struct Index {
   @State soundEnabled: boolean = true;
   @State effectsEnabled: boolean = true;
   @State username: string = 'test';
+  @State isNewGame: boolean = true;
   @State engulfWarning: boolean = false;
   @State dashReady: boolean = true;
-  @State playerGender: GenderType = GenderType.MALE;
   @State currentWeaponForm: WeaponForm = WeaponForm.BLADE;
   @State toolReady: boolean = true;
   @State showEvolution: boolean = false;
@@ -112,8 +113,8 @@ struct Index {
         if (p['username'] !== undefined) {
           this.username = p['username'] as string;
         }
-        if (p['gender'] !== undefined) {
-          this.playerGender = p['gender'] as GenderType;
+        if (p['isNewGame'] !== undefined) {
+          this.isNewGame = p['isNewGame'] as boolean;
         }
       }
     } catch (e) {
@@ -699,7 +700,6 @@ struct Index {
     if (this.gameCanvasReady && this.minimapCanvasReady) {
       const harmonyCtx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
       this.gameScene = new GameScene(this.audio, this.settings, harmonyCtx);
-      this.gameScene.setPlayerGender(this.playerGender);
       this.engine.sceneManager.pushScene(this.gameScene);
       this.engine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH);
 
@@ -710,6 +710,14 @@ struct Index {
 
       console.log('[Index] Engine initialized with GameScene, screenW:', this.screenW, 'screenH:', this.screenH);
       this.startStatusMonitor();
+
+      if (!this.isNewGame) {
+        SaveManager.load(harmonyCtx).then((data: Object | null) => {
+          if (data !== null) {
+            this.handleLoadGame(data as SaveData);
+          }
+        });
+      }
     }
   }
 
@@ -1124,7 +1132,6 @@ struct Index {
 
     const harmonyCtx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
     const newScene: GameScene = new GameScene(this.audio, this.settings, harmonyCtx);
-    newScene.setPlayerGender(this.playerGender);
     this.engine.sceneManager.replaceScene(newScene);
     this.gameScene = newScene;
 
