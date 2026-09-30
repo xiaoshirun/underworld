@@ -1,14 +1,19 @@
-import { World, Entity, PositionComponent } from '@qiuyu/engine';
+import { World, Entity, PositionComponent, HealthComponent } from '@qiuyu/engine';
 import {
   MINIMAP_SIZE, TILE_SIZE, CHUNK_SIZE,
-  TileType, BiomeType, ChestType,
+  TileType, BiomeType, ChestType, SkillFamily, SkillSlot,
   COLOR_MINIMAP_BG, COLOR_MINIMAP_ENEMY, COLOR_MINIMAP_PLAYER, COLOR_CHEST_GLOW,
   COLOR_CHEST_NORMAL, COLOR_CHEST_ELITE, COLOR_CHEST_BOSS,
+  DEVOUR_RANGE,
   ChunkData,
 } from '../GameConstants';
 import { MovementComponent } from '../components/MovementComponent';
 import { BossAIComponent } from '../components/BossAIComponent';
 import { ChestComponent } from '../components/ChestComponent';
+import { LevelComponent } from '../components/LevelComponent';
+import { SkillComponent } from '../components/SkillComponent';
+import { HumanFormComponent } from '../components/HumanFormComponent';
+import { SkillSystem } from '../systems/SkillSystem';
 import { WorldGenerator } from '../WorldGenerator';
 
 export class UIRenderer {
@@ -285,5 +290,141 @@ export class UIRenderer {
     // Chest marker
     mc.fillStyle = COLOR_CHEST_GLOW;
     mc.fillRect(legendX + legendSpacing * 2, legendY, 3, 3);
+  }
+
+  renderHUD(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number, screenW: number, screenH: number, frameCount: number): void {
+    const player: Entity | null = world.findEntityByTag('player');
+    if (player === null) return;
+
+    const level: LevelComponent | null = player.getComponent<LevelComponent>('level');
+    const skill: SkillComponent | null = player.getComponent<SkillComponent>('skill');
+    const humanForm: HumanFormComponent | null = player.getComponent<HumanFormComponent>('humanForm');
+    const health: HealthComponent | null = player.getComponent<HealthComponent>('Health');
+    const pos: PositionComponent | null = player.getComponent<PositionComponent>('Position');
+
+    // Player level display (top-left, above HP hearts area)
+    if (level !== null) {
+      ctx.font = 'bold 12px monospace';
+      ctx.fillStyle = '#22d3ee';
+      ctx.textAlign = 'left';
+      ctx.fillText('Lv.' + level.level.toString(), 10, 20);
+
+      // XP bar below level
+      const xpNeeded: number = level.getXpNeeded();
+      const xpFraction: number = xpNeeded > 0 ? level.xp / xpNeeded : 0;
+      const xpBarX: number = 50;
+      const xpBarY: number = 14;
+      const xpBarW: number = 60;
+      const xpBarH: number = 4;
+      ctx.fillStyle = '#1f2937';
+      ctx.fillRect(xpBarX, xpBarY, xpBarW, xpBarH);
+      ctx.fillStyle = '#22d3ee';
+      ctx.fillRect(xpBarX, xpBarY, xpBarW * xpFraction, xpBarH);
+    }
+
+    // Human form energy bar (below HP area)
+    if (humanForm !== null && humanForm.hasMask) {
+      const energyBarX: number = 10;
+      const energyBarY: number = 50;
+      const energyBarW: number = 80;
+      const energyBarH: number = 6;
+      const energyFraction: number = humanForm.formMaxEnergy > 0 ? humanForm.formEnergy / humanForm.formMaxEnergy : 0;
+      // Background
+      ctx.fillStyle = '#1f2937';
+      ctx.fillRect(energyBarX, energyBarY, energyBarW, energyBarH);
+      // Fill
+      ctx.fillStyle = humanForm.isHumanForm ? '#22d3ee' : '#4b5563';
+      ctx.fillRect(energyBarX, energyBarY, energyBarW * energyFraction, energyBarH);
+      // Label
+      ctx.font = '8px monospace';
+      ctx.fillStyle = '#9ca3af';
+      ctx.textAlign = 'left';
+      ctx.fillText('拟人', energyBarX + energyBarW + 4, energyBarY + 5);
+    }
+
+    // Active skill icon and cooldown (bottom-center)
+    if (skill !== null) {
+      const selectedSkill: SkillSlot | null = skill.getSelectedSkill();
+      if (selectedSkill !== null) {
+        const skillX: number = screenW / 2;
+        const skillY: number = screenH - 40;
+        // Draw skill icon (colored circle by family)
+        ctx.fillStyle = this.getSkillFamilyColor(selectedSkill.family);
+        ctx.beginPath();
+        ctx.arc(skillX, skillY, 12, 0, Math.PI * 2);
+        ctx.fill();
+        // Border
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(skillX, skillY, 12, 0, Math.PI * 2);
+        ctx.stroke();
+        // Tier indicator
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('T' + selectedSkill.tier.toString(), skillX, skillY + 4);
+        // Cooldown overlay
+        if (skill.skillCooldown > 0) {
+          const maxCd: number = SkillSystem.getSkillCooldown(selectedSkill.family, selectedSkill.tier);
+          const cdFraction: number = maxCd > 0 ? skill.skillCooldown / maxCd : 0;
+          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.beginPath();
+          ctx.moveTo(skillX, skillY);
+          ctx.arc(skillX, skillY, 12, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cdFraction);
+          ctx.fill();
+        }
+        // Skill slot count indicators
+        const slotCount: number = skill.activeSlotCount;
+        for (let i: number = 0; i < slotCount; i++) {
+          const dotX: number = skillX - (slotCount - 1) * 6 + i * 12;
+          const dotY: number = skillY + 18;
+          ctx.fillStyle = i === skill.selectedActiveIndex ? '#ffffff' : '#4b5563';
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // Devour range indicator (green pulsing ring around weakened enemies near player)
+    if (pos !== null) {
+      const enemies: Entity[] = world.queryWithTag('enemy');
+      for (let i: number = 0; i < enemies.length; i++) {
+        const enemy: Entity = enemies[i];
+        if (!enemy.active) continue;
+        const enemyPos: PositionComponent | null = enemy.getComponent<PositionComponent>('Position');
+        const enemyHealth: HealthComponent | null = enemy.getComponent<HealthComponent>('Health');
+        if (enemyPos === null || enemyHealth === null) continue;
+
+        const dx: number = enemyPos.x - pos.x;
+        const dy: number = enemyPos.y - pos.y;
+        const dist: number = Math.sqrt(dx * dx + dy * dy);
+
+        // Show devour indicator when enemy is within range and weakened (below 30% HP)
+        if (dist < DEVOUR_RANGE * TILE_SIZE && enemyHealth.current < enemyHealth.max * 0.3) {
+          const sx: number = enemyPos.x - cameraX;
+          const sy: number = enemyPos.y - cameraY;
+          const pulse: number = 0.4 + Math.sin(frameCount * 0.1) * 0.3;
+          ctx.globalAlpha = pulse;
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 14 + Math.sin(frameCount * 0.08) * 2, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1.0;
+        }
+      }
+    }
+  }
+
+  private getSkillFamilyColor(family: number): string {
+    if (family === SkillFamily.BOUNCE) return '#9ca3af';       // GRAY - gray
+    if (family === SkillFamily.CORROSION) return '#a78bfa';    // PURPLE - purple
+    if (family === SkillFamily.FIRE) return '#ef4444';         // RED - red
+    if (family === SkillFamily.ICE) return '#60a5fa';          // BLUE - blue
+    if (family === SkillFamily.LIGHTNING) return '#facc15';    // YELLOW - yellow
+    if (family === SkillFamily.VOID) return '#6b21a8';         // GHOST - dark purple
+    return '#ffffff';
   }
 }

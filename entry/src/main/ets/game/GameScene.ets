@@ -162,6 +162,9 @@ export class GameScene extends Scene {
 
     // Minimap (throttled by UIRenderer internally)
     this.uiRenderer.renderMinimap(w, baseCtx.minimapCtx, camX, camY, sw, sh, fc);
+
+    // HUD overlay (level, skills, devour indicator, human form energy)
+    this.uiRenderer.renderHUD(w, ctx, camX, camY, sw, sh, fc);
   }
 
   getWorld(): World {
