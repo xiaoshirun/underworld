@@ -133,6 +133,9 @@ export class GameScene extends Scene {
       frameCount: baseCtx.frameCount,
       dt: dt
     };
+    if (baseCtx.frameCount < 5) {
+      console.log('[GameScene] update frame=' + baseCtx.frameCount + ' dt=' + dt + ' entities=' + this.world.getEntities().length);
+    }
     this.world.update(sysCtx, dt);
   }
 
@@ -146,10 +149,23 @@ export class GameScene extends Scene {
     const sw: number = baseCtx.screenW;
     const sh: number = baseCtx.screenH;
 
+    if (fc < 5) {
+      console.log('[GameScene] render frame=' + fc + ' chunks=' + w.chunks.size + ' camX=' + camX.toFixed(1) + ' camY=' + camY.toFixed(1));
+    }
+
     // Clear and fill background
     ctx.clearRect(0, 0, sw, sh);
     ctx.fillStyle = '#08080f';
     ctx.fillRect(0, 0, sw, sh);
+
+    // Diagnostic: bright rectangle to confirm canvas is drawing
+    if (fc < 10) {
+      ctx.fillStyle = '#ff0000';
+      ctx.fillRect(10, 10, 60, 30);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '14px sans-serif';
+      ctx.fillText('RENDER OK', 14, 30);
+    }
 
     // Render layers in order
     this.tileRenderer.render(w, ctx, camX, camY, sw, sh, s, fc);

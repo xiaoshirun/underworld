@@ -65,6 +65,8 @@ export class Engine {
       };
       this.sceneManager.update(baseCtx, dt);
       this.sceneManager.render(baseCtx);
+    } else if (this.frameCount < 5) {
+      console.log('[Engine] tick skipped: activeScene=' + (activeScene !== null) + ' ctx=' + (this.ctx !== null) + ' minimapCtx=' + (this.minimapCtx !== null));
     }
     this.frameCount++;
   }

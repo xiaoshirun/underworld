@@ -8,6 +8,7 @@ import { MonsterLevelSystem } from './MonsterLevelSystem';
 import { HumanoidBeastSystem } from './HumanoidBeastSystem';
 
 export class ChunkLoadSystem extends System {
+  private loggedFirstLoad: boolean = false;
 
   update(entities: Entity[], context: SystemContext): void {
     const player: Entity | null = context.world.findEntityByTag("player");
@@ -26,6 +27,7 @@ export class ChunkLoadSystem extends System {
     const pcx: number = Math.floor(ptx / CHUNK_SIZE);
     const pcy: number = Math.floor(pty / CHUNK_SIZE);
 
+    let newChunks: number = 0;
     for (let dy: number = -CHUNK_LOAD_RADIUS; dy <= CHUNK_LOAD_RADIUS; dy++) {
       for (let dx: number = -CHUNK_LOAD_RADIUS; dx <= CHUNK_LOAD_RADIUS; dx++) {
         const cx: number = pcx + dx;
@@ -35,6 +37,7 @@ export class ChunkLoadSystem extends System {
         if (!chunks.has(key)) {
           const chunk: ChunkData = worldGen.generateChunk(cx, cy);
           chunks.set(key, chunk as Object);
+          newChunks++;
 
           // Create enemy entities from chunk data
           const enemies: SlimeState[] = chunk.enemies;
@@ -86,6 +89,11 @@ export class ChunkLoadSystem extends System {
           }
         }
       }
+    }
+
+    if (newChunks > 0 && !this.loggedFirstLoad) {
+      console.log('[ChunkLoadSystem] First load: ' + newChunks + ' chunks, total=' + chunks.size + ' playerChunk=(' + pcx + ',' + pcy + ')');
+      this.loggedFirstLoad = true;
     }
   }
 }

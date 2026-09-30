@@ -79,7 +79,11 @@ export class World {
     for (let i: number = 0; i < this.systems.length; i++) {
       const sys: System = this.systems[i];
       if (sys.isEnabled()) {
-        sys.update(this.entities, context);
+        try {
+          sys.update(this.entities, context);
+        } catch (e) {
+          console.error('[World] System #' + i + ' error: ' + JSON.stringify(e));
+        }
       }
     }
     this.entities = this.entities.filter((e: Entity) => e.active);

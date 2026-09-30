@@ -697,6 +697,7 @@ struct Index {
   }
 
   private tryInitEngine(): void {
+    console.log('[Index] tryInitEngine: gameCanvasReady=' + this.gameCanvasReady + ' minimapCanvasReady=' + this.minimapCanvasReady);
     if (this.gameCanvasReady && this.minimapCanvasReady) {
       const harmonyCtx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
       this.gameScene = new GameScene(this.audio, this.settings, harmonyCtx);
