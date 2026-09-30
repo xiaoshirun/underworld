@@ -26,6 +26,12 @@ import { ParticleSystem } from './systems/ParticleSystem';
 import { AmbientParticleSystem } from './systems/AmbientParticleSystem';
 import { SaveLoadSystem } from './systems/SaveLoadSystem';
 import { CleanupSystem } from './systems/CleanupSystem';
+import { DevourSystem } from './systems/DevourSystem';
+import { SkillSystem } from './systems/SkillSystem';
+import { MonsterLevelSystem } from './systems/MonsterLevelSystem';
+import { HumanoidBeastSystem } from './systems/HumanoidBeastSystem';
+import { HumanFormSystem } from './systems/HumanFormSystem';
+import { PassiveTreeSystem } from './systems/PassiveTreeSystem';
 
 // Renderers
 import { TileRenderer } from './renderers/TileRenderer';
@@ -79,11 +85,16 @@ export class GameScene extends Scene {
     // Register 19 systems in execution order
     this.world.addSystem(new SpatialRebuildSystem());
     this.world.addSystem(new ChunkLoadSystem());
+    this.world.addSystem(new MonsterLevelSystem());
+    this.world.addSystem(new HumanoidBeastSystem());
     this.world.addSystem(new PlayerMovementSystem());
     this.world.addSystem(new PlayerCombatSystem());
+    this.world.addSystem(new DevourSystem());
+    this.world.addSystem(new SkillSystem());
     this.world.addSystem(new EnemyAISystem());
     this.world.addSystem(new BossSystem());
     this.world.addSystem(new TransformSystem());
+    this.world.addSystem(new HumanFormSystem());
     this.world.addSystem(new TrapSystem());
     this.world.addSystem(new MechanismSystem());
     this.world.addSystem(new ChestSystem());
@@ -92,6 +103,7 @@ export class GameScene extends Scene {
     this.world.addSystem(new DamageSystem());
     this.evolutionSystem = new EvolutionSystem();
     this.world.addSystem(this.evolutionSystem);
+    this.world.addSystem(new PassiveTreeSystem());
     this.world.addSystem(new CameraSystem());
     this.world.addSystem(new ParticleSystem());
     this.world.addSystem(new AmbientParticleSystem());
