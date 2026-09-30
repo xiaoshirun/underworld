@@ -5,6 +5,10 @@ import { TransformComponent } from '../components/TransformComponent';
 import { InventoryComponent } from '../components/InventoryComponent';
 import { XpComponent } from '../components/XpComponent';
 import { EvolutionComponent } from '../components/EvolutionComponent';
+import { LevelComponent } from '../components/LevelComponent';
+import { SkillComponent } from '../components/SkillComponent';
+import { DevourComponent } from '../components/DevourComponent';
+import { HumanFormComponent } from '../components/HumanFormComponent';
 import { PLAYER_MAX_HP } from '../GameConstants';
 
 export class PlayerFactory {
@@ -15,11 +19,18 @@ export class PlayerFactory {
     entity.addComponent(new HealthComponent(PLAYER_MAX_HP, PLAYER_MAX_HP));
     entity.addComponent(new MovementComponent());
     entity.addComponent(new CombatComponent());
-    entity.addComponent(new TransformComponent());
+    entity.addComponent(new TransformComponent()); // Kept for backward compat during transition
     entity.addComponent(new InventoryComponent());
-    entity.addComponent(new XpComponent());
-    entity.addComponent(new EvolutionComponent());
+    entity.addComponent(new XpComponent()); // Kept for backward compat during transition
+    entity.addComponent(new EvolutionComponent()); // Kept for backward compat during transition
     entity.addComponent(new ColliderComponent(20, 20, 0, 0));
+
+    // New gameplay components
+    entity.addComponent(new LevelComponent());
+    entity.addComponent(new SkillComponent());
+    entity.addComponent(new DevourComponent());
+    entity.addComponent(new HumanFormComponent());
+
     return entity;
   }
 }
