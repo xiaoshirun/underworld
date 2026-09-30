@@ -126,7 +126,8 @@ export enum EnemyType {
   RED_SLIME = 2,
   BLUE_SLIME = 3,
   YELLOW_SLIME = 4,
-  GHOST_SLIME = 5
+  GHOST_SLIME = 5,
+  HUMANOID_BEAST = 6  // 拟人兽 — rare elite
 }
 
 export enum BiomeType {
@@ -441,6 +442,8 @@ export interface Inventory {
   transformCoreArmor: number;
   transformCoreIronMan: number;
   transformCoreGhost: number;
+  maskFragments: number;
+  hasHumanMask: boolean;
 }
 
 export interface TransformCoreDrop {
@@ -666,6 +669,95 @@ export enum GameState {
   GAME_OVER = 3
 }
 
+// ==================== Slime Devour Gameplay ====================
+
+export enum SkillFamily {
+  BOUNCE = 0,     // GRAY_SLIME
+  CORROSION = 1,  // PURPLE_SLIME
+  FIRE = 2,       // RED_SLIME
+  ICE = 3,        // BLUE_SLIME
+  LIGHTNING = 4,  // YELLOW_SLIME
+  VOID = 5        // GHOST_SLIME
+}
+
+export enum SkillTier {
+  NONE = 0,
+  TIER_1 = 1,
+  TIER_2 = 2,
+  TIER_3 = 3
+}
+
+export enum DevourState {
+  IDLE = 0,
+  DEVOURING = 1,
+  COOLDOWN = 2
+}
+
+export enum HumanFormStage {
+  NONE = -1,
+  PROTO = 0,
+  PHANTOM = 1,
+  ARMORED = 2,
+  COMPLETE = 3
+}
+
+// Devour mechanics
+export const DEVOUR_RANGE: number = 20;
+export const DEVOUR_ANIM_DURATION: number = 200;
+export const DEVOUR_BASE_SKILL_CHANCE: number = 0.3;
+export const DEVOUR_SKILL_CHANCE_PER_LEVEL: number = 0.02;
+export const DEVOUR_SKILL_CHANCE_CAP: number = 0.6;
+export const DEVOUR_ENERGY_GAIN: number = 5;
+export const DEVOUR_THRESHOLD_SAME_LEVEL: number = 0.15;
+export const DEVOUR_THRESHOLD_HIGHER_LEVEL: number = 0.10;
+export const DEVOUR_THRESHOLD_BOSS: number = 0.05;
+export const DEVOUR_THRESHOLD_HUMANOID: number = 0.08;
+
+// Monster level scaling
+export const MONSTER_MIN_LEVEL: number = 1;
+export const MONSTER_MAX_LEVEL: number = 10;
+export const MONSTER_HP_SCALE_PER_LEVEL: number = 0.3;
+export const MONSTER_SPEED_SCALE_PER_LEVEL: number = 0.05;
+export const MONSTER_DAMAGE_PER_3_LEVELS: number = 1;
+export const MONSTER_SIZE_PER_4_LEVELS: number = 1;
+
+// Player level scaling
+export const PLAYER_LEVEL_BASE_XP: number = 10;
+export const PLAYER_LEVEL_XP_INCREMENT: number = 5;
+export const PLAYER_HP_PER_LEVEL: number = 2;
+export const PLAYER_SPEED_PER_LEVEL: number = 0.3;
+export const PLAYER_DAMAGE_PER_LEVEL: number = 1;
+
+// Skill system
+export const SKILL_FAMILY_COUNT: number = 6;
+export const SKILL_TIER_COUNT: number = 3;
+export const SKILL_XP_PER_DEVOUR_SAME: number = 2;
+export const SKILL_XP_PER_DEVOUR_OTHER: number = 1;
+export const SKILL_TIER_2_XP: number = 10;
+export const SKILL_TIER_3_XP: number = 25;
+export const PLAYER_ACTIVE_SLOTS_BASE: number = 1;
+export const PLAYER_PASSIVE_SLOTS_BASE: number = 1;
+
+// Human form
+export const HUMANOID_SPAWN_CHANCE: number = 0.02;
+export const MASK_FRAGMENTS_NEEDED: number = 3;
+export const MASK_FRAGMENT_DROP_CHANCE: number = 1.0;
+
+// Human form stage bonuses (indexed by HumanFormStage value 0-3)
+export const HUMAN_FORM_HP_BONUS: number[] = [0.3, 0.4, 0.5, 0.6];
+export const HUMAN_FORM_SPEED_BONUS: number[] = [0.2, 0.3, 0.3, 0.4];
+export const HUMAN_FORM_DAMAGE_BONUS: number[] = [0.0, 0.0, 0.0, 0.4];
+export const HUMAN_FORM_ACTIVE_SLOTS: number[] = [2, 3, 3, 3];
+export const HUMAN_FORM_PASSIVE_SLOTS: number[] = [1, 1, 2, 3];
+
+// Humanoid Beast (拟人兽)
+export const HUMANOID_BEAST_HP: number = 15;
+export const HUMANOID_BEAST_SIZE: number = 16;
+export const HUMANOID_BEAST_SPEED: number = 2.5;
+export const HUMANOID_BEAST_DAMAGE: number = 2;
+export const COLOR_HUMANOID_BEAST: string = '#d4af37';
+export const COLOR_HUMANOID_BEAST_GLOW: string = '#ffd700';
+
 export const SAVE_KEY: string = 'game_save_data';
 export const SAVE_PREF_NAME: string = 'game_prefs';
 export const SAVE_VERSION: number = 1;
@@ -679,6 +771,44 @@ export function getBossColor(bossType: number): string {
   if (bossType === BossType.VOID_RIFT) return '#6b21a8';
   return '#ffffff';
 }
+
+export interface SkillSlot {
+  family: number;   // SkillFamily value
+  tier: number;     // SkillTier value
+  skillXp: number;  // progress toward next tier
+}
+
+export interface PassiveSlot {
+  branch: number;   // EvolutionBranch value
+  level: number;    // 0-3
+}
+
+// Maps EnemyType to SkillFamily (same numeric values)
+export const ENEMY_TYPE_TO_SKILL_FAMILY: number[] = [
+  SkillFamily.BOUNCE,     // GRAY_SLIME = 0
+  SkillFamily.CORROSION,  // PURPLE_SLIME = 1
+  SkillFamily.FIRE,       // RED_SLIME = 2
+  SkillFamily.ICE,        // BLUE_SLIME = 3
+  SkillFamily.LIGHTNING,  // YELLOW_SLIME = 4
+  SkillFamily.VOID,       // GHOST_SLIME = 5
+  SkillFamily.VOID        // HUMANOID_BEAST = 6 (uses VOID family)
+];
+
+// Skill stats per family per tier: [damage, range, cooldown, aoeRadius]
+export const SKILL_STATS: number[][][] = [
+  // BOUNCE: [damage, range, cooldown(ms), aoeRadius]
+  [[2, 60, 800, 0], [4, 80, 700, 20], [6, 100, 600, 40]],
+  // CORROSION
+  [[3, 50, 1000, 0], [2, 60, 900, 60], [3, 80, 800, 80]],
+  // FIRE
+  [[4, 70, 900, 30], [3, 60, 800, 60], [5, 100, 700, 100]],
+  // ICE
+  [[2, 55, 850, 0], [2, 50, 800, 50], [1, 120, 700, 120]],
+  // LIGHTNING
+  [[3, 40, 700, 0], [4, 50, 650, 30], [5, 60, 600, 50]],
+  // VOID
+  [[2, 30, 900, 30], [3, 80, 800, 0], [4, 100, 700, 100]]
+];
 
 export interface SaveData {
   version: number;
@@ -700,4 +830,14 @@ export interface SaveData {
   transformMaxEnergy: number;
   unlockedTransforms: number[];
   exploredChunks: string[];
+  skills: SkillSlot[];
+  passives: PassiveSlot[];
+  activeSlotCount: number;
+  passiveSlotCount: number;
+  selectedActiveIndex: number;
+  humanFormStage: number;
+  hasHumanMask: boolean;
+  maskFragments: number;
+  humanFormEnergy: number;
+  unlockedHumanForms: number[];
 }
