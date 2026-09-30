@@ -15,6 +15,8 @@ export class InventoryComponent implements Component, Serializable {
   transformCoreArmor: number = 0;
   transformCoreIronMan: number = 0;
   transformCoreGhost: number = 0;
+  maskFragments: number = 0;
+  hasHumanMask: boolean = false;
 
   getType(): string { return "inventory"; }
 
@@ -28,7 +30,9 @@ export class InventoryComponent implements Component, Serializable {
       transformCoreSlime: this.transformCoreSlime,
       transformCoreArmor: this.transformCoreArmor,
       transformCoreIronMan: this.transformCoreIronMan,
-      transformCoreGhost: this.transformCoreGhost
+      transformCoreGhost: this.transformCoreGhost,
+      maskFragments: this.maskFragments,
+      hasHumanMask: this.hasHumanMask
     };
   }
 
@@ -47,5 +51,7 @@ export class InventoryComponent implements Component, Serializable {
     this.transformCoreArmor = data["transformCoreArmor"] as number;
     this.transformCoreIronMan = data["transformCoreIronMan"] as number;
     this.transformCoreGhost = data["transformCoreGhost"] as number;
+    this.maskFragments = (data["maskFragments"] as number) || 0;
+    this.hasHumanMask = (data["hasHumanMask"] as boolean) || false;
   }
 }

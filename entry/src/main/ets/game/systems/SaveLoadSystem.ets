@@ -49,7 +49,9 @@ export class SaveLoadSystem extends System {
       transformCoreSlime: inventory.transformCoreSlime,
       transformCoreArmor: inventory.transformCoreArmor,
       transformCoreIronMan: inventory.transformCoreIronMan,
-      transformCoreGhost: inventory.transformCoreGhost
+      transformCoreGhost: inventory.transformCoreGhost,
+      maskFragments: inventory.maskFragments,
+      hasHumanMask: inventory.hasHumanMask
     };
 
     const exploredChunks: string[] = [];
@@ -160,6 +162,8 @@ export class SaveLoadSystem extends System {
     inventory.transformCoreArmor = data.inventory.transformCoreArmor;
     inventory.transformCoreIronMan = data.inventory.transformCoreIronMan;
     inventory.transformCoreGhost = data.inventory.transformCoreGhost;
+    inventory.maskFragments = data.inventory.maskFragments || 0;
+    inventory.hasHumanMask = data.inventory.hasHumanMask || false;
 
     transform.isTransformed = data.isTransformed;
     transform.transformForm = data.transformForm;
