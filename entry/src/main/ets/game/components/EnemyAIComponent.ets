@@ -13,6 +13,7 @@ export class EnemyAIComponent implements Component {
   engulfedPlayer: boolean = false;
   splitCount: number = 0;
   size: number = 12;
+  level: number = 1;
   chargeDirX: number = 0;
   chargeDirY: number = 0;
 

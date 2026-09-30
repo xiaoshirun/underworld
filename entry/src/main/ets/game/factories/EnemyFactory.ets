@@ -1,19 +1,21 @@
 import { Entity, PositionComponent, VelocityComponent, HealthComponent, ColliderComponent } from '@qiuyu/engine';
 import { EnemyAIComponent } from '../components/EnemyAIComponent';
-import { EnemyType, SLIME_SIZE, SLIME_HP } from '../GameConstants';
+import { EnemyType, SLIME_SIZE, SLIME_HP, MONSTER_HP_SCALE_PER_LEVEL, MONSTER_SIZE_PER_4_LEVELS } from '../GameConstants';
 
 export class EnemyFactory {
-  static createSlime(x: number, y: number, enemyType: number): Entity {
+  static createSlime(x: number, y: number, enemyType: number, level: number = 1): Entity {
     const entity: Entity = new Entity("enemy");
     entity.addComponent(new PositionComponent(x, y));
     entity.addComponent(new VelocityComponent(0, 0));
 
-    const hp: number = EnemyFactory.getHpForType(enemyType);
-    entity.addComponent(new HealthComponent(hp, hp));
+    const baseHp: number = EnemyFactory.getHpForType(enemyType);
+    const scaledHp: number = Math.floor(baseHp * (1 + (level - 1) * MONSTER_HP_SCALE_PER_LEVEL));
+    entity.addComponent(new HealthComponent(scaledHp, scaledHp));
 
     const ai: EnemyAIComponent = new EnemyAIComponent();
     ai.enemyType = enemyType;
-    ai.size = EnemyFactory.getSizeForType(enemyType);
+    ai.level = level;
+    ai.size = SLIME_SIZE + Math.floor(level / MONSTER_SIZE_PER_4_LEVELS);
     entity.addComponent(ai);
 
     const size: number = ai.size;
@@ -31,9 +33,5 @@ export class EnemyFactory {
       case EnemyType.GHOST_SLIME: return SLIME_HP + 1;
       default: return SLIME_HP;
     }
-  }
-
-  private static getSizeForType(enemyType: number): number {
-    return SLIME_SIZE;
   }
 }
