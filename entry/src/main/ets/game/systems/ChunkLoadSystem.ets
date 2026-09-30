@@ -4,6 +4,7 @@ import { WorldEntityFactory } from '../factories/WorldEntityFactory';
 import { BossFactory } from '../factories/BossFactory';
 import { CHUNK_SIZE, TILE_SIZE, CHUNK_LOAD_RADIUS, ChunkData, SlimeState, TrapInstance, MechanismInstance, ChestState, BossState } from '../GameConstants';
 import { WorldGenerator } from '../WorldGenerator';
+import { MonsterLevelSystem } from './MonsterLevelSystem';
 
 export class ChunkLoadSystem extends System {
 
@@ -36,9 +37,11 @@ export class ChunkLoadSystem extends System {
 
           // Create enemy entities from chunk data
           const enemies: SlimeState[] = chunk.enemies;
+          const chunkDist: number = Math.max(Math.abs(cx), Math.abs(cy));
           for (let i: number = 0; i < enemies.length; i++) {
             const e: SlimeState = enemies[i];
-            const enemy: Entity = EnemyFactory.createSlime(e.x, e.y, e.enemyType as number);
+            const level: number = MonsterLevelSystem.calculateLevel(chunkDist);
+            const enemy: Entity = EnemyFactory.createSlime(e.x, e.y, e.enemyType as number, level);
             context.world.addEntity(enemy);
           }
 
