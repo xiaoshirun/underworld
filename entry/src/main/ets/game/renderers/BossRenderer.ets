@@ -11,12 +11,16 @@ import {
 } from '../GameConstants';
 import { BossAIComponent } from '../components/BossAIComponent';
 import { MaterialPickupComponent } from '../components/MaterialPickupComponent';
+import { SpriteManager } from '../sprites/SpriteManager';
+import { SpriteAtlas } from '../sprites/SpriteAtlas';
 
 export class BossRenderer {
-  render(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number, screenW: number, screenH: number, settings: GameSettings, frameCount: number): void {
+  render(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number,
+      screenW: number, screenH: number, settings: GameSettings, frameCount: number,
+      spriteManager: SpriteManager | null = null): void {
     const offX: number = -cameraX;
     const offY: number = -cameraY;
-    this.renderBosses(world, ctx, offX, offY, screenW, screenH, frameCount);
+    this.renderBosses(world, ctx, offX, offY, screenW, screenH, frameCount, spriteManager);
     this.renderMaterialDrops(world, ctx, offX, offY, screenW, screenH, frameCount);
   }
 
@@ -24,7 +28,7 @@ export class BossRenderer {
     this.renderBossHPBar(world, c, screenW, screenH, frameCount);
   }
 
-  private renderBosses(world: World, c: CanvasRenderingContext2D, offX: number, offY: number, screenW: number, screenH: number, frameCount: number): void {
+  private renderBosses(world: World, c: CanvasRenderingContext2D, offX: number, offY: number, screenW: number, screenH: number, frameCount: number, spriteManager: SpriteManager | null = null): void {
     const bosses: Entity[] = world.queryWithTag('boss');
     for (let i: number = 0; i < bosses.length; i++) {
       const entity: Entity = bosses[i];
@@ -47,7 +51,6 @@ export class BossRenderer {
       const halfSize: number = BOSS_SIZE / 2;
       const pulse: number = Math.sin(frameCount * 0.05) * 2;
       const t: number = frameCount;
-      const hitFlash: number = ai.extraData.length > 0 ? ai.extraData[0] : 0;
 
       // Ground shadow for all bosses
       c.globalAlpha = 0.2;
@@ -57,25 +60,11 @@ export class BossRenderer {
       c.fill();
       c.globalAlpha = 1.0;
 
-      if (hitFlash > 0) {
-        c.globalAlpha = 0.5 + 0.5 * Math.sin(hitFlash * 0.05);
-        c.fillStyle = '#ffffff';
-        c.beginPath();
-        c.arc(screenX, screenY, halfSize + 4, 0, Math.PI * 2);
-        c.fill();
-        c.globalAlpha = 1.0;
-      }
-
-      if (ai.bossType === BossType.CRYSTAL_GUARDIAN) {
-        this.renderCrystalGuardian(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
-      } else if (ai.bossType === BossType.MUSHROOM_KING) {
-        this.renderMushroomKing(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
-      } else if (ai.bossType === BossType.LAVA_BEAST) {
-        this.renderLavaBeast(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
-      } else if (ai.bossType === BossType.ABYSS_SIREN) {
-        this.renderAbyssSiren(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
-      } else if (ai.bossType === BossType.VOID_RIFT) {
-        this.renderVoidRift(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
+      // Boss body: sprite or procedural
+      if (spriteManager !== null && spriteManager.isReady()) {
+        this.renderBossSprite(c, screenX, screenY, ai, frameCount, spriteManager);
+      } else {
+        this.renderBossProcedural(c, screenX, screenY, ai, frameCount);
       }
 
       // Phase 2 aura
@@ -84,6 +73,58 @@ export class BossRenderer {
       }
     }
     c.globalAlpha = 1.0;
+  }
+
+  private renderBossProcedural(c: CanvasRenderingContext2D, screenX: number, screenY: number,
+      ai: BossAIComponent, frameCount: number): void {
+    const halfSize: number = BOSS_SIZE / 2;
+    const pulse: number = Math.sin(frameCount * 0.05) * 2;
+    const t: number = frameCount;
+    const hitFlash: number = ai.extraData.length > 0 ? ai.extraData[0] : 0;
+    const bossColor: string = getBossColor(ai.bossType);
+
+    if (hitFlash > 0) {
+      c.globalAlpha = 0.5 + 0.5 * Math.sin(hitFlash * 0.05);
+      c.fillStyle = '#ffffff';
+      c.beginPath();
+      c.arc(screenX, screenY, halfSize + 4, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 1.0;
+    }
+
+    if (ai.bossType === BossType.CRYSTAL_GUARDIAN) {
+      this.renderCrystalGuardian(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
+    } else if (ai.bossType === BossType.MUSHROOM_KING) {
+      this.renderMushroomKing(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
+    } else if (ai.bossType === BossType.LAVA_BEAST) {
+      this.renderLavaBeast(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
+    } else if (ai.bossType === BossType.ABYSS_SIREN) {
+      this.renderAbyssSiren(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
+    } else if (ai.bossType === BossType.VOID_RIFT) {
+      this.renderVoidRift(c, screenX, screenY, halfSize, pulse, bossColor, ai, t);
+    }
+  }
+
+  private renderBossSprite(c: CanvasRenderingContext2D, screenX: number, screenY: number,
+      ai: BossAIComponent, frameCount: number, sm: SpriteManager): void {
+    const atlas: SpriteAtlas = sm.getBossAtlas(ai.bossType);
+    const frameIndex: number = Math.floor((frameCount % (atlas.frameCount * 11)) / 11);
+    const frame: { sx: number, sy: number } = atlas.getFrame(frameIndex);
+
+    const halfSize: number = BOSS_SIZE / 2;
+    const hitFlash: number = ai.extraData.length > 0 ? ai.extraData[0] : 0;
+
+    c.drawImage(atlas.canvas, frame.sx, frame.sy, atlas.cellW, atlas.cellH,
+                screenX - atlas.cellW / 2, screenY - atlas.cellH / 2,
+                atlas.cellW, atlas.cellH);
+
+    // Hit flash overlay
+    if (hitFlash > 0) {
+      c.globalAlpha = 0.5;
+      c.fillStyle = '#ffffff';
+      c.fillRect(screenX - halfSize, screenY - halfSize, BOSS_SIZE, BOSS_SIZE);
+      c.globalAlpha = 1.0;
+    }
   }
 
   private renderCrystalGuardian(c: CanvasRenderingContext2D, sx: number, sy: number,

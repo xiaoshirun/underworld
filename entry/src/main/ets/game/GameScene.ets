@@ -146,7 +146,7 @@ export class GameScene extends Scene {
     this.effectRenderer.renderLighting(w, ctx, camX, camY, sw, sh, s, fc);
     this.enemyRenderer.render(w, ctx, camX, camY, sw, sh, s, fc, this.spriteManager);
     this.effectRenderer.render(w, ctx, camX, camY, sw, sh, s, fc);
-    this.bossRenderer.render(w, ctx, camX, camY, sw, sh, s, fc);
+    this.bossRenderer.render(w, ctx, camX, camY, sw, sh, s, fc, this.spriteManager);
     this.playerRenderer.render(w, ctx, camX, camY, sw, sh, s, fc);
     this.effectRenderer.renderVignetteAndDamage(w, ctx, camX, camY, sw, sh, s, fc);
 
