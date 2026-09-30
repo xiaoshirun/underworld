@@ -7,6 +7,6 @@
   "author": "",
   "license": "",
   "dependencies": {
-    "engine": "file:../Engine"
+    "@qiuyu/engine": "file:../Engine"
   }
 }

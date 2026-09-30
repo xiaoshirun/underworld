@@ -3,22 +3,17 @@ import { MovementComponent } from '../components/MovementComponent';
 import { CombatComponent } from '../components/CombatComponent';
 import { TransformComponent } from '../components/TransformComponent';
 import { EnemyAIComponent } from '../components/EnemyAIComponent';
-import { CameraComponent } from '../components/CameraComponent';
-import { GameStateComponent } from '../components/GameStateComponent';
 import {
   PLAYER_SIZE, SLIME_SIZE, SLIME_SPEED, PURPLE_SLIME_SPEED, PURPLE_SLIME_DETECT,
   RED_SLIME_SPEED, RED_SLIME_DETECT, BLUE_SLIME_SPEED,
   SLIME_DAMAGE, INVINCIBLE_DURATION,
   TransformForm, EnemyType,
   TRANSFORM_DAMAGE_REDUCTION,
-  TILE_SIZE, CHUNK_SIZE,
-  TileType, ChunkData,
+  TILE_SIZE,
+  TileType,
 } from '../GameConstants';
-
-interface AudioManager {
-  playPlayerDamage(): void;
-  playEngulf(): void;
-}
+import { shakeCamera, triggerDamageFlash, getTile, isWalkable } from '../helpers/SystemHelpers';
+import { IAudioService } from '../interfaces/IAudioService';
 
 export class EnemyAISystem extends System {
 
@@ -36,7 +31,7 @@ export class EnemyAISystem extends System {
 
     if (playerHealth.isDead()) return;
 
-    const audio: AudioManager = context.audio as AudioManager;
+    const audio: IAudioService = context.audio as IAudioService;
     const chunks: Map<string, Object> = context.world.chunks;
 
     for (let idx: number = 0; idx < entities.length; idx++) {
@@ -202,15 +197,9 @@ export class EnemyAISystem extends System {
           const knockBack: number = isArmor ? 2.5 : 5;
           playerPos.x -= Math.cos(knockAngle) * knockBack;
           playerPos.y -= Math.sin(knockAngle) * knockBack;
-          this.shakeCamera(context, 150);
+          shakeCamera(context, 150);
           audio.playPlayerDamage();
-          const gsEntity: Entity | null = context.world.findEntityByTag("gameState");
-          if (gsEntity !== null) {
-            const gs: GameStateComponent | null = gsEntity.getComponent<GameStateComponent>("gameState");
-            if (gs !== null) {
-              gs.damageFlashTimer = 200;
-            }
-          }
+          triggerDamageFlash(context);
         }
       }
     }
@@ -222,35 +211,10 @@ export class EnemyAISystem extends System {
     const cornersY: number[] = [y - halfSize, y + halfSize];
     for (let i: number = 0; i < 2; i++) {
       for (let j: number = 0; j < 2; j++) {
-        const tile: number = this.getTile(chunks, cornersX[i], cornersY[j]);
-        if (!this.isWalkable(tile)) return true;
+        const tile: number = getTile(chunks, cornersX[i], cornersY[j]);
+        if (!isWalkable(tile)) return true;
       }
     }
     return false;
-  }
-
-  private getTile(chunks: Map<string, Object>, worldX: number, worldY: number): number {
-    const tx: number = Math.floor(worldX / TILE_SIZE);
-    const ty: number = Math.floor(worldY / TILE_SIZE);
-    const cx: number = Math.floor(tx / CHUNK_SIZE);
-    const cy: number = Math.floor(ty / CHUNK_SIZE);
-    const key: string = cx + ',' + cy;
-    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
-    if (chunk === undefined) return TileType.WALL;
-    const lx: number = tx - cx * CHUNK_SIZE;
-    const ly: number = ty - cy * CHUNK_SIZE;
-    return chunk.tiles[ly][lx];
-  }
-
-  private isWalkable(tile: number): boolean {
-    return tile !== TileType.WALL && tile !== TileType.VOID;
-  }
-
-  private shakeCamera(context: SystemContext, duration: number): void {
-    const cameraEntity: Entity | null = context.world.findEntityByTag("camera");
-    if (cameraEntity !== null) {
-      const cam: CameraComponent = cameraEntity.getComponent<CameraComponent>("camera")!;
-      cam.shakeTimer = duration;
-    }
   }
 }

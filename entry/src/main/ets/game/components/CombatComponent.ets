@@ -9,10 +9,10 @@ export class CombatComponent implements Component, Serializable {
   getType(): string { return "combat"; }
 
   serialize(): Record<string, Object> {
-    return {
-      attackTimer: this.attackTimer,
-      invincibleTimer: this.invincibleTimer
-    };
+    const result: Record<string, Object> = {} as Record<string, Object>;
+    result["attackTimer"] = this.attackTimer as Object;
+    result["invincibleTimer"] = this.invincibleTimer as Object;
+    return result;
   }
 
   deserialize(data: Record<string, Object>): void {

@@ -9,7 +9,7 @@ import { BossAIComponent } from '../components/BossAIComponent';
 import { SpriteAtlas } from './SpriteAtlas';
 
 export function drawCrystalGuardian(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   halfSize: number,
   pulse: number,
   color: string,
@@ -124,7 +124,7 @@ export function drawCrystalGuardian(
 }
 
 export function drawMushroomKing(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   halfSize: number,
   pulse: number,
   color: string,
@@ -243,7 +243,7 @@ export function drawMushroomKing(
 }
 
 export function drawLavaBeast(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   halfSize: number,
   pulse: number,
   color: string,
@@ -359,7 +359,7 @@ export function drawLavaBeast(
 }
 
 export function drawAbyssSiren(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   halfSize: number,
   pulse: number,
   color: string,
@@ -507,7 +507,7 @@ export function drawAbyssSiren(
 }
 
 export function drawVoidRift(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   halfSize: number,
   pulse: number,
   color: string,
@@ -609,7 +609,7 @@ export function generateBossAtlas(type: BossType): SpriteAtlas {
   const cols: number = Math.ceil(Math.sqrt(BOSS_FRAMES));
   const rows: number = Math.ceil(BOSS_FRAMES / cols);
   const atlas: OffscreenCanvas = new OffscreenCanvas(cols * BOSS_CELL_W, rows * BOSS_CELL_H);
-  const actx: CanvasRenderingContext2D = atlas.getContext('2d') as CanvasRenderingContext2D;
+  const actx: OffscreenCanvasRenderingContext2D = atlas.getContext('2d') as OffscreenCanvasRenderingContext2D;
 
   const halfSize: number = BOSS_SIZE / 2;
   const bossColor: string = getBossColor(type);

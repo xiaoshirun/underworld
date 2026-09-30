@@ -14,15 +14,15 @@ export class HumanFormComponent implements Component, Serializable {
   getType(): string { return "humanForm"; }
 
   serialize(): Record<string, Object> {
-    return {
-      isHumanForm: this.isHumanForm,
-      humanFormStage: this.humanFormStage,
-      hasMask: this.hasMask,
-      maskFragments: this.maskFragments,
-      formEnergy: this.formEnergy,
-      formMaxEnergy: this.formMaxEnergy,
-      formCooldown: this.formCooldown
-    };
+    const result: Record<string, Object> = {} as Record<string, Object>;
+    result["isHumanForm"] = this.isHumanForm as Object;
+    result["humanFormStage"] = this.humanFormStage as Object;
+    result["hasMask"] = this.hasMask as Object;
+    result["maskFragments"] = this.maskFragments as Object;
+    result["formEnergy"] = this.formEnergy as Object;
+    result["formMaxEnergy"] = this.formMaxEnergy as Object;
+    result["formCooldown"] = this.formCooldown as Object;
+    return result;
   }
 
   deserialize(data: Record<string, Object>): void {

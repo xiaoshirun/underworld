@@ -8,7 +8,7 @@ import {
 import { SpriteAtlas } from './SpriteAtlas';
 
 export function drawGraySlime(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   bouncePhase: number,
   size: number,
   flash: boolean,
@@ -108,7 +108,7 @@ export function drawGraySlime(
 }
 
 export function drawPurpleSlime(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   bouncePhase: number,
   size: number,
   flash: boolean,
@@ -245,7 +245,7 @@ export function drawPurpleSlime(
 }
 
 export function drawRedSlime(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   bouncePhase: number,
   size: number,
   flash: boolean,
@@ -371,7 +371,7 @@ export function drawRedSlime(
 }
 
 export function drawBlueSlime(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   bouncePhase: number,
   size: number,
   flash: boolean,
@@ -488,7 +488,7 @@ export function drawBlueSlime(
 }
 
 export function drawYellowSlime(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   bouncePhase: number,
   size: number,
   flash: boolean,
@@ -621,7 +621,7 @@ export function drawYellowSlime(
 }
 
 export function drawGhostSlime(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   bouncePhase: number,
   size: number,
   flash: boolean,
@@ -753,7 +753,7 @@ export function generateEnemyAtlas(type: EnemyType): SpriteAtlas {
   const cols: number = 4;
   const rows: number = 4;
   const atlas: OffscreenCanvas = new OffscreenCanvas(cols * ENEMY_CELL_W, rows * ENEMY_CELL_H);
-  const actx: CanvasRenderingContext2D = atlas.getContext('2d') as CanvasRenderingContext2D;
+  const actx: OffscreenCanvasRenderingContext2D = atlas.getContext('2d') as OffscreenCanvasRenderingContext2D;
 
   for (let i: number = 0; i < ENEMY_BOUNCE_FRAMES; i++) {
     const bp: number = i * Math.PI / 4;
@@ -784,7 +784,7 @@ export function generateEnemyAtlas(type: EnemyType): SpriteAtlas {
 }
 
 function drawEnemyFrame(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   type: EnemyType,
   cx: number,
   cy: number,

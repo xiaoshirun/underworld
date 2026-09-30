@@ -11,7 +11,10 @@ export class LevelComponent implements Component, Serializable {
   }
 
   serialize(): Record<string, Object> {
-    return { level: this.level, xp: this.xp };
+    const result: Record<string, Object> = {} as Record<string, Object>;
+    result["level"] = this.level as Object;
+    result["xp"] = this.xp as Object;
+    return result;
   }
 
   deserialize(data: Record<string, Object>): void {

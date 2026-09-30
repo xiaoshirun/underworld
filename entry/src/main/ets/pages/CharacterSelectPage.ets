@@ -28,7 +28,7 @@ struct CharacterSelectPage {
 
   aboutToAppear(): void {
     try {
-      const displayInfo = display.getDefaultDisplaySync();
+      const displayInfo: display.Display = display.getDefaultDisplaySync();
       const rawW: number = px2vp(displayInfo.width);
       const rawH: number = px2vp(displayInfo.height);
       if (rawW > rawH) {
@@ -40,9 +40,9 @@ struct CharacterSelectPage {
         this.screenH = rawW;
         this.isLandscape = false;
       }
-      const params = router.getParams();
+      const params: Object | undefined = router.getParams();
       if (params !== null && params !== undefined) {
-        const p = params as Record<string, Object>;
+        const p: Record<string, Object> = params as Record<string, Object>;
         if (p['username'] !== undefined) {
           this.username = p['username'] as string;
         }
@@ -295,7 +295,7 @@ struct CharacterSelectPage {
       c.fillStyle = '#08080f';
       c.fillRect(0, 0, this.screenW, this.screenH);
 
-      const grd = c.createRadialGradient(
+      const grd: CanvasGradient = c.createRadialGradient(
         this.screenW / 2, this.screenH * 0.35, 10,
         this.screenW / 2, this.screenH * 0.35, this.screenW * 0.6
       );

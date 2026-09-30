@@ -1,6 +1,6 @@
 import { ResourceManager } from './ResourceManager';
 import { SceneManager } from './SceneManager';
-import { InputState, BaseContext } from './Scene';
+import { Scene, InputState, BaseContext } from './Scene';
 
 export { InputState } from './Scene';
 
@@ -39,7 +39,11 @@ export class Engine {
   startLoop(): void {
     if (this.externalLoop) return;
     this.gameLoopId = setInterval(() => {
-      this.tick(this.tickInterval);
+      try {
+        this.tick(this.tickInterval);
+      } catch (e) {
+        console.error('[Engine] tick error:', JSON.stringify(e));
+      }
     }, this.tickInterval);
   }
 
@@ -48,7 +52,7 @@ export class Engine {
   }
 
   tick(dt: number): void {
-    const activeScene = this.sceneManager.getActiveScene();
+    const activeScene: Scene | null = this.sceneManager.getActiveScene();
     if (activeScene !== null && this.ctx !== null && this.minimapCtx !== null) {
       const baseCtx: BaseContext = {
         ctx: this.ctx,

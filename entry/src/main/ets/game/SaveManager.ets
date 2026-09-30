@@ -5,7 +5,7 @@ import { SaveData, SAVE_KEY, SAVE_PREF_NAME, SAVE_VERSION } from './GameConstant
 export class SaveManager {
   static async save(context: common.UIAbilityContext, data: SaveData): Promise<void> {
     try {
-      const pref = await preferences.getPreferences(context, SAVE_PREF_NAME);
+      const pref: preferences.Preferences = await preferences.getPreferences(context, SAVE_PREF_NAME);
       const jsonStr: string = JSON.stringify(data);
       await pref.put(SAVE_KEY, jsonStr);
       await pref.flush();
@@ -16,7 +16,7 @@ export class SaveManager {
 
   static async load(context: common.UIAbilityContext): Promise<SaveData | null> {
     try {
-      const pref = await preferences.getPreferences(context, SAVE_PREF_NAME);
+      const pref: preferences.Preferences = await preferences.getPreferences(context, SAVE_PREF_NAME);
       const jsonStr: string = await pref.get(SAVE_KEY, '') as string;
       if (!jsonStr || jsonStr.length === 0) {
         return null;
@@ -34,7 +34,7 @@ export class SaveManager {
 
   static async deleteSave(context: common.UIAbilityContext): Promise<void> {
     try {
-      const pref = await preferences.getPreferences(context, SAVE_PREF_NAME);
+      const pref: preferences.Preferences = await preferences.getPreferences(context, SAVE_PREF_NAME);
       await pref.delete(SAVE_KEY);
       await pref.flush();
     } catch (e) {

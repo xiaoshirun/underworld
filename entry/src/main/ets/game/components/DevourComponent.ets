@@ -9,7 +9,11 @@ export class DevourComponent implements Component, Serializable {
   getType(): string { return "devour"; }
 
   serialize(): Record<string, Object> {
-    return { state: this.state, devourTimer: this.devourTimer, devourTargetId: this.devourTargetId };
+    const result: Record<string, Object> = {} as Record<string, Object>;
+    result["state"] = this.state as Object;
+    result["devourTimer"] = this.devourTimer as Object;
+    result["devourTargetId"] = this.devourTargetId as Object;
+    return result;
   }
 
   deserialize(data: Record<string, Object>): void {

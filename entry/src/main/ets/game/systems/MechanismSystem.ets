@@ -1,19 +1,13 @@
 import { System, SystemContext, Entity, PositionComponent, VelocityComponent } from '@qiuyu/engine';
 import { MechanismComponent } from '../components/MechanismComponent';
 import { MovementComponent } from '../components/MovementComponent';
-import { CameraComponent } from '../components/CameraComponent';
+import { shakeCamera, getTile, setTile } from '../helpers/SystemHelpers';
 import {
   TILE_SIZE, CHUNK_SIZE, PLAYER_SIZE,
   MECH_INTERACT_RANGE, PUSH_BLOCK_SPEED, TELEPORT_COOLDOWN, PRESSURE_PLATE_RANGE,
   MechanismType, TileType,
-  ChunkData,
 } from '../GameConstants';
-
-interface AudioManager {
-  playDash(): void;
-  playDrillHit(): void;
-  playWallBreak(): void;
-}
+import { IAudioService } from '../interfaces/IAudioService';
 
 export class MechanismSystem extends System {
 
@@ -26,7 +20,7 @@ export class MechanismSystem extends System {
     const playerMovement: MovementComponent | null = player.getComponent<MovementComponent>("movement");
     if (playerPos === null || playerVel === null || playerMovement === null) return;
 
-    const audio: AudioManager = context.audio as AudioManager;
+    const audio: IAudioService = context.audio as IAudioService;
     const dt: number = context.dt;
     const chunks: Map<string, Object> = context.world.chunks;
 
@@ -89,7 +83,7 @@ export class MechanismSystem extends System {
             if (pushLen > 0.5) {
               const newX: number = mech.posX + (pushDirX / pushLen) * PUSH_BLOCK_SPEED;
               const newY: number = mech.posY + (pushDirY / pushLen) * PUSH_BLOCK_SPEED;
-              const tileAtNew: number = this.getTile(chunks, newX, newY);
+              const tileAtNew: number = getTile(chunks, newX, newY);
               if (tileAtNew === TileType.FLOOR || tileAtNew === TileType.BROKEN_WALL) {
                 mech.posX = newX;
                 mech.posY = newY;
@@ -167,9 +161,9 @@ export class MechanismSystem extends System {
             const tileDist: number = Math.abs(mechTileX - drillTileX) + Math.abs(mechTileY - drillTileY);
             if (tileDist <= 1) {
               // Break the wall tile
-              this.setTile(chunks, pos.x, pos.y, TileType.BROKEN_WALL);
+              setTile(chunks, pos.x, pos.y, TileType.BROKEN_WALL);
               audio.playWallBreak();
-              this.shakeCamera(context, 100);
+              shakeCamera(context, 100);
               playerMovement.isDrilling = false;
               playerMovement.drillHitCount = 0;
             }
@@ -201,42 +195,6 @@ export class MechanismSystem extends System {
           }
           mechCount++;
         }
-      }
-    }
-  }
-
-  private getTile(chunks: Map<string, Object>, worldX: number, worldY: number): number {
-    const tx: number = Math.floor(worldX / TILE_SIZE);
-    const ty: number = Math.floor(worldY / TILE_SIZE);
-    const cx: number = Math.floor(tx / CHUNK_SIZE);
-    const cy: number = Math.floor(ty / CHUNK_SIZE);
-    const key: string = cx + ',' + cy;
-    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
-    if (chunk === undefined) return TileType.WALL;
-    const lx: number = tx - cx * CHUNK_SIZE;
-    const ly: number = ty - cy * CHUNK_SIZE;
-    return chunk.tiles[ly][lx];
-  }
-
-  private setTile(chunks: Map<string, Object>, worldX: number, worldY: number, tileType: number): void {
-    const tx: number = Math.floor(worldX / TILE_SIZE);
-    const ty: number = Math.floor(worldY / TILE_SIZE);
-    const cx: number = Math.floor(tx / CHUNK_SIZE);
-    const cy: number = Math.floor(ty / CHUNK_SIZE);
-    const key: string = cx + ',' + cy;
-    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
-    if (chunk === undefined) return;
-    const lx: number = tx - cx * CHUNK_SIZE;
-    const ly: number = ty - cy * CHUNK_SIZE;
-    chunk.tiles[ly][lx] = tileType;
-  }
-
-  private shakeCamera(context: SystemContext, duration: number): void {
-    const cameraEntity: Entity | null = context.world.findEntityByTag("camera");
-    if (cameraEntity !== null) {
-      const cam: CameraComponent | null = cameraEntity.getComponent<CameraComponent>("camera");
-      if (cam !== null) {
-        cam.shakeTimer = duration;
       }
     }
   }

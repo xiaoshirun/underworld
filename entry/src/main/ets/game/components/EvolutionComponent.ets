@@ -8,11 +8,11 @@ export class EvolutionComponent implements Component, Serializable {
   getType(): string { return "evolution"; }
 
   serialize(): Record<string, Object> {
-    return {
-      evolutionLevel: this.evolutionLevel,
-      unlockedForms: this.unlockedForms as Object[],
-      evolutionBranch: this.evolutionBranch
-    };
+    const result: Record<string, Object> = {} as Record<string, Object>;
+    result["evolutionLevel"] = this.evolutionLevel as Object;
+    result["unlockedForms"] = this.unlockedForms as Object;
+    result["evolutionBranch"] = this.evolutionBranch as Object;
+    return result;
   }
 
   deserialize(data: Record<string, Object>): void {

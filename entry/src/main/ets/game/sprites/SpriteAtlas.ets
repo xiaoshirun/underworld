@@ -1,5 +1,15 @@
+export class FrameCoord {
+  sx: number;
+  sy: number;
+  constructor(sx: number, sy: number) {
+    this.sx = sx;
+    this.sy = sy;
+  }
+}
+
 export class SpriteAtlas {
   readonly canvas: OffscreenCanvas;
+  readonly imageBitmap: ImageBitmap;
   readonly cellW: number;
   readonly cellH: number;
   readonly cols: number;
@@ -8,6 +18,7 @@ export class SpriteAtlas {
 
   constructor(canvas: OffscreenCanvas, cellW: number, cellH: number, frameCount: number) {
     this.canvas = canvas;
+    this.imageBitmap = canvas.transferToImageBitmap();
     this.cellW = cellW;
     this.cellH = cellH;
     this.cols = Math.ceil(Math.sqrt(frameCount));
@@ -15,9 +26,9 @@ export class SpriteAtlas {
     this.frameCount = frameCount;
   }
 
-  getFrame(index: number): { sx: number, sy: number } {
+  getFrame(index: number): FrameCoord {
     const col: number = index % this.cols;
     const row: number = Math.floor(index / this.cols);
-    return { sx: col * this.cellW, sy: row * this.cellH };
+    return new FrameCoord(col * this.cellW, row * this.cellH);
   }
 }

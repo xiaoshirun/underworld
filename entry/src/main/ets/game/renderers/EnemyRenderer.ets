@@ -14,7 +14,7 @@ import { EnemyAIComponent } from '../components/EnemyAIComponent';
 import { LevelComponent } from '../components/LevelComponent';
 import { XpPickupComponent } from '../components/XpPickupComponent';
 import { SpriteManager } from '../sprites/SpriteManager';
-import { SpriteAtlas } from '../sprites/SpriteAtlas';
+import { SpriteAtlas, FrameCoord } from '../sprites/SpriteAtlas';
 
 export class EnemyRenderer {
   render(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number,
@@ -884,13 +884,13 @@ export class EnemyRenderer {
           frameIndex = (flash ? 8 : 0) + bounceFrame;
         }
 
-        const frame: { sx: number, sy: number } = atlas.getFrame(frameIndex);
+        const frame: FrameCoord = atlas.getFrame(frameIndex);
         const destW: number = atlas.cellW * sc;
         const destH: number = atlas.cellH * sc;
         const destX: number = screenX - destW / 2;
         const destY: number = screenY - destH / 2;
 
-        c.drawImage(atlas.canvas, frame.sx, frame.sy, atlas.cellW, atlas.cellH,
+        c.drawImage(atlas.imageBitmap, frame.sx, frame.sy, atlas.cellW, atlas.cellH,
                     destX, destY, destW, destH);
 
         // Flash overlay for PURPLE/RED (their flash frames aren't in atlas)

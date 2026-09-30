@@ -35,21 +35,28 @@ export class SkillComponent implements Component, Serializable {
     const activeData: Object[] = [];
     for (let i: number = 0; i < this.activeSkills.length; i++) {
       const s: SkillSlot = this.activeSkills[i];
-      activeData.push({ family: s.family, tier: s.tier, skillXp: s.skillXp } as Object);
+      const slotRecord: Record<string, Object> = {} as Record<string, Object>;
+      slotRecord["family"] = s.family as Object;
+      slotRecord["tier"] = s.tier as Object;
+      slotRecord["skillXp"] = s.skillXp as Object;
+      activeData.push(slotRecord as Object);
     }
     const passiveData: Object[] = [];
     for (let i: number = 0; i < this.passiveSkills.length; i++) {
       const p: PassiveSlot = this.passiveSkills[i];
-      passiveData.push({ branch: p.branch, level: p.level } as Object);
+      const pRecord: Record<string, Object> = {} as Record<string, Object>;
+      pRecord["branch"] = p.branch as Object;
+      pRecord["level"] = p.level as Object;
+      passiveData.push(pRecord as Object);
     }
-    return {
-      activeSkills: activeData,
-      passiveSkills: passiveData,
-      activeSlotCount: this.activeSlotCount,
-      passiveSlotCount: this.passiveSlotCount,
-      selectedActiveIndex: this.selectedActiveIndex,
-      skillCooldown: this.skillCooldown
-    };
+    const result: Record<string, Object> = {} as Record<string, Object>;
+    result["activeSkills"] = activeData as Object;
+    result["passiveSkills"] = passiveData as Object;
+    result["activeSlotCount"] = this.activeSlotCount as Object;
+    result["passiveSlotCount"] = this.passiveSlotCount as Object;
+    result["selectedActiveIndex"] = this.selectedActiveIndex as Object;
+    result["skillCooldown"] = this.skillCooldown as Object;
+    return result;
   }
 
   deserialize(data: Record<string, Object>): void {

@@ -27,9 +27,5 @@ export class CameraSystem extends System {
         cam.shakeY = 0;
       }
     }
-
-    // 同步到 SystemContext 供后续系统使用
-    context.cameraX = context.world.cameraX + cam.shakeX;
-    context.cameraY = context.world.cameraY + cam.shakeY;
   }
 }

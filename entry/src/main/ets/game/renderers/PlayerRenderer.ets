@@ -19,7 +19,7 @@ import { HumanFormComponent } from '../components/HumanFormComponent';
 import { WeaponRenderer } from './WeaponRenderer';
 import { TransformFormRenderer } from './TransformFormRenderer';
 
-interface PComp {
+export interface PComp {
   pos: PositionComponent;
   vel: VelocityComponent;
   movement: MovementComponent;

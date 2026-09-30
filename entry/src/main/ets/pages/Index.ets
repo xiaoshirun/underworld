@@ -10,7 +10,7 @@ import {
   TransformForm, TRANSFORM_MAX_ENERGY,
   COLOR_TRANSFORM_BTN_LOCKED, COLOR_TRANSFORM_BTN_READY,
   COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_IRON_GOLD,
-  GameState, LEVEL_UP_XP, SaveData,
+  GameState, LEVEL_UP_XP, SaveData, GameSettings,
 } from '../game/GameConstants';
 
 // Components
@@ -34,7 +34,7 @@ struct Index {
   private engine: Engine = new Engine();
   private gameScene: GameScene | null = null;
   private audio: AudioManager = new AudioManager();
-  private settings: { soundEnabled: boolean; effectsEnabled: boolean } = { soundEnabled: true, effectsEnabled: true };
+  private settings: GameSettings = { soundEnabled: true, effectsEnabled: true } as GameSettings;
   private gameCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private minimapCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private gameCanvasReady: boolean = false;
@@ -95,7 +95,7 @@ struct Index {
 
   aboutToAppear(): void {
     try {
-      const displayInfo: display.DisplayInfo = display.getDefaultDisplaySync();
+      const displayInfo: display.Display = display.getDefaultDisplaySync();
       const pxW: number = displayInfo.width;
       const pxH: number = displayInfo.height;
       const vpW: number = px2vp(pxW);
@@ -723,7 +723,7 @@ struct Index {
 
   private handleJoystickTouch(event: TouchEvent): void {
     if (event.type === TouchType.Down) {
-      const touch: Touch = event.touches[0];
+      const touch: TouchObject = event.touches[0];
       this.joyCenterX = touch.x;
       this.joyCenterY = touch.y;
       this.joyActive = true;
@@ -731,7 +731,7 @@ struct Index {
       this.joyKnobY = 0;
       this.engine.setInputJoy(true, 0, 0);
     } else if (event.type === TouchType.Move && this.joyActive) {
-      const touch: Touch = event.touches[0];
+      const touch: TouchObject = event.touches[0];
       let dx: number = touch.x - this.joyCenterX;
       let dy: number = touch.y - this.joyCenterY;
       const dist: number = Math.sqrt(dx * dx + dy * dy);

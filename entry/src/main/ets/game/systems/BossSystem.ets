@@ -3,7 +3,6 @@ import { BossAIComponent } from '../components/BossAIComponent';
 import { GameStateComponent } from '../components/GameStateComponent';
 import { TransformComponent } from '../components/TransformComponent';
 import { CombatComponent } from '../components/CombatComponent';
-import { CameraComponent } from '../components/CameraComponent';
 import { ChestComponent } from '../components/ChestComponent';
 import { DropFactory } from '../factories/DropFactory';
 import {
@@ -12,13 +11,9 @@ import {
   INVINCIBLE_DURATION,
   TRANSFORM_ENERGY_KILL_BOSS,
   TileType, BossType, BossRole, BossPhase, MaterialType, TransformForm,
-  ChunkData,
 } from '../GameConstants';
-
-interface AudioManager {
-  playPlayerDamage(): void;
-  playEnemyDeath(): void;
-}
+import { shakeCamera, triggerDamageFlash, setTile } from '../helpers/SystemHelpers';
+import { IAudioService } from '../interfaces/IAudioService';
 
 // extraData index for hit flash timer (BossAIComponent lacks a dedicated hitFlash field)
 const EXTRA_HIT_FLASH: number = 0;
@@ -43,7 +38,7 @@ export class BossSystem extends System {
     const gs: GameStateComponent | null = gsEntity !== null
       ? gsEntity.getComponent<GameStateComponent>("gameState") : null;
 
-    const audio: AudioManager = context.audio as AudioManager;
+    const audio: IAudioService = context.audio as IAudioService;
     const dt: number = context.dt;
     const chunks: Map<string, Object> = context.world.chunks;
 
@@ -104,12 +99,10 @@ export class BossSystem extends System {
           audio.playPlayerDamage();
 
           // Damage flash
-          if (gs !== null) {
-            gs.damageFlashTimer = 200;
-          }
+          triggerDamageFlash(context);
 
           // Camera shake
-          this.shakeCamera(context, 200);
+          shakeCamera(context, 200);
 
           // Knockback
           if (dist > 1) {
@@ -128,7 +121,7 @@ export class BossSystem extends System {
         } else {
           ai.extraData[EXTRA_HIT_FLASH] = 500;
         }
-        this.shakeCamera(context, 400);
+        shakeCamera(context, 400);
       }
 
       // --- Death check ---
@@ -150,7 +143,7 @@ export class BossSystem extends System {
     ai: BossAIComponent,
     playerTransform: TransformComponent,
     gs: GameStateComponent | null,
-    audio: AudioManager,
+    audio: IAudioService,
     chunks: Map<string, Object>,
     context: SystemContext
   ): void {
@@ -191,7 +184,7 @@ export class BossSystem extends System {
     context.world.addEntity(chestEntity);
 
     // --- Effects ---
-    this.shakeCamera(context, 500);
+    shakeCamera(context, 500);
     audio.playEnemyDeath();
   }
 
@@ -300,7 +293,7 @@ export class BossSystem extends System {
     for (let i: number = 0; i < entranceTilesX.length; i++) {
       const worldX: number = entranceTilesX[i] * TILE_SIZE + TILE_SIZE / 2;
       const worldY: number = entranceTilesY[i] * TILE_SIZE + TILE_SIZE / 2;
-      this.setTile(chunks, worldX, worldY, TileType.FLOOR);
+      setTile(chunks, worldX, worldY, TileType.FLOOR);
     }
   }
 
@@ -308,26 +301,5 @@ export class BossSystem extends System {
     let h: number = (cx * 13 + 7000) * 374761393 + (cy * 13 + 8000) * 668265263;
     h = ((h ^ (h >> 13)) * 1274126177) | 0;
     return ((h ^ (h >> 16)) >>> 0) % 4;
-  }
-
-  private setTile(chunks: Map<string, Object>, worldX: number, worldY: number, tileType: number): void {
-    const tx: number = Math.floor(worldX / TILE_SIZE);
-    const ty: number = Math.floor(worldY / TILE_SIZE);
-    const cx: number = Math.floor(tx / CHUNK_SIZE);
-    const cy: number = Math.floor(ty / CHUNK_SIZE);
-    const key: string = cx + ',' + cy;
-    const chunk: ChunkData | undefined = chunks.get(key) as ChunkData | undefined;
-    if (chunk === undefined) return;
-    const lx: number = tx - cx * CHUNK_SIZE;
-    const ly: number = ty - cy * CHUNK_SIZE;
-    chunk.tiles[ly][lx] = tileType;
-  }
-
-  private shakeCamera(context: SystemContext, duration: number): void {
-    const cameraEntity: Entity | null = context.world.findEntityByTag("camera");
-    if (cameraEntity !== null) {
-      const cam: CameraComponent = cameraEntity.getComponent<CameraComponent>("camera")!;
-      cam.shakeTimer = duration;
-    }
   }
 }

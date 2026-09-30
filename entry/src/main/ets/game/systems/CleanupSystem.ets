@@ -1,4 +1,4 @@
-import { System, SystemContext, Entity } from '@qiuyu/engine';
+import { System, SystemContext, Entity, Component } from '@qiuyu/engine';
 
 export class CleanupSystem extends System {
   update(entities: Entity[], context: SystemContext): void {
@@ -8,7 +8,7 @@ export class CleanupSystem extends System {
       const e: Entity = entities[i];
       if (!e.active) {
         // 移除所有组件引用，帮助 GC
-        const components = e.getAllComponents();
+        const components: Component[] = e.getAllComponents();
         for (let j: number = 0; j < components.length; j++) {
           e.removeComponent(components[j].getType());
         }

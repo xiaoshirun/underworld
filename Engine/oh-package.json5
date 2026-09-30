@@ -1,5 +1,5 @@
 {
-  "name": "engine",
+  "name": "@qiuyu/engine",
   "version": "1.0.0",
   "description": "Reusable 2D game engine with ECS architecture",
   "main": "src/main/ets/index.ets",

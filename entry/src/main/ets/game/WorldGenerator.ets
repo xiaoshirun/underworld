@@ -191,7 +191,7 @@ export class WorldGenerator {
       };
     }
 
-    const entities = this.generateEntities(cx, cy, tiles, size, chunkBiome, distFromOrigin);
+    const entities: EntitySpawnResult = this.generateEntities(cx, cy, tiles, size, chunkBiome, distFromOrigin);
     const secretRooms: SecretRoom[] = this.generateSecretRooms(cx, cy, tiles, chunkBiome, distFromOrigin);
     const chests: ChestState[] = this.generateChests(cx, cy, tiles, size, secretRooms, distFromOrigin);
 

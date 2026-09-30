@@ -7,7 +7,10 @@ export class XpComponent implements Component, Serializable {
   getType(): string { return "xp"; }
 
   serialize(): Record<string, Object> {
-    return { xp: this.xp, level: this.level };
+    const result: Record<string, Object> = {} as Record<string, Object>;
+    result["xp"] = this.xp as Object;
+    result["level"] = this.level as Object;
+    return result;
   }
 
   deserialize(data: Record<string, Object>): void {

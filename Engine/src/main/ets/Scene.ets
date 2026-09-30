@@ -22,10 +22,10 @@ export interface BaseContext {
 }
 
 export abstract class Scene {
-  protected onEnter(): void {}
-  protected onExit(): void {}
-  protected onPause(): void {}
-  protected onResume(): void {}
+  public onEnter(): void {}
+  public onExit(): void {}
+  public onPause(): void {}
+  public onResume(): void {}
 
   abstract update(baseCtx: BaseContext, dt: number): void;
   abstract render(baseCtx: BaseContext): void;

@@ -1,5 +1,6 @@
 import { audio } from '@kit.AudioKit';
 import { GameSettings } from './GameConstants';
+import { IAudioService } from './interfaces/IAudioService';
 
 const SAMPLE_RATE: number = 44100;
 const POOL_SIZE: number = 6;
@@ -19,8 +20,8 @@ enum SoundId {
   LEVEL_UP = 'level_up'
 }
 
-export class AudioManager {
-  private settings: GameSettings = { soundEnabled: true, effectsEnabled: true };
+export class AudioManager implements IAudioService {
+  private settings: GameSettings = { soundEnabled: true, effectsEnabled: true } as GameSettings;
   private renderers: audio.AudioRenderer[] = [];
   private releasedFlags: boolean[] = [];
   private soundBuffers: Map<string, ArrayBuffer> = new Map();
@@ -32,8 +33,8 @@ export class AudioManager {
     if (this.initialized) return;
     try {
       this.generateAllSounds();
-      for (let i = 0; i < POOL_SIZE; i++) {
-        const renderer = await audio.createAudioRenderer({
+      for (let i: number = 0; i < POOL_SIZE; i++) {
+        const renderer: audio.AudioRenderer = await audio.createAudioRenderer({
           streamInfo: {
             samplingRate: audio.AudioSamplingRate.SAMPLE_RATE_44100,
             channels: audio.AudioChannel.CHANNEL_1,
@@ -112,7 +113,7 @@ export class AudioManager {
   }
 
   destroy(): void {
-    for (let i = 0; i < this.renderers.length; i++) {
+    for (let i: number = 0; i < this.renderers.length; i++) {
       this.releasedFlags[i] = true;
       this.currentSounds[i] = null;
       try {
@@ -135,16 +136,16 @@ export class AudioManager {
         this.fillSilence(buffer);
         return audio.AudioDataCallbackResult.VALID;
       }
-      const soundData = this.currentSounds[idx];
+      const soundData: ArrayBuffer | null = this.currentSounds[idx];
       if (soundData === null) {
         this.fillSilence(buffer);
         return audio.AudioDataCallbackResult.VALID;
       }
-      const soundView = new Int16Array(soundData);
-      const outView = new Int16Array(buffer);
-      const outLen = outView.length;
-      let offset = this.soundOffsets[idx];
-      for (let i = 0; i < outLen; i++) {
+      const soundView: Int16Array = new Int16Array(soundData);
+      const outView: Int16Array = new Int16Array(buffer);
+      const outLen: number = outView.length;
+      let offset: number = this.soundOffsets[idx];
+      for (let i: number = 0; i < outLen; i++) {
         if (offset < soundView.length) {
           outView[i] = soundView[offset];
           offset++;
@@ -171,11 +172,11 @@ export class AudioManager {
 
   private playSound(soundId: string): void {
     if (!this.initialized) return;
-    const buffer = this.soundBuffers.get(soundId);
+    const buffer: ArrayBuffer | undefined = this.soundBuffers.get(soundId);
     if (!buffer) return;
 
     let idx: number = -1;
-    for (let i = 0; i < this.renderers.length; i++) {
+    for (let i: number = 0; i < this.renderers.length; i++) {
       if (!this.releasedFlags[i]) {
         idx = i;
         break;
@@ -186,7 +187,7 @@ export class AudioManager {
     this.currentSounds[idx] = buffer;
     this.soundOffsets[idx] = 0;
 
-    const renderer = this.renderers[idx];
+    const renderer: audio.AudioRenderer = this.renderers[idx];
     if (renderer.state === audio.AudioState.STATE_PREPARED ||
       renderer.state === audio.AudioState.STATE_STOPPED) {
       renderer.start().catch(() => {
@@ -201,7 +202,7 @@ export class AudioManager {
     this.currentSounds[idx] = null;
     this.soundOffsets[idx] = 0;
 
-    const oldRenderer = this.renderers[idx];
+    const oldRenderer: audio.AudioRenderer = this.renderers[idx];
     try {
       oldRenderer.off('writeData');
       oldRenderer.off('stateChange');
@@ -232,8 +233,8 @@ export class AudioManager {
   }
 
   private fillSilence(buffer: ArrayBuffer): void {
-    const view = new Int16Array(buffer);
-    for (let i = 0; i < view.length; i++) {
+    const view: Int16Array = new Int16Array(buffer);
+    for (let i: number = 0; i < view.length; i++) {
       view[i] = 0;
     }
   }
@@ -256,7 +257,7 @@ export class AudioManager {
     const buf: ArrayBuffer = new ArrayBuffer(numSamples * BYTES_PER_SAMPLE);
     const view: DataView = new DataView(buf);
     let phase: number = 0;
-    for (let i = 0; i < numSamples; i++) {
+    for (let i: number = 0; i < numSamples; i++) {
       const progress: number = i / numSamples;
       const freq: number = startFreq + (endFreq - startFreq) * progress;
       phase += TWO_PI * freq / SAMPLE_RATE;
@@ -273,7 +274,7 @@ export class AudioManager {
     const view: DataView = new DataView(buf);
     let phase1: number = 0;
     let phase2: number = 0;
-    for (let i = 0; i < numSamples; i++) {
+    for (let i: number = 0; i < numSamples; i++) {
       phase1 += TWO_PI * freq1 / SAMPLE_RATE;
       phase2 += TWO_PI * freq2 / SAMPLE_RATE;
       const envelope: number = Math.min(1.0, (numSamples - i) / (SAMPLE_RATE * 0.015));
@@ -288,7 +289,7 @@ export class AudioManager {
     const buf: ArrayBuffer = new ArrayBuffer(numSamples * BYTES_PER_SAMPLE);
     const view: DataView = new DataView(buf);
     const noteSamples: number = Math.floor(numSamples / freqs.length);
-    for (let i = 0; i < numSamples; i++) {
+    for (let i: number = 0; i < numSamples; i++) {
       const noteIdx: number = Math.min(Math.floor(i / noteSamples), freqs.length - 1);
       const freq: number = freqs[noteIdx];
       const t: number = (i % noteSamples) / SAMPLE_RATE;
@@ -304,7 +305,7 @@ export class AudioManager {
     const numSamples: number = Math.floor(SAMPLE_RATE * durationSec);
     const buf: ArrayBuffer = new ArrayBuffer(numSamples * BYTES_PER_SAMPLE);
     const view: DataView = new DataView(buf);
-    for (let i = 0; i < numSamples; i++) {
+    for (let i: number = 0; i < numSamples; i++) {
       const decay: number = 1.0 - (i / numSamples);
       const noise: number = Math.random() * 2 - 1;
       const sample: number = noise * vol * decay * decay;
@@ -319,7 +320,7 @@ export class AudioManager {
     const view: DataView = new DataView(buf);
     const coeff: number = 0.3;
     let prev: number = 0;
-    for (let i = 0; i < numSamples; i++) {
+    for (let i: number = 0; i < numSamples; i++) {
       const decay: number = 1.0 - (i / numSamples);
       const noise: number = Math.random() * 2 - 1;
       prev = prev * (1.0 - coeff) + noise * coeff;

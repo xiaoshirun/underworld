@@ -4,12 +4,9 @@ import { TransformCorePickupComponent } from '../components/TransformCorePickupC
 import { InventoryComponent } from '../components/InventoryComponent';
 import { GameStateComponent } from '../components/GameStateComponent';
 import { MaterialType, TransformForm } from '../GameConstants';
+import { IAudioService } from '../interfaces/IAudioService';
 
 const PICKUP_RANGE: number = 30;
-
-interface AudioManager {
-  playXpCollect(): void;
-}
 
 export class MaterialDropSystem extends System {
 
@@ -21,7 +18,7 @@ export class MaterialDropSystem extends System {
     const inventory: InventoryComponent | null = player.getComponent<InventoryComponent>("inventory");
     if (playerPos === null || inventory === null) return;
 
-    const audio: AudioManager = context.audio as AudioManager;
+    const audio: IAudioService = context.audio as IAudioService;
 
     // Material pickup pass
     for (let i: number = 0; i < entities.length; i++) {

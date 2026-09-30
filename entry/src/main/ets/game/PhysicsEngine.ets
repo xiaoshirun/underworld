@@ -227,7 +227,7 @@ export class PhysicsEngine {
     const stepY: number = body.vy * (dt / 16);
 
     body.x += stepX;
-    const xResult = this.resolveTileCollisionX(body, getTile, isSolid);
+    const xResult: TileCollisionXResult = this.resolveTileCollisionX(body, getTile, isSolid);
     result.hitLeft = xResult.hitLeft;
     result.hitRight = xResult.hitRight;
     if (xResult.hitLeft || xResult.hitRight) {
@@ -238,7 +238,7 @@ export class PhysicsEngine {
     }
 
     body.y += stepY;
-    const yResult = this.resolveTileCollisionY(body, getTile, isSolid);
+    const yResult: TileCollisionYResult = this.resolveTileCollisionY(body, getTile, isSolid);
     result.hitTop = yResult.hitTop;
     result.hitBottom = yResult.hitBottom;
     result.grounded = yResult.hitBottom;

@@ -7,7 +7,7 @@ import {
 import { SpriteCache } from './SpriteCache';
 
 export function drawPlayerBody(
-  c: CanvasRenderingContext2D,
+  c: OffscreenCanvasRenderingContext2D,
   centerX: number,
   centerY: number,
   walkPhase: number,
@@ -152,7 +152,7 @@ export function generatePlayerCache(): SpriteCache {
   for (let f: number = 0; f < 2; f++) {
     const facingRight: boolean = f === 0;
     const canvas: OffscreenCanvas = new OffscreenCanvas(PLAYER_CELL_W, PLAYER_CELL_H);
-    const ctx: CanvasRenderingContext2D = canvas.getContext('2d') as CanvasRenderingContext2D;
+    const ctx: OffscreenCanvasRenderingContext2D = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
     drawPlayerBody(ctx, centerX, centerY, 0, facingRight, false);
     const key: string = facingRight ? 'body_idle_R' : 'body_idle_L';
     cache.set(key, canvas);
@@ -163,7 +163,7 @@ export function generatePlayerCache(): SpriteCache {
     for (let f: number = 0; f < 2; f++) {
       const facingRight: boolean = f === 0;
       const canvas: OffscreenCanvas = new OffscreenCanvas(PLAYER_CELL_W, PLAYER_CELL_H);
-      const ctx: CanvasRenderingContext2D = canvas.getContext('2d') as CanvasRenderingContext2D;
+      const ctx: OffscreenCanvasRenderingContext2D = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
       drawPlayerBody(ctx, centerX, centerY, phase, facingRight, true);
       const dir: string = facingRight ? 'R' : 'L';
       const key: string = `body_walk_${dir}_${phase}`;

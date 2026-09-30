@@ -1,4 +1,4 @@
-import { image } from '@kit.ArkUI';
+import { image } from '@kit.ImageKit';
 
 export interface RawFileProvider {
   getRawFileContent(path: string): Promise<ArrayBuffer>;
@@ -69,13 +69,13 @@ export class ResourceManager {
       sheet.frameHeight = frameHeight;
       for (let row: number = 0; row < rows; row++) {
         for (let col: number = 0; col < cols; col++) {
-          const opts: image.DecodingOptions = {
-            srcRegion: {
-              x: col * frameWidth,
-              y: row * frameHeight,
-              size: { width: frameWidth, height: frameHeight }
-            }
-          };
+          const frameSize: image.Size = { width: frameWidth, height: frameHeight } as image.Size;
+          const frameRegion: image.Region = {
+            x: col * frameWidth,
+            y: row * frameHeight,
+            size: frameSize
+          } as image.Region;
+          const opts: image.DecodingOptions = { desiredRegion: frameRegion };
           const frame: image.PixelMap = await imageSource.createPixelMap(opts);
           sheet.frames.push(frame);
         }

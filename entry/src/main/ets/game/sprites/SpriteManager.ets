@@ -15,7 +15,7 @@ export class SpriteManager {
     try {
       // Test OffscreenCanvas support
       const testCanvas: OffscreenCanvas = new OffscreenCanvas(1, 1);
-      const testCtx: CanvasRenderingContext2D | null = testCanvas.getContext('2d');
+      const testCtx: Object | null = testCanvas.getContext('2d');
       if (testCtx === null) {
         console.warn('[SpriteManager] OffscreenCanvas 2D context not available, using procedural fallback');
         return;

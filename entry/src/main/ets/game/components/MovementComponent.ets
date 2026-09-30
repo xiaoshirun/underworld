@@ -23,12 +23,15 @@ export class MovementComponent implements Component, Serializable {
   getType(): string { return "movement"; }
 
   serialize(): Record<string, Object> {
-    return {
-      facing: this.facing, isJumping: this.isJumping,
-      jumpTimer: this.jumpTimer, jumpHeight: this.jumpHeight,
-      isDashing: this.isDashing, dashTimer: this.dashTimer,
-      dashCooldown: this.dashCooldown
-    };
+    const result: Record<string, Object> = {} as Record<string, Object>;
+    result["facing"] = this.facing as Object;
+    result["isJumping"] = this.isJumping as Object;
+    result["jumpTimer"] = this.jumpTimer as Object;
+    result["jumpHeight"] = this.jumpHeight as Object;
+    result["isDashing"] = this.isDashing as Object;
+    result["dashTimer"] = this.dashTimer as Object;
+    result["dashCooldown"] = this.dashCooldown as Object;
+    return result;
   }
 
   deserialize(data: Record<string, Object>): void {

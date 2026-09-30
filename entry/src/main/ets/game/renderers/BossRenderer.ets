@@ -12,7 +12,7 @@ import {
 import { BossAIComponent } from '../components/BossAIComponent';
 import { MaterialPickupComponent } from '../components/MaterialPickupComponent';
 import { SpriteManager } from '../sprites/SpriteManager';
-import { SpriteAtlas } from '../sprites/SpriteAtlas';
+import { SpriteAtlas, FrameCoord } from '../sprites/SpriteAtlas';
 
 export class BossRenderer {
   render(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number,
@@ -109,12 +109,12 @@ export class BossRenderer {
       ai: BossAIComponent, frameCount: number, sm: SpriteManager): void {
     const atlas: SpriteAtlas = sm.getBossAtlas(ai.bossType);
     const frameIndex: number = Math.floor((frameCount % (atlas.frameCount * 11)) / 11);
-    const frame: { sx: number, sy: number } = atlas.getFrame(frameIndex);
+    const frame: FrameCoord = atlas.getFrame(frameIndex);
 
     const halfSize: number = BOSS_SIZE / 2;
     const hitFlash: number = ai.extraData.length > 0 ? ai.extraData[0] : 0;
 
-    c.drawImage(atlas.canvas, frame.sx, frame.sy, atlas.cellW, atlas.cellH,
+    c.drawImage(atlas.imageBitmap, frame.sx, frame.sy, atlas.cellW, atlas.cellH,
                 screenX - atlas.cellW / 2, screenY - atlas.cellH / 2,
                 atlas.cellW, atlas.cellH);
 

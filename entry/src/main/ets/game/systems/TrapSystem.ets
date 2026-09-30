@@ -2,17 +2,13 @@ import { System, SystemContext, Entity, PositionComponent, VelocityComponent, He
 import { TrapComponent } from '../components/TrapComponent';
 import { CombatComponent } from '../components/CombatComponent';
 import { TransformComponent } from '../components/TransformComponent';
-import { GameStateComponent } from '../components/GameStateComponent';
-import { CameraComponent } from '../components/CameraComponent';
+import { shakeCamera, triggerDamageFlash } from '../helpers/SystemHelpers';
 import {
   TRAP_TELEGRAPH_TIME, TRAP_ACTIVE_TIME, TRAP_COOLDOWN_TIME,
   INVINCIBLE_DURATION,
   TrapType, TrapState, TransformForm,
 } from '../GameConstants';
-
-interface AudioManager {
-  playPlayerDamage(): void;
-}
+import { IAudioService } from '../interfaces/IAudioService';
 
 export class TrapSystem extends System {
 
@@ -29,7 +25,7 @@ export class TrapSystem extends System {
 
     if (playerHealth.isDead()) return;
 
-    const audio: AudioManager = context.audio as AudioManager;
+    const audio: IAudioService = context.audio as IAudioService;
     const dt: number = context.dt;
 
     for (let i: number = 0; i < entities.length; i++) {
@@ -81,8 +77,8 @@ export class TrapSystem extends System {
               if (!isIronMan) {
                 playerHealth.damage(trap.damage);
                 playerCombat.invincibleTimer = INVINCIBLE_DURATION;
-                this.shakeCamera(context, 150);
-                this.setDamageFlash(context);
+                shakeCamera(context, 150);
+                triggerDamageFlash(context);
 
                 // Water vortex displaces the player
                 if (trap.trapType === TrapType.WATER_VORTEX) {
@@ -107,26 +103,6 @@ export class TrapSystem extends System {
             trap.state = TrapState.IDLE;
           }
           break;
-      }
-    }
-  }
-
-  private shakeCamera(context: SystemContext, duration: number): void {
-    const cameraEntity: Entity | null = context.world.findEntityByTag("camera");
-    if (cameraEntity !== null) {
-      const cam: CameraComponent | null = cameraEntity.getComponent<CameraComponent>("camera");
-      if (cam !== null) {
-        cam.shakeTimer = duration;
-      }
-    }
-  }
-
-  private setDamageFlash(context: SystemContext): void {
-    const gsEntity: Entity | null = context.world.findEntityByTag("gameState");
-    if (gsEntity !== null) {
-      const gs: GameStateComponent | null = gsEntity.getComponent<GameStateComponent>("gameState");
-      if (gs !== null) {
-        gs.damageFlashTimer = 200;
       }
     }
   }

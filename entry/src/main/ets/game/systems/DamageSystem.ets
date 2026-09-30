@@ -1,10 +1,7 @@
 import { System, SystemContext, Entity, HealthComponent } from '@qiuyu/engine';
 import { GameStateComponent } from '../components/GameStateComponent';
 import { GameState } from '../GameConstants';
-
-interface AudioManager {
-  playPlayerDamage(): void;
-}
+import { IAudioService } from '../interfaces/IAudioService';
 
 export class DamageSystem extends System {
 
@@ -31,7 +28,7 @@ export class DamageSystem extends System {
     if (health.isDead() && gs.state === (GameState.PLAYING as number)) {
       health.current = 0;
 
-      const audio: AudioManager = context.audio as AudioManager;
+      const audio: IAudioService = context.audio as IAudioService;
       audio.playPlayerDamage();
 
       gs.state = GameState.GAME_OVER as number;

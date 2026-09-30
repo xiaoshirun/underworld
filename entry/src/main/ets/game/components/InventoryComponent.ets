@@ -21,19 +21,24 @@ export class InventoryComponent implements Component, Serializable {
   getType(): string { return "inventory"; }
 
   serialize(): Record<string, Object> {
-    return {
-      crystalOre: this.crystalOre, mushroomOre: this.mushroomOre,
-      flameOre: this.flameOre, abyssOre: this.abyssOre,
-      voidOre: this.voidOre, coreNormal: this.coreNormal,
-      coreRare: this.coreRare, formCore: this.formCore,
-      hpPotions: this.hpPotions, gold: this.gold,
-      transformCoreSlime: this.transformCoreSlime,
-      transformCoreArmor: this.transformCoreArmor,
-      transformCoreIronMan: this.transformCoreIronMan,
-      transformCoreGhost: this.transformCoreGhost,
-      maskFragments: this.maskFragments,
-      hasHumanMask: this.hasHumanMask
-    };
+    const result: Record<string, Object> = {} as Record<string, Object>;
+    result["crystalOre"] = this.crystalOre as Object;
+    result["mushroomOre"] = this.mushroomOre as Object;
+    result["flameOre"] = this.flameOre as Object;
+    result["abyssOre"] = this.abyssOre as Object;
+    result["voidOre"] = this.voidOre as Object;
+    result["coreNormal"] = this.coreNormal as Object;
+    result["coreRare"] = this.coreRare as Object;
+    result["formCore"] = this.formCore as Object;
+    result["hpPotions"] = this.hpPotions as Object;
+    result["gold"] = this.gold as Object;
+    result["transformCoreSlime"] = this.transformCoreSlime as Object;
+    result["transformCoreArmor"] = this.transformCoreArmor as Object;
+    result["transformCoreIronMan"] = this.transformCoreIronMan as Object;
+    result["transformCoreGhost"] = this.transformCoreGhost as Object;
+    result["maskFragments"] = this.maskFragments as Object;
+    result["hasHumanMask"] = this.hasHumanMask as Object;
+    return result;
   }
 
   deserialize(data: Record<string, Object>): void {

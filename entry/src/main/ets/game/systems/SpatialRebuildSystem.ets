@@ -1,8 +1,8 @@
-import { System, SystemContext, Entity, PositionComponent } from '@qiuyu/engine';
+import { System, SystemContext, Entity, PositionComponent, SpatialGrid } from '@qiuyu/engine';
 
 export class SpatialRebuildSystem extends System {
   update(entities: Entity[], context: SystemContext): void {
-    const grid = context.world.getSpatialGrid();
+    const grid: SpatialGrid<Entity> = context.world.getSpatialGrid();
     grid.clear();
     for (let i: number = 0; i < entities.length; i++) {
       const e: Entity = entities[i];
