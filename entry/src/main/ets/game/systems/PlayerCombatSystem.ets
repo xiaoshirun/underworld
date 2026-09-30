@@ -1,20 +1,19 @@
 import { System, SystemContext, Entity, PositionComponent, VelocityComponent, HealthComponent } from '@qiuyu/engine';
 import { MovementComponent } from '../components/MovementComponent';
 import { CombatComponent } from '../components/CombatComponent';
-import { TransformComponent } from '../components/TransformComponent';
 import { EnemyAIComponent } from '../components/EnemyAIComponent';
-import { CameraComponent } from '../components/CameraComponent';
+import { LevelComponent } from '../components/LevelComponent';
+import { SkillComponent } from '../components/SkillComponent';
+import { DevourComponent } from '../components/DevourComponent';
+import { HumanFormComponent } from '../components/HumanFormComponent';
+import { SkillSystem } from './SkillSystem';
 import { DropFactory } from '../factories/DropFactory';
+import { shakeCamera } from '../helpers/SystemHelpers';
 import {
-  SLIME_KNOCKBACK,
-  WEAPON_FORM_STATS,
-  TRANSFORM_ENERGY_KILL_SLIME,
+  SLIME_KNOCKBACK, ATTACK_RANGE, ATTACK_WIDTH, ATTACK_DURATION, ATTACK_COOLDOWN,
+  TRANSFORM_ENERGY_KILL_SLIME, DevourState, SkillSlot,
 } from '../GameConstants';
-
-interface AudioManager {
-  playEnemyHit(): void;
-  playEnemyDeath(): void;
-}
+import { IAudioService } from '../interfaces/IAudioService';
 
 export class PlayerCombatSystem extends System {
 
@@ -26,12 +25,17 @@ export class PlayerCombatSystem extends System {
     const movement: MovementComponent | null = player.getComponent<MovementComponent>("movement");
     const combat: CombatComponent | null = player.getComponent<CombatComponent>("combat");
     const health: HealthComponent | null = player.getComponent<HealthComponent>("Health");
-    const transform: TransformComponent | null = player.getComponent<TransformComponent>("transform");
-    if (pos === null || movement === null || combat === null || health === null || transform === null) return;
+    const playerLevel: LevelComponent | null = player.getComponent<LevelComponent>("level");
+    const skill: SkillComponent | null = player.getComponent<SkillComponent>("skill");
+    const devour: DevourComponent | null = player.getComponent<DevourComponent>("devour");
+    const humanForm: HumanFormComponent | null = player.getComponent<HumanFormComponent>("humanForm");
+    if (pos === null || movement === null || combat === null || health === null) return;
+    if (playerLevel === null || skill === null) return;
 
-    if (health.isDead()) return;
+    const audio: IAudioService = context.audio as IAudioService;
 
-    const audio: AudioManager = context.audio as AudioManager;
+    // Skip if devour is in progress
+    if (devour !== null && devour.state !== DevourState.IDLE) return;
 
     // Handle attack trigger (engulf escape or normal attack initiation)
     if (context.input.attackPressed) {
@@ -39,35 +43,62 @@ export class PlayerCombatSystem extends System {
       if (movement.isEngulfed) {
         movement.engulfEscapeCount++;
         audio.playEnemyHit();
-        this.shakeCamera(context, 80);
+        shakeCamera(context, 80);
         return;
+      }
+
+      // Check if we have a skill equipped and cooldown is ready
+      const selectedSkill: SkillSlot | null = skill.getSelectedSkill();
+      if (selectedSkill !== null && skill.skillCooldown <= 0) {
+        combat.isAttacking = true;
+        const cooldown: number = SkillSystem.getSkillCooldown(selectedSkill.family, selectedSkill.tier);
+        combat.attackTimer = cooldown;
+        skill.skillCooldown = cooldown;
+      } else if (selectedSkill === null) {
+        // Basic bump attack (no skill equipped)
+        combat.isAttacking = true;
+        combat.attackTimer = ATTACK_COOLDOWN;
       }
     }
 
     // Process active attack
     if (combat.isAttacking) {
-      this.performAttack(entities, pos, movement, combat, transform, audio, context);
+      combat.attackTimer -= context.dt;
+      if (combat.attackTimer <= 0) {
+        combat.isAttacking = false;
+      } else {
+        this.performSkillAttack(entities, pos, movement, combat, playerLevel, skill, humanForm, audio, context);
+      }
     }
   }
 
-  private performAttack(
+  private performSkillAttack(
     entities: Entity[],
     pos: PositionComponent,
     movement: MovementComponent,
     combat: CombatComponent,
-    transform: TransformComponent,
-    audio: AudioManager,
+    playerLevel: LevelComponent,
+    skill: SkillComponent,
+    humanForm: HumanFormComponent | null,
+    audio: IAudioService,
     context: SystemContext
   ): void {
-    const formStats: number[] = WEAPON_FORM_STATS[transform.currentWeaponForm];
-    const formRange: number = formStats[0];
-    const formWidth: number = formStats[1];
+    const selectedSkill: SkillSlot | null = skill.getSelectedSkill();
+    let attackRange: number = ATTACK_RANGE;
+    let attackWidth: number = ATTACK_WIDTH;
+    let damage: number = 1;
 
-    const attackX: number = pos.x + Math.cos(movement.facing) * formRange;
-    const attackY: number = pos.y + Math.sin(movement.facing) * formRange;
+    if (selectedSkill !== null) {
+      attackRange = SkillSystem.getSkillRange(selectedSkill.family, selectedSkill.tier);
+      damage = SkillSystem.getSkillDamage(selectedSkill.family, selectedSkill.tier, playerLevel.level);
+      attackWidth = SkillSystem.getSkillAoeRadius(selectedSkill.family, selectedSkill.tier);
+      if (attackWidth === 0) attackWidth = 20; // Single target skills have small hitbox
+    }
 
-    // Query spatial grid for nearby entities
-    const nearby: Entity[] = context.world.getSpatialGrid().queryRadius(attackX, attackY, formWidth + 60);
+    const attackX: number = pos.x + Math.cos(movement.facing) * attackRange;
+    const attackY: number = pos.y + Math.sin(movement.facing) * attackRange;
+
+    const nearby: Entity[] = context.world.getSpatialGrid().queryRadius(attackX, attackY, attackWidth + 60);
 
     for (let i: number = 0; i < nearby.length; i++) {
       const e: Entity = nearby[i];
@@ -83,17 +114,17 @@ export class PlayerCombatSystem extends System {
         const dx: number = enemyPos.x - attackX;
         const dy: number = enemyPos.y - attackY;
         const dist: number = Math.sqrt(dx * dx + dy * dy);
-        if (dist < formWidth + ai.size) {
-          enemyHealth.damage(1);
+        if (dist < attackWidth + ai.size) {
+          enemyHealth.damage(damage);
           ai.hitFlash = 150;
           const knockAngle: number = Math.atan2(dy, dx);
           enemyVel.vx = Math.cos(knockAngle) * SLIME_KNOCKBACK;
           enemyVel.vy = Math.sin(knockAngle) * SLIME_KNOCKBACK;
-          this.shakeCamera(context, 100);
+          shakeCamera(context, 100);
           audio.playEnemyHit();
 
           if (enemyHealth.isDead()) {
-            this.onEnemyDeath(e, enemyPos, ai, transform, audio, context);
+            this.onEnemyDeath(e, enemyPos, ai, humanForm, audio, context);
           }
         }
       } else if (e.tag === "boss") {
@@ -104,9 +135,9 @@ export class PlayerCombatSystem extends System {
         const dx: number = bossPos.x - attackX;
         const dy: number = bossPos.y - attackY;
         const dist: number = Math.sqrt(dx * dx + dy * dy);
-        if (dist < formWidth + 60) {
-          bossHealth.damage(1);
-          this.shakeCamera(context, 120);
+        if (dist < attackWidth + 60) {
+          bossHealth.damage(damage);
+          shakeCamera(context, 120);
           audio.playEnemyHit();
         }
       }
@@ -117,17 +148,17 @@ export class PlayerCombatSystem extends System {
     enemy: Entity,
     enemyPos: PositionComponent,
     ai: EnemyAIComponent,
-    transform: TransformComponent,
-    audio: AudioManager,
+    humanForm: HumanFormComponent | null,
+    audio: IAudioService,
     context: SystemContext
   ): void {
     enemy.active = false;
 
-    // Transform energy gain
-    if (transform.isTransformed) {
-      transform.transformEnergy += TRANSFORM_ENERGY_KILL_SLIME;
-      if (transform.transformEnergy > transform.transformMaxEnergy) {
-        transform.transformEnergy = transform.transformMaxEnergy;
+    // Human form energy gain
+    if (humanForm !== null && humanForm.isHumanForm) {
+      humanForm.formEnergy += TRANSFORM_ENERGY_KILL_SLIME;
+      if (humanForm.formEnergy > humanForm.formMaxEnergy) {
+        humanForm.formEnergy = humanForm.formMaxEnergy;
       }
     }
 
@@ -144,14 +175,6 @@ export class PlayerCombatSystem extends System {
         1
       );
       context.world.addEntity(orb);
-    }
-  }
-
-  private shakeCamera(context: SystemContext, duration: number): void {
-    const cameraEntity: Entity | null = context.world.findEntityByTag("camera");
-    if (cameraEntity !== null) {
-      const cam: CameraComponent = cameraEntity.getComponent<CameraComponent>("camera")!;
-      cam.shakeTimer = duration;
     }
   }
 }
