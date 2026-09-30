@@ -34,6 +34,7 @@ import { EnemyRenderer } from './renderers/EnemyRenderer';
 import { BossRenderer } from './renderers/BossRenderer';
 import { PlayerRenderer } from './renderers/PlayerRenderer';
 import { UIRenderer } from './renderers/UIRenderer';
+import { SpriteManager } from './sprites/SpriteManager';
 
 export class GameScene extends Scene {
   private world: World;
@@ -47,6 +48,7 @@ export class GameScene extends Scene {
   private bossRenderer: BossRenderer = new BossRenderer();
   private playerRenderer: PlayerRenderer = new PlayerRenderer();
   private uiRenderer: UIRenderer = new UIRenderer();
+  private spriteManager: SpriteManager = new SpriteManager();
 
   private playerGender: number = 0;
 
@@ -103,19 +105,21 @@ export class GameScene extends Scene {
     this.world.cameraY = startY - 780 / 2;
   }
 
+  async initSprites(): Promise<void> {
+    await this.spriteManager.generateAll();
+  }
+
+  getSpriteManager(): SpriteManager {
+    return this.spriteManager;
+  }
+
   update(baseCtx: BaseContext, dt: number): void {
     const sysCtx: SystemContext = {
       world: this.world,
-      ctx: baseCtx.ctx,
-      minimapCtx: baseCtx.minimapCtx,
       screenW: baseCtx.screenW,
       screenH: baseCtx.screenH,
-      cameraX: this.world.cameraX,
-      cameraY: this.world.cameraY,
       input: baseCtx.input,
-      resources: baseCtx.resources,
       audio: this.audio as Object,
-      settings: this.settings as Object,
       frameCount: baseCtx.frameCount,
       dt: dt
     };

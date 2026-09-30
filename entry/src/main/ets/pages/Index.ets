@@ -3,17 +3,11 @@ import { common } from '@kit.AbilityKit';
 import { Engine, Entity, HealthComponent, SystemContext, World } from '@qiuyu/engine';
 import { GameScene } from '../game/GameScene';
 import { AudioManager } from '../game/AudioManager';
-import { SaveManager } from '../game/SaveManager';
-import { SaveLoadSystem } from '../game/systems/SaveLoadSystem';
 import {
   PLAYER_MAX_HP, JOYSTICK_RADIUS, MINIMAP_SIZE,
-  COLOR_HP_FULL, COLOR_HP_EMPTY,
-  COLOR_JOY_BASE, COLOR_JOY_KNOB,
-  COLOR_BTN_JUMP, COLOR_BTN_ATTACK, COLOR_BTN_DASH, COLOR_TOOL_BTN,
-  COLOR_XP_ORB, DASH_COOLDOWN, GenderType, WeaponForm,
-  EvolutionBranch, FORM_UNLOCK_COST,
+  DASH_COOLDOWN, GenderType, WeaponForm,
   TransformForm, TRANSFORM_MAX_ENERGY,
-  COLOR_TRANSFORM_BTN_LOCKED, COLOR_TRANSFORM_BTN_READY, COLOR_TRANSFORM_ENERGY_BG,
+  COLOR_TRANSFORM_BTN_LOCKED, COLOR_TRANSFORM_BTN_READY,
   COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_IRON_GOLD,
   GameState, LEVEL_UP_XP, SaveData,
 } from '../game/GameConstants';
@@ -24,8 +18,14 @@ import { InventoryComponent } from '../game/components/InventoryComponent';
 import { TransformComponent } from '../game/components/TransformComponent';
 import { EvolutionComponent } from '../game/components/EvolutionComponent';
 import { MovementComponent } from '../game/components/MovementComponent';
-import { CombatComponent } from '../game/components/CombatComponent';
 import { GameStateComponent } from '../game/components/GameStateComponent';
+
+// Overlay components
+import { SettingsOverlay } from './overlays/SettingsOverlay';
+import { EvolutionOverlay } from './overlays/EvolutionOverlay';
+import { PauseMenuOverlay } from './overlays/PauseMenuOverlay';
+import { GameOverOverlay } from './overlays/GameOverOverlay';
+import { SaveIndicator } from './overlays/SaveIndicator';
 
 @Entry
 @Component
@@ -158,11 +158,38 @@ struct Index {
       }
 
       if (this.showSettings) {
-        this.SettingsOverlay()
+        SettingsOverlay({
+          soundEnabled: this.soundEnabled,
+          effectsEnabled: this.effectsEnabled,
+          username: this.username,
+          engine: this.engine,
+          audio: this.audio,
+          settings: this.settings,
+          onClose: () => { this.showSettings = false; }
+        })
       }
 
       if (this.showEvolution) {
-        this.EvolutionOverlay()
+        EvolutionOverlay({
+          branchNames: this.branchNames,
+          evoBranch: this.evoBranch,
+          evoLevel: this.evoLevel,
+          evoOreHave: this.evoOreHave,
+          evoOreNeed: this.evoOreNeed,
+          evoNormalHave: this.evoNormalHave,
+          evoNormalNeed: this.evoNormalNeed,
+          evoRareHave: this.evoRareHave,
+          evoRareNeed: this.evoRareNeed,
+          evoFormCore: this.evoFormCore,
+          evoMaxLevel: this.evoMaxLevel,
+          lockedForms: this.lockedForms,
+          currentWeaponForm: this.currentWeaponForm,
+          gameScene: this.gameScene,
+          weaponFormNames: this.weaponFormNames,
+          onClose: () => { this.showEvolution = false; },
+          onRefreshState: () => { this.refreshEvoState(); },
+          onSelectBranch: (index: number) => { this.evoBranch = index; }
+        })
       }
 
       this.TransformButtonView()
@@ -171,15 +198,25 @@ struct Index {
       this.TransformUnlockNotification()
 
       if (this.showPauseMenu) {
-        this.PauseMenuOverlay()
+        PauseMenuOverlay({
+          onResume: () => { this.resumeGame(); },
+          onClosed: () => { this.showPauseMenu = false; },
+          onLoadGame: (data: SaveData) => { this.handleLoadGame(data); }
+        })
       }
 
       if (this.showGameOver) {
-        this.GameOverOverlay()
+        GameOverOverlay({
+          deathLevel: this.deathLevel,
+          deathChunks: this.deathChunks,
+          onRestart: () => { this.restartGame(); this.showGameOver = false; },
+          onLoadGame: (data: SaveData) => { this.handleLoadGame(data); this.showGameOver = false; },
+          onQuit: () => { this.quitGame(); }
+        })
       }
 
       if (this.showSaveIndicator) {
-        this.SaveIndicator()
+        SaveIndicator({ screenW: this.screenW })
       }
     }
     .width('100%')
@@ -619,463 +656,6 @@ struct Index {
     .position({ x: this.screenW * 0.05, y: this.screenH * 0.43 })
   }
 
-  @Builder
-  SettingsOverlay() {
-    Stack() {
-      Column() {
-        Row() {
-          Text('✦ 设置 ✦')
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#fbbf24')
-
-          Blank()
-
-          Stack() {
-            Column()
-              .width(26)
-              .height(26)
-              .backgroundColor('#2d1b4e')
-              .borderRadius(2)
-              .border({ width: 2, color: '#7c3aed' })
-
-            Text('✕')
-              .fontSize(13)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#c4b5fd')
-          }
-          .width(26)
-          .height(26)
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.showSettings = false;
-            }
-          })
-        }
-        .width('100%')
-        .padding({ bottom: 10 })
-        .border({ width: { bottom: 2 }, color: '#334155' })
-
-        Column() {
-          Row() {
-            Text('♪ 音效')
-              .fontSize(13)
-              .fontColor('#e2e8f0')
-
-            Blank()
-
-            Stack() {
-              Row()
-                .width(40)
-                .height(20)
-                .backgroundColor(this.soundEnabled ? '#1e3a5f' : '#1a1a2e')
-                .borderRadius(10)
-                .border({ width: 2, color: this.soundEnabled ? '#3b82f6' : '#475569' })
-
-              Column()
-                .width(16)
-                .height(16)
-                .backgroundColor(this.soundEnabled ? '#3b82f6' : '#475569')
-                .borderRadius(8)
-                .translate({ x: this.soundEnabled ? 10 : -10 })
-            }
-            .width(40)
-            .height(20)
-            .onTouch((event: TouchEvent) => {
-              if (event.type === TouchType.Down) {
-                this.soundEnabled = !this.soundEnabled;
-                this.settings.soundEnabled = this.soundEnabled;
-                this.audio.setSettings(this.settings);
-              }
-            })
-          }
-          .width('100%')
-          .padding({ top: 10, bottom: 10 })
-
-          Divider().color('#334155').strokeWidth(1)
-
-          Row() {
-            Text('✧ 特效')
-              .fontSize(13)
-              .fontColor('#e2e8f0')
-
-            Blank()
-
-            Stack() {
-              Row()
-                .width(40)
-                .height(20)
-                .backgroundColor(this.effectsEnabled ? '#1e3a5f' : '#1a1a2e')
-                .borderRadius(10)
-                .border({ width: 2, color: this.effectsEnabled ? '#3b82f6' : '#475569' })
-
-              Column()
-                .width(16)
-                .height(16)
-                .backgroundColor(this.effectsEnabled ? '#3b82f6' : '#475569')
-                .borderRadius(8)
-                .translate({ x: this.effectsEnabled ? 10 : -10 })
-            }
-            .width(40)
-            .height(20)
-            .onTouch((event: TouchEvent) => {
-              if (event.type === TouchType.Down) {
-                this.effectsEnabled = !this.effectsEnabled;
-                this.settings.effectsEnabled = this.effectsEnabled;
-                this.audio.setSettings(this.settings);
-              }
-            })
-          }
-          .width('100%')
-          .padding({ top: 10, bottom: 10 })
-        }
-        .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-        .backgroundColor('#0f0f23e0')
-        .borderRadius(4)
-        .border({ width: 2, color: '#334155' })
-
-        Column() {
-          Row() {
-            Text('角色')
-              .fontSize(11)
-              .fontColor('#64748b')
-
-            Blank()
-
-            Text(this.username)
-              .fontSize(13)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#fbbf24')
-          }
-          .width('100%')
-          .padding({ top: 8, bottom: 8 })
-        }
-        .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-        .backgroundColor('#0f0f23e0')
-        .borderRadius(4)
-        .border({ width: 2, color: '#334155' })
-        .margin({ top: 8 })
-
-        Stack() {
-          Column()
-            .width('100%')
-            .height(36)
-            .backgroundColor('#7f1d1d')
-            .borderRadius(4)
-            .border({ width: 2, color: '#dc2626' })
-
-          Text('退出登录')
-            .fontSize(13)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#fca5a5')
-        }
-        .width('100%')
-        .height(36)
-        .margin({ top: 14 })
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            this.engine.stop();
-            this.audio.destroy();
-            router.replaceUrl({ url: 'pages/LoginPage' });
-          }
-        })
-
-        Blank()
-
-        Column() {
-          Text('ICP备案号: 示例ICP备xxxxxxxx号')
-            .fontSize(9)
-            .fontColor('#374151')
-          Text('v1.0.0')
-            .fontSize(8)
-            .fontColor('#1e293b')
-            .margin({ top: 2 })
-        }
-        .alignItems(HorizontalAlign.Center)
-        .margin({ bottom: 6 })
-      }
-      .width('80%')
-      .padding(16)
-      .backgroundColor('#0a0a15f8')
-      .borderRadius(6)
-      .border({ width: 3, color: '#475569' })
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor('#000000c0')
-  }
-
-  @Builder
-  EvolutionOverlay() {
-    Stack() {
-      Column() {
-        Row() {
-          Text('✦ 武器进化 ✦')
-            .fontSize(15)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#c4b5fd')
-
-          Blank()
-
-          Stack() {
-            Column()
-              .width(26)
-              .height(26)
-              .backgroundColor('#2d1b4e')
-              .borderRadius(2)
-              .border({ width: 2, color: '#7c3aed' })
-
-            Text('✕')
-              .fontSize(13)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#c4b5fd')
-          }
-          .width(26)
-          .height(26)
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.showEvolution = false;
-            }
-          })
-        }
-        .width('100%')
-        .padding({ bottom: 8 })
-        .border({ width: { bottom: 2 }, color: '#4c1d95' })
-
-        Row() {
-          Text('形态')
-            .fontSize(11)
-            .fontColor('#64748b')
-          Text(this.getWeaponFormName(this.currentWeaponForm))
-            .fontSize(12)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#fbbf24')
-            .margin({ left: 6 })
-        }
-        .width('100%')
-        .padding({ top: 8, bottom: 6 })
-
-        Row() {
-          ForEach(this.branchNames, (name: string, index: number) => {
-            Stack() {
-              Text(name)
-                .fontSize(9)
-                .fontWeight(this.evoBranch === index ? FontWeight.Bold : FontWeight.Normal)
-                .fontColor(this.evoBranch === index ? '#ffffff' : '#64748b')
-            }
-            .padding({ left: 8, right: 8, top: 5, bottom: 5 })
-            .backgroundColor(this.evoBranch === index ? '#4c1d95' : '#0f0f23')
-            .borderRadius(3)
-            .border({ width: 2, color: this.evoBranch === index ? this.getBranchColor(index) : '#1e293b' })
-            .margin({ left: index > 0 ? 4 : 0 })
-            .onTouch((event: TouchEvent) => {
-              if (event.type === TouchType.Down) {
-                this.evoBranch = index;
-                const player: Entity | null = this.getPlayerEntity();
-                if (player !== null) {
-                  this.evoOreHave = this.gameScene!.getEvolutionSystem().getEvoOreHaveForBranch(player, index);
-                }
-              }
-            })
-          })
-        }
-        .width('100%')
-        .justifyContent(FlexAlign.Center)
-        .padding({ bottom: 8 })
-
-        Row() {
-          Text('进化等级')
-            .fontSize(11)
-            .fontColor('#94a3b8')
-          Blank()
-          Row() {
-            ForEach([0, 1, 2], (i: number) => {
-              Text(i < this.evoLevel ? '★' : '☆')
-                .fontSize(14)
-                .fontColor(i < this.evoLevel ? this.getBranchColor(this.evoBranch) : '#374151')
-                .margin({ left: i > 0 ? 2 : 0 })
-            })
-          }
-        }
-        .width('100%')
-        .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-        .backgroundColor('#0f0f23e0')
-        .borderRadius(4)
-        .border({ width: 2, color: '#334155' })
-
-        if (!this.evoMaxLevel) {
-          Column() {
-            Row() {
-              Text('◆ 矿石')
-                .fontSize(10)
-                .fontColor('#00ced1')
-              Blank()
-              Text(this.evoOreHave + ' / ' + this.evoOreNeed)
-                .fontSize(11)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.evoOreHave >= this.evoOreNeed ? '#22c55e' : '#ef4444')
-            }
-            .width('100%')
-            .padding({ top: 5, bottom: 5 })
-
-            Divider().color('#334155').strokeWidth(1)
-
-            Row() {
-              Text('● 普通核心')
-                .fontSize(10)
-                .fontColor('#a78bfa')
-              Blank()
-              Text(this.evoNormalHave + ' / ' + this.evoNormalNeed)
-                .fontSize(11)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.evoNormalHave >= this.evoNormalNeed ? '#22c55e' : '#ef4444')
-            }
-            .width('100%')
-            .padding({ top: 5, bottom: 5 })
-
-            Divider().color('#334155').strokeWidth(1)
-
-            Row() {
-              Text('★ 稀有核心')
-                .fontSize(10)
-                .fontColor('#fbbf24')
-              Blank()
-              Text(this.evoRareHave + ' / ' + this.evoRareNeed)
-                .fontSize(11)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.evoRareHave >= this.evoRareNeed ? '#22c55e' : '#ef4444')
-            }
-            .width('100%')
-            .padding({ top: 5, bottom: 5 })
-          }
-          .padding({ left: 12, right: 12, top: 4, bottom: 4 })
-          .backgroundColor('#0f0f23e0')
-          .borderRadius(4)
-          .border({ width: 2, color: '#334155' })
-          .margin({ top: 8 })
-
-          Stack() {
-            Column()
-              .width('100%')
-              .height(36)
-              .backgroundColor(this.canEvolveNow() ? '#4c1d95' : '#1a1a2e')
-              .borderRadius(4)
-              .border({ width: 2, color: this.canEvolveNow() ? '#7c3aed' : '#334155' })
-
-            Text('✦ 进化 ✦')
-              .fontSize(14)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(this.canEvolveNow() ? '#e9d5ff' : '#475569')
-          }
-          .width('100%')
-          .height(36)
-          .margin({ top: 10 })
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down && this.canEvolveNow()) {
-              const player: Entity | null = this.getPlayerEntity();
-              if (player !== null) {
-                if (this.gameScene!.getEvolutionSystem().tryEvolveWeapon(player)) {
-                  this.refreshEvoState();
-                }
-              }
-            }
-          })
-        } else {
-          Row() {
-            Text('★ 已达最高等级 ★')
-              .fontSize(12)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#fbbf24')
-          }
-          .width('100%')
-          .justifyContent(FlexAlign.Center)
-          .padding({ top: 12, bottom: 12 })
-          .backgroundColor('#0f0f23e0')
-          .borderRadius(4)
-          .border({ width: 2, color: '#fbbf2460' })
-          .margin({ top: 8 })
-        }
-
-        Column() {
-          Row() {
-            Text('解锁形态')
-              .fontSize(12)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#e2e8f0')
-            Blank()
-            Text('◈ ' + this.evoFormCore)
-              .fontSize(10)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#f472b6')
-          }
-          .width('100%')
-          .padding({ bottom: 6 })
-
-          ForEach(this.lockedForms, (formIndex: number) => {
-            Row() {
-              Text(this.getWeaponFormName(formIndex as WeaponForm))
-                .fontSize(10)
-                .fontColor('#94a3b8')
-              Blank()
-              Stack() {
-                Text('解锁 (1核心)')
-                  .fontSize(9)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor(this.evoFormCore >= FORM_UNLOCK_COST ? '#ffffff' : '#64748b')
-              }
-              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-              .backgroundColor(this.evoFormCore >= FORM_UNLOCK_COST ? '#4c1d95' : '#0f0f23')
-              .borderRadius(3)
-              .border({ width: 2, color: this.evoFormCore >= FORM_UNLOCK_COST ? '#7c3aed' : '#1e293b' })
-              .onTouch((event: TouchEvent) => {
-                if (event.type === TouchType.Down && this.evoFormCore >= FORM_UNLOCK_COST) {
-                  const player: Entity | null = this.getPlayerEntity();
-                  if (player !== null) {
-                    this.gameScene!.getEvolutionSystem().unlockWeaponForm(player, formIndex as WeaponForm);
-                    this.refreshEvoState();
-                  }
-                }
-              })
-            }
-            .width('100%')
-            .padding({ top: 4, bottom: 4 })
-          })
-        }
-        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-        .backgroundColor('#0f0f23e0')
-        .borderRadius(4)
-        .border({ width: 2, color: '#334155' })
-        .margin({ top: 8 })
-
-        Blank()
-      }
-      .width('85%')
-      .padding(14)
-      .backgroundColor('#0a0a15f8')
-      .borderRadius(6)
-      .border({ width: 3, color: '#4c1d95' })
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor('#000000c0')
-  }
-
-  private getBranchColor(branch: number): string {
-    if (branch === EvolutionBranch.CRYSTAL) return '#00ced1';
-    if (branch === EvolutionBranch.FLAME) return '#ff4500';
-    if (branch === EvolutionBranch.SHADOW) return '#6b21a8';
-    if (branch === EvolutionBranch.TOXIN) return '#32cd32';
-    if (branch === EvolutionBranch.TIDE) return '#4169e1';
-    return '#ffffff';
-  }
-
-  private canEvolveNow(): boolean {
-    if (this.evoMaxLevel) return false;
-    return this.evoOreHave >= this.evoOreNeed &&
-      this.evoNormalHave >= this.evoNormalNeed &&
-      this.evoRareHave >= this.evoRareNeed;
-  }
-
   private refreshEvoState(): void {
     const player: Entity | null = this.getPlayerEntity();
     if (player === null) return;
@@ -1122,6 +702,11 @@ struct Index {
       this.gameScene.setPlayerGender(this.playerGender);
       this.engine.sceneManager.pushScene(this.gameScene);
       this.engine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH);
+
+      // Start async sprite generation (non-blocking)
+      this.gameScene.initSprites().then(() => {
+        console.log('[Index] Sprite generation complete');
+      });
 
       console.log('[Index] Engine initialized with GameScene, screenW:', this.screenW, 'screenH:', this.screenH);
       this.startStatusMonitor();
@@ -1456,197 +1041,6 @@ struct Index {
     return COLOR_TRANSFORM_BTN_READY;
   }
 
-  @Builder
-  PauseMenuOverlay() {
-    Stack() {
-      Column() {
-        // Dimmed background
-      }
-      .width('100%')
-      .height('100%')
-      .backgroundColor('rgba(0,0,0,0.7)')
-      .onTouch((event: TouchEvent) => {
-        if (event.type === TouchType.Down) {
-          // Consume touch
-        }
-      })
-
-      Column() {
-        Text('游戏暂停')
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#fbbf24')
-          .margin({ bottom: 20 })
-
-        Button('继续游戏')
-          .width(180)
-          .height(44)
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
-          .backgroundColor('#22c55e')
-          .borderRadius(8)
-          .margin({ bottom: 12 })
-          .onClick(() => {
-            this.showPauseMenu = false;
-            this.resumeGame();
-          })
-
-        Button('读取存档')
-          .width(180)
-          .height(44)
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
-          .backgroundColor('#3b82f6')
-          .borderRadius(8)
-          .margin({ bottom: 12 })
-          .onClick(async () => {
-            const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
-            const data: SaveData | null = await SaveManager.load(ctx);
-            if (data && this.gameScene !== null) {
-              const world: World = this.gameScene.getWorld();
-              const player: Entity | null = world.findEntityByTag("player");
-              if (player !== null) {
-                const saveSystem: SaveLoadSystem = this.gameScene.getSaveLoadSystem();
-                const sysCtx: SystemContext = this.buildSystemContext();
-                saveSystem.applySaveData(player, data, sysCtx);
-                this.showPauseMenu = false;
-                this.resumeGame();
-              }
-            }
-          })
-
-        Button('退出游戏')
-          .width(180)
-          .height(44)
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
-          .backgroundColor('#ef4444')
-          .borderRadius(8)
-          .onClick(() => {
-            this.quitGame();
-          })
-      }
-      .width(240)
-      .padding(24)
-      .backgroundColor('#1a1a2e')
-      .borderRadius(12)
-      .border({ width: 3, color: '#f59e0b' })
-    }
-    .width('100%')
-    .height('100%')
-  }
-
-  @Builder
-  GameOverOverlay() {
-    Stack() {
-      Column() {
-        // Red dimmed background
-      }
-      .width('100%')
-      .height('100%')
-      .backgroundColor('rgba(80,0,0,0.75)')
-      .onTouch((event: TouchEvent) => {
-        if (event.type === TouchType.Down) {
-          // Consume touch
-        }
-      })
-
-      Column() {
-        Text('你死了')
-          .fontSize(28)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ef4444')
-          .margin({ bottom: 16 })
-
-        Text('等级: ' + this.deathLevel)
-          .fontSize(14)
-          .fontColor('#94a3b8')
-          .margin({ bottom: 4 })
-
-        Text('探索: ' + this.deathChunks + ' chunks')
-          .fontSize(14)
-          .fontColor('#94a3b8')
-          .margin({ bottom: 20 })
-
-        Button('重新开始')
-          .width(180)
-          .height(44)
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
-          .backgroundColor('#22c55e')
-          .borderRadius(8)
-          .margin({ bottom: 12 })
-          .onClick(async () => {
-            const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
-            await SaveManager.deleteSave(ctx);
-            this.showGameOver = false;
-            this.restartGame();
-          })
-
-        Button('读取存档')
-          .width(180)
-          .height(44)
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
-          .backgroundColor('#3b82f6')
-          .borderRadius(8)
-          .margin({ bottom: 12 })
-          .onClick(async () => {
-            const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
-            const data: SaveData | null = await SaveManager.load(ctx);
-            if (data && this.gameScene !== null) {
-              const world: World = this.gameScene.getWorld();
-              const player: Entity | null = world.findEntityByTag("player");
-              if (player !== null) {
-                const saveSystem: SaveLoadSystem = this.gameScene.getSaveLoadSystem();
-                const sysCtx: SystemContext = this.buildSystemContext();
-                saveSystem.applySaveData(player, data, sysCtx);
-                this.showGameOver = false;
-                this.resumeGame();
-              }
-            }
-          })
-
-        Button('返回主页')
-          .width(180)
-          .height(44)
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
-          .backgroundColor('#6b7280')
-          .borderRadius(8)
-          .onClick(() => {
-            this.quitGame();
-          })
-      }
-      .width(260)
-      .padding(24)
-      .backgroundColor('#1a1a2e')
-      .borderRadius(12)
-      .border({ width: 3, color: '#ef4444' })
-    }
-    .width('100%')
-    .height('100%')
-  }
-
-  @Builder
-  SaveIndicator() {
-    Text('已保存')
-      .fontSize(12)
-      .fontWeight(FontWeight.Bold)
-      .fontColor('#22c55e')
-      .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-      .backgroundColor('rgba(0,0,0,0.7)')
-      .borderRadius(6)
-      .position({ x: this.screenW - 80, y: 50 })
-      .opacity(0.9)
-  }
-
   private getPlayerEntity(): Entity | null {
     if (this.gameScene === null) return null;
     return this.gameScene.getWorld().findEntityByTag("player");
@@ -1686,16 +1080,10 @@ struct Index {
     const world: World = this.gameScene.getWorld();
     return {
       world: world,
-      ctx: this.gameCtx,
-      minimapCtx: this.minimapCtx,
       screenW: this.screenW,
       screenH: this.screenH,
-      cameraX: world.cameraX,
-      cameraY: world.cameraY,
       input: this.engine.input,
-      resources: this.engine.resources,
       audio: this.audio as Object,
-      settings: this.settings as Object,
       frameCount: this.engine.getFrameCount(),
       dt: 0
     };
@@ -1751,5 +1139,14 @@ struct Index {
     this.transformEnergy = TRANSFORM_MAX_ENERGY;
     this.transformCooldown = 0;
     this.currentWeaponForm = WeaponForm.BLADE;
+  }
+
+  private handleLoadGame(data: SaveData): void {
+    const player: Entity | null = this.getPlayerEntity();
+    if (player === null || this.gameScene === null) return;
+
+    const sysCtx: SystemContext = this.buildSystemContext();
+    this.gameScene.getSaveLoadSystem().applySaveData(player, data, sysCtx);
+    this.resumeGame();
   }
 }
