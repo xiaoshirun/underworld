@@ -5,7 +5,10 @@ import { TransformComponent } from '../components/TransformComponent';
 import { InventoryComponent } from '../components/InventoryComponent';
 import { XpComponent } from '../components/XpComponent';
 import { EvolutionComponent } from '../components/EvolutionComponent';
-import { SAVE_VERSION, AUTO_SAVE_INTERVAL, TILE_SIZE, SaveData, Inventory } from '../GameConstants';
+import { LevelComponent } from '../components/LevelComponent';
+import { SkillComponent } from '../components/SkillComponent';
+import { HumanFormComponent } from '../components/HumanFormComponent';
+import { SAVE_VERSION, AUTO_SAVE_INTERVAL, TILE_SIZE, SaveData, Inventory, SkillSlot, PassiveSlot } from '../GameConstants';
 import { SaveManager } from '../SaveManager';
 import { common } from '@kit.AbilityKit';
 
@@ -28,6 +31,9 @@ export class SaveLoadSystem extends System {
     const inventory: InventoryComponent = player.getComponent<InventoryComponent>("inventory")!;
     const xp: XpComponent = player.getComponent<XpComponent>("xp")!;
     const evo: EvolutionComponent = player.getComponent<EvolutionComponent>("evolution")!;
+    const level: LevelComponent | null = player.getComponent<LevelComponent>("level");
+    const skill: SkillComponent | null = player.getComponent<SkillComponent>("skill");
+    const humanForm: HumanFormComponent | null = player.getComponent<HumanFormComponent>("humanForm");
 
     const inv: Inventory = {
       crystalOre: inventory.crystalOre,
@@ -57,8 +63,8 @@ export class SaveLoadSystem extends System {
       playerX: pos.x,
       playerY: pos.y,
       hp: health.current,
-      xp: xp.xp,
-      level: xp.level,
+      xp: level !== null ? level.xp : xp.xp,
+      level: level !== null ? level.level : xp.level,
       gender: 0,
       currentWeaponForm: transform.currentWeaponForm,
       unlockedForms: evo.unlockedForms.slice(),
@@ -67,10 +73,20 @@ export class SaveLoadSystem extends System {
       inventory: inv,
       isTransformed: transform.isTransformed,
       transformForm: transform.transformForm,
-      transformEnergy: transform.transformEnergy,
-      transformMaxEnergy: transform.transformMaxEnergy,
+      transformEnergy: humanForm !== null ? humanForm.formEnergy : transform.transformEnergy,
+      transformMaxEnergy: humanForm !== null ? humanForm.formMaxEnergy : transform.transformMaxEnergy,
       unlockedTransforms: [],
-      exploredChunks: exploredChunks
+      exploredChunks: exploredChunks,
+      skills: skill !== null ? skill.activeSkills : [],
+      passives: skill !== null ? skill.passiveSkills : [],
+      activeSlotCount: skill !== null ? skill.activeSlotCount : 1,
+      passiveSlotCount: skill !== null ? skill.passiveSlotCount : 1,
+      selectedActiveIndex: skill !== null ? skill.selectedActiveIndex : 0,
+      humanFormStage: humanForm !== null ? humanForm.humanFormStage : -1,
+      hasHumanMask: humanForm !== null ? humanForm.hasMask : false,
+      maskFragments: humanForm !== null ? humanForm.maskFragments : 0,
+      humanFormEnergy: humanForm !== null ? humanForm.formEnergy : 0,
+      unlockedHumanForms: humanForm !== null ? [humanForm.humanFormStage] : [],
     };
     return saveData;
   }
@@ -85,6 +101,16 @@ export class SaveLoadSystem extends System {
     const inventory: InventoryComponent = player.getComponent<InventoryComponent>("inventory")!;
     const xp: XpComponent = player.getComponent<XpComponent>("xp")!;
     const evo: EvolutionComponent = player.getComponent<EvolutionComponent>("evolution")!;
+    const level: LevelComponent | null = player.getComponent<LevelComponent>("level");
+    const skill: SkillComponent | null = player.getComponent<SkillComponent>("skill");
+    const humanForm: HumanFormComponent | null = player.getComponent<HumanFormComponent>("humanForm");
+
+    // Migration: old saves may not have new fields
+    if (data.skills === undefined) data.skills = [];
+    if (data.passives === undefined) data.passives = [];
+    if (data.humanFormStage === undefined) data.humanFormStage = -1;
+    if (data.hasHumanMask === undefined) data.hasHumanMask = false;
+    if (data.maskFragments === undefined) data.maskFragments = 0;
 
     // Write persistent state to components
     pos.x = data.playerX;
@@ -96,6 +122,29 @@ export class SaveLoadSystem extends System {
     evo.unlockedForms = data.unlockedForms.slice();
     evo.evolutionBranch = data.evolutionBranch;
     evo.evolutionLevel = data.evolutionLevel;
+
+    // Restore new level component
+    if (level !== null) {
+      level.level = data.level;
+      level.xp = data.xp;
+    }
+
+    // Restore new skill component
+    if (skill !== null) {
+      skill.activeSkills = data.skills;
+      skill.passiveSkills = data.passives;
+      skill.activeSlotCount = data.activeSlotCount || 1;
+      skill.passiveSlotCount = data.passiveSlotCount || 1;
+      skill.selectedActiveIndex = data.selectedActiveIndex || 0;
+    }
+
+    // Restore new human form component
+    if (humanForm !== null) {
+      humanForm.humanFormStage = data.humanFormStage;
+      humanForm.hasMask = data.hasHumanMask;
+      humanForm.maskFragments = data.maskFragments;
+      humanForm.formEnergy = data.humanFormEnergy || 0;
+    }
 
     inventory.crystalOre = data.inventory.crystalOre;
     inventory.mushroomOre = data.inventory.mushroomOre;
