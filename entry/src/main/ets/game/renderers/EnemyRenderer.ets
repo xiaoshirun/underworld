@@ -7,9 +7,11 @@ import {
   COLOR_SLIME_YELLOW, COLOR_SLIME_YELLOW_LIGHT, COLOR_SLIME_GHOST, COLOR_SLIME_GHOST_LIGHT,
   COLOR_SLIME_PUPIL,
   COLOR_XP_ORB, COLOR_XP_GLOW,
+  COLOR_HUMANOID_BEAST, COLOR_HUMANOID_BEAST_GLOW,
   GameSettings,
 } from '../GameConstants';
 import { EnemyAIComponent } from '../components/EnemyAIComponent';
+import { LevelComponent } from '../components/LevelComponent';
 import { XpPickupComponent } from '../components/XpPickupComponent';
 import { SpriteManager } from '../sprites/SpriteManager';
 import { SpriteAtlas } from '../sprites/SpriteAtlas';
@@ -31,6 +33,9 @@ export class EnemyRenderer {
 
   private renderEnemiesProcedural(world: World, c: CanvasRenderingContext2D, offX: number, offY: number, screenW: number, screenH: number, frameCount: number): void {
     const enemies: Entity[] = world.queryWithTag('enemy');
+    const player: Entity | null = world.findEntityByTag("player");
+    const playerLevelComp: LevelComponent | null = player !== null ? player.getComponent<LevelComponent>("level") : null;
+    const playerLevel: number = playerLevelComp !== null ? playerLevelComp.level : 1;
     for (let i: number = 0; i < enemies.length; i++) {
       const entity: Entity = enemies[i];
       if (!entity.active) continue;
@@ -679,6 +684,76 @@ export class EnemyRenderer {
           c.fill();
         }
         c.restore();
+      } else if (ai.enemyType === EnemyType.HUMANOID_BEAST) {
+        const bounce: number = Math.sin(bp) * 2 * sc;
+        c.save();
+        c.translate(cx, cy + bounce);
+        if (!flash) {
+          c.globalAlpha = 0.12 + Math.sin(frameCount * 0.04) * 0.05;
+          c.fillStyle = COLOR_HUMANOID_BEAST_GLOW;
+          c.beginPath();
+          c.ellipse(0, 0, 20 * sc, 22 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 0.2;
+        c.fillStyle = '#000000';
+        c.beginPath();
+        c.ellipse(0, 14 * sc, 10 * sc, 3 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        if (flash) {
+          c.globalAlpha = 0.9;
+          c.fillStyle = '#ffffff';
+          c.beginPath();
+          c.ellipse(0, 0, 12 * sc, 18 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+        } else {
+          c.strokeStyle = '#8b6914';
+          c.lineWidth = 2 * sc;
+          c.globalAlpha = 0.8;
+          c.beginPath();
+          c.ellipse(0, 0, 12 * sc, 18 * sc, 0, 0, Math.PI * 2);
+          c.stroke();
+          c.globalAlpha = 0.9;
+          c.fillStyle = COLOR_HUMANOID_BEAST;
+          c.beginPath();
+          c.ellipse(0, 0, 11 * sc, 17 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+          c.fillStyle = COLOR_HUMANOID_BEAST_GLOW;
+          c.globalAlpha = 0.3;
+          c.beginPath();
+          c.ellipse(-2 * sc, -5 * sc, 5 * sc, 7 * sc, -0.2, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 1.0;
+        c.fillStyle = '#ffffff';
+        c.beginPath();
+        c.ellipse(-3 * sc, -6 * sc, 2.5 * sc, 3 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.ellipse(3 * sc, -6 * sc, 2.5 * sc, 3 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          c.fillStyle = '#1a1a2e';
+          c.beginPath();
+          c.arc(-3 * sc, -5.5 * sc, 1.3 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(3 * sc, -5.5 * sc, 1.3 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.fillStyle = '#ffffff';
+          c.beginPath();
+          c.arc(-3.5 * sc, -6.2 * sc, 0.5 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(2.5 * sc, -6.2 * sc, 0.5 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.strokeStyle = '#8b6914';
+          c.lineWidth = 1 * sc;
+          c.beginPath();
+          c.arc(0, -1 * sc, 3 * sc, 0.2, Math.PI - 0.2);
+          c.stroke();
+        }
+        c.restore();
       }
 
       c.globalAlpha = 1.0;
@@ -701,12 +776,25 @@ export class EnemyRenderer {
         c.fillStyle = '#ef4444';
         c.fillRect(screenX - barW / 2, barY, barW * (health.current / health.max), barH);
       }
+
+      // Level indicator above health bar
+      const levelY: number = screenY - ai.size / 2 - 12;
+      const level: number = ai.level;
+      const levelColor: string = level > playerLevel ? '#ef4444' : (level < playerLevel ? '#22c55e' : '#ffffff');
+      c.globalAlpha = 1.0;
+      c.font = '8px monospace';
+      c.fillStyle = levelColor;
+      c.textAlign = 'center';
+      c.fillText('Lv' + level.toString(), screenX, levelY);
     }
   }
 
   private renderEnemiesSprite(world: World, c: CanvasRenderingContext2D, offX: number, offY: number,
       screenW: number, screenH: number, frameCount: number, sm: SpriteManager): void {
     const enemies: Entity[] = world.queryWithTag('enemy');
+    const player: Entity | null = world.findEntityByTag("player");
+    const playerLevelComp: LevelComponent | null = player !== null ? player.getComponent<LevelComponent>("level") : null;
+    const playerLevel: number = playerLevelComp !== null ? playerLevelComp.level : 1;
     for (let i: number = 0; i < enemies.length; i++) {
       const entity: Entity = enemies[i];
       if (!entity.active) continue;
@@ -720,37 +808,100 @@ export class EnemyRenderer {
       const screenY: number = pos.y + offY;
       if (screenX < -50 || screenX > screenW + 50 || screenY < -50 || screenY > screenH + 50) continue;
 
-      const atlas: SpriteAtlas = sm.getEnemyAtlas(ai.enemyType);
-      const bounceFrame: number = Math.floor(((ai.bouncePhase % (Math.PI * 2)) / (Math.PI * 2)) * 8) % 8;
+      const sc: number = ai.size / 48;
       const flash: boolean = ai.hitFlash > 0;
 
-      let frameIndex: number;
-      if (ai.enemyType === EnemyType.PURPLE_SLIME) {
-        frameIndex = (ai.isEngulfing ? 8 : 0) + bounceFrame;
-      } else if (ai.enemyType === EnemyType.RED_SLIME) {
-        frameIndex = (ai.isCharging ? 8 : 0) + bounceFrame;
-      } else {
-        frameIndex = (flash ? 8 : 0) + bounceFrame;
-      }
-
-      const frame: { sx: number, sy: number } = atlas.getFrame(frameIndex);
-      const sc: number = ai.size / 48;
-      const destW: number = atlas.cellW * sc;
-      const destH: number = atlas.cellH * sc;
-      const destX: number = screenX - destW / 2;
-      const destY: number = screenY - destH / 2;
-
-      c.drawImage(atlas.canvas, frame.sx, frame.sy, atlas.cellW, atlas.cellH,
-                  destX, destY, destW, destH);
-
-      // Flash overlay for PURPLE/RED (their flash frames aren't in atlas)
-      if (flash && (ai.enemyType === EnemyType.PURPLE_SLIME || ai.enemyType === EnemyType.RED_SLIME)) {
-        c.globalAlpha = 0.6;
+      // HUMANOID_BEAST has no sprite atlas — render procedurally
+      if (ai.enemyType === EnemyType.HUMANOID_BEAST) {
+        const bp: number = ai.bouncePhase;
+        const bounce: number = Math.sin(bp) * 2 * sc;
+        c.save();
+        c.translate(screenX, screenY + bounce);
+        if (!flash) {
+          c.globalAlpha = 0.12 + Math.sin(frameCount * 0.04) * 0.05;
+          c.fillStyle = COLOR_HUMANOID_BEAST_GLOW;
+          c.beginPath();
+          c.ellipse(0, 0, 20 * sc, 22 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 0.2;
+        c.fillStyle = '#000000';
+        c.beginPath();
+        c.ellipse(0, 14 * sc, 10 * sc, 3 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        if (flash) {
+          c.globalAlpha = 0.9;
+          c.fillStyle = '#ffffff';
+          c.beginPath();
+          c.ellipse(0, 0, 12 * sc, 18 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+        } else {
+          c.strokeStyle = '#8b6914';
+          c.lineWidth = 2 * sc;
+          c.globalAlpha = 0.8;
+          c.beginPath();
+          c.ellipse(0, 0, 12 * sc, 18 * sc, 0, 0, Math.PI * 2);
+          c.stroke();
+          c.globalAlpha = 0.9;
+          c.fillStyle = COLOR_HUMANOID_BEAST;
+          c.beginPath();
+          c.ellipse(0, 0, 11 * sc, 17 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+          c.fillStyle = COLOR_HUMANOID_BEAST_GLOW;
+          c.globalAlpha = 0.3;
+          c.beginPath();
+          c.ellipse(-2 * sc, -5 * sc, 5 * sc, 7 * sc, -0.2, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 1.0;
         c.fillStyle = '#ffffff';
         c.beginPath();
-        c.ellipse(screenX, screenY, 15 * sc, 13 * sc, 0, 0, Math.PI * 2);
+        c.ellipse(-3 * sc, -6 * sc, 2.5 * sc, 3 * sc, 0, 0, Math.PI * 2);
         c.fill();
-        c.globalAlpha = 1.0;
+        c.beginPath();
+        c.ellipse(3 * sc, -6 * sc, 2.5 * sc, 3 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        if (!flash) {
+          c.fillStyle = '#1a1a2e';
+          c.beginPath();
+          c.arc(-3 * sc, -5.5 * sc, 1.3 * sc, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(3 * sc, -5.5 * sc, 1.3 * sc, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.restore();
+      } else {
+        const atlas: SpriteAtlas = sm.getEnemyAtlas(ai.enemyType);
+        const bounceFrame: number = Math.floor(((ai.bouncePhase % (Math.PI * 2)) / (Math.PI * 2)) * 8) % 8;
+
+        let frameIndex: number;
+        if (ai.enemyType === EnemyType.PURPLE_SLIME) {
+          frameIndex = (ai.isEngulfing ? 8 : 0) + bounceFrame;
+        } else if (ai.enemyType === EnemyType.RED_SLIME) {
+          frameIndex = (ai.isCharging ? 8 : 0) + bounceFrame;
+        } else {
+          frameIndex = (flash ? 8 : 0) + bounceFrame;
+        }
+
+        const frame: { sx: number, sy: number } = atlas.getFrame(frameIndex);
+        const destW: number = atlas.cellW * sc;
+        const destH: number = atlas.cellH * sc;
+        const destX: number = screenX - destW / 2;
+        const destY: number = screenY - destH / 2;
+
+        c.drawImage(atlas.canvas, frame.sx, frame.sy, atlas.cellW, atlas.cellH,
+                    destX, destY, destW, destH);
+
+        // Flash overlay for PURPLE/RED (their flash frames aren't in atlas)
+        if (flash && (ai.enemyType === EnemyType.PURPLE_SLIME || ai.enemyType === EnemyType.RED_SLIME)) {
+          c.globalAlpha = 0.6;
+          c.fillStyle = '#ffffff';
+          c.beginPath();
+          c.ellipse(screenX, screenY, 15 * sc, 13 * sc, 0, 0, Math.PI * 2);
+          c.fill();
+          c.globalAlpha = 1.0;
+        }
       }
 
       // Charging indicator (stays real-time)
@@ -775,6 +926,16 @@ export class EnemyRenderer {
         c.fillStyle = '#ef4444';
         c.fillRect(screenX - barW / 2, barY, barW * (health.current / health.max), barH);
       }
+
+      // Level indicator above health bar
+      const levelY: number = screenY - ai.size / 2 - 12;
+      const level: number = ai.level;
+      const levelColor: string = level > playerLevel ? '#ef4444' : (level < playerLevel ? '#22c55e' : '#ffffff');
+      c.globalAlpha = 1.0;
+      c.font = '8px monospace';
+      c.fillStyle = levelColor;
+      c.textAlign = 'center';
+      c.fillText('Lv' + level.toString(), screenX, levelY);
     }
   }
 
