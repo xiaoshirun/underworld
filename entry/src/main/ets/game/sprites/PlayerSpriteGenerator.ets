@@ -4,6 +4,7 @@ import {
   COLOR_PLAYER_HAIR,
   COLOR_PLAYER_SKIN,
 } from '../GameConstants';
+import { SpriteCache } from './SpriteCache';
 
 export function drawPlayerBody(
   c: CanvasRenderingContext2D,
@@ -138,4 +139,38 @@ export function drawPlayerBody(
   c.fillRect(centerX, centerY - 4 + bobY, 2, 1);
   c.fillStyle = '#a06850';
   c.fillRect(centerX, centerY - 4 + bobY, 2, 1);
+}
+
+const PLAYER_CELL_W: number = 64;
+const PLAYER_CELL_H: number = 64;
+
+export function generatePlayerCache(): SpriteCache {
+  const cache: SpriteCache = new SpriteCache();
+  const centerX: number = PLAYER_CELL_W / 2;
+  const centerY: number = PLAYER_CELL_H / 2 + 4; // Slight offset downward to center body
+
+  // Idle frames (walkPhase=0, isMoving=false)
+  for (let f: number = 0; f < 2; f++) {
+    const facingRight: boolean = f === 0;
+    const canvas: OffscreenCanvas = new OffscreenCanvas(PLAYER_CELL_W, PLAYER_CELL_H);
+    const ctx: CanvasRenderingContext2D = canvas.getContext('2d') as CanvasRenderingContext2D;
+    drawPlayerBody(ctx, centerX, centerY, 0, facingRight, false);
+    const key: string = facingRight ? 'body_idle_R' : 'body_idle_L';
+    cache.set(key, canvas);
+  }
+
+  // Walk frames (4 phases x 2 directions)
+  for (let phase: number = 0; phase < 4; phase++) {
+    for (let f: number = 0; f < 2; f++) {
+      const facingRight: boolean = f === 0;
+      const canvas: OffscreenCanvas = new OffscreenCanvas(PLAYER_CELL_W, PLAYER_CELL_H);
+      const ctx: CanvasRenderingContext2D = canvas.getContext('2d') as CanvasRenderingContext2D;
+      drawPlayerBody(ctx, centerX, centerY, phase, facingRight, true);
+      const dir: string = facingRight ? 'R' : 'L';
+      const key: string = `body_walk_${dir}_${phase}`;
+      cache.set(key, canvas);
+    }
+  }
+
+  return cache;
 }
