@@ -11,16 +11,25 @@ import {
 } from '../GameConstants';
 import { EnemyAIComponent } from '../components/EnemyAIComponent';
 import { XpPickupComponent } from '../components/XpPickupComponent';
+import { SpriteManager } from '../sprites/SpriteManager';
+import { SpriteAtlas } from '../sprites/SpriteAtlas';
 
 export class EnemyRenderer {
-  render(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number, screenW: number, screenH: number, settings: GameSettings, frameCount: number): void {
+  render(world: World, ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number,
+         screenW: number, screenH: number, settings: GameSettings, frameCount: number,
+         spriteManager: SpriteManager | null = null): void {
     const offX: number = -cameraX;
     const offY: number = -cameraY;
-    this.renderEnemies(world, ctx, offX, offY, screenW, screenH, frameCount);
+    if (spriteManager === null || !spriteManager.isReady()) {
+      this.renderEnemiesProcedural(world, ctx, offX, offY, screenW, screenH, frameCount);
+      this.renderXpOrbs(world, ctx, offX, offY, screenW, screenH, frameCount);
+      return;
+    }
+    this.renderEnemiesSprite(world, ctx, offX, offY, screenW, screenH, frameCount, spriteManager);
     this.renderXpOrbs(world, ctx, offX, offY, screenW, screenH, frameCount);
   }
 
-  private renderEnemies(world: World, c: CanvasRenderingContext2D, offX: number, offY: number, screenW: number, screenH: number, frameCount: number): void {
+  private renderEnemiesProcedural(world: World, c: CanvasRenderingContext2D, offX: number, offY: number, screenW: number, screenH: number, frameCount: number): void {
     const enemies: Entity[] = world.queryWithTag('enemy');
     for (let i: number = 0; i < enemies.length; i++) {
       const entity: Entity = enemies[i];
@@ -683,6 +692,80 @@ export class EnemyRenderer {
         c.globalAlpha = 1.0;
       }
 
+      if (health.current < health.max) {
+        const barW: number = ai.size;
+        const barH: number = 3;
+        const barY: number = screenY - ai.size / 2 - 6;
+        c.fillStyle = '#374151';
+        c.fillRect(screenX - barW / 2, barY, barW, barH);
+        c.fillStyle = '#ef4444';
+        c.fillRect(screenX - barW / 2, barY, barW * (health.current / health.max), barH);
+      }
+    }
+  }
+
+  private renderEnemiesSprite(world: World, c: CanvasRenderingContext2D, offX: number, offY: number,
+      screenW: number, screenH: number, frameCount: number, sm: SpriteManager): void {
+    const enemies: Entity[] = world.queryWithTag('enemy');
+    for (let i: number = 0; i < enemies.length; i++) {
+      const entity: Entity = enemies[i];
+      if (!entity.active) continue;
+
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>('Position');
+      const health: HealthComponent | null = entity.getComponent<HealthComponent>('Health');
+      const ai: EnemyAIComponent | null = entity.getComponent<EnemyAIComponent>('enemyAI');
+      if (pos === null || health === null || ai === null) continue;
+
+      const screenX: number = pos.x + offX;
+      const screenY: number = pos.y + offY;
+      if (screenX < -50 || screenX > screenW + 50 || screenY < -50 || screenY > screenH + 50) continue;
+
+      const atlas: SpriteAtlas = sm.getEnemyAtlas(ai.enemyType);
+      const bounceFrame: number = Math.floor(((ai.bouncePhase % (Math.PI * 2)) / (Math.PI * 2)) * 8) % 8;
+      const flash: boolean = ai.hitFlash > 0;
+
+      let frameIndex: number;
+      if (ai.enemyType === EnemyType.PURPLE_SLIME) {
+        frameIndex = (ai.isEngulfing ? 8 : 0) + bounceFrame;
+      } else if (ai.enemyType === EnemyType.RED_SLIME) {
+        frameIndex = (ai.isCharging ? 8 : 0) + bounceFrame;
+      } else {
+        frameIndex = (flash ? 8 : 0) + bounceFrame;
+      }
+
+      const frame: { sx: number, sy: number } = atlas.getFrame(frameIndex);
+      const sc: number = ai.size / 48;
+      const destW: number = atlas.cellW * sc;
+      const destH: number = atlas.cellH * sc;
+      const destX: number = screenX - destW / 2;
+      const destY: number = screenY - destH / 2;
+
+      c.drawImage(atlas.canvas, frame.sx, frame.sy, atlas.cellW, atlas.cellH,
+                  destX, destY, destW, destH);
+
+      // Flash overlay for PURPLE/RED (their flash frames aren't in atlas)
+      if (flash && (ai.enemyType === EnemyType.PURPLE_SLIME || ai.enemyType === EnemyType.RED_SLIME)) {
+        c.globalAlpha = 0.6;
+        c.fillStyle = '#ffffff';
+        c.beginPath();
+        c.ellipse(screenX, screenY, 15 * sc, 13 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        c.globalAlpha = 1.0;
+      }
+
+      // Charging indicator (stays real-time)
+      c.globalAlpha = 1.0;
+      if (ai.isCharging && ai.enemyType !== EnemyType.RED_SLIME) {
+        const halfSize: number = ai.size / 2;
+        c.globalAlpha = 0.4;
+        c.fillStyle = COLOR_SLIME_RED;
+        c.beginPath();
+        c.arc(screenX, screenY, halfSize + 6, 0, Math.PI * 2);
+        c.fill();
+        c.globalAlpha = 1.0;
+      }
+
+      // Health bar (stays real-time)
       if (health.current < health.max) {
         const barW: number = ai.size;
         const barH: number = 3;
