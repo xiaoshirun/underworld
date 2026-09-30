@@ -5,6 +5,7 @@ import { BossFactory } from '../factories/BossFactory';
 import { CHUNK_SIZE, TILE_SIZE, CHUNK_LOAD_RADIUS, ChunkData, SlimeState, TrapInstance, MechanismInstance, ChestState, BossState } from '../GameConstants';
 import { WorldGenerator } from '../WorldGenerator';
 import { MonsterLevelSystem } from './MonsterLevelSystem';
+import { HumanoidBeastSystem } from './HumanoidBeastSystem';
 
 export class ChunkLoadSystem extends System {
 
@@ -41,7 +42,14 @@ export class ChunkLoadSystem extends System {
           for (let i: number = 0; i < enemies.length; i++) {
             const e: SlimeState = enemies[i];
             const level: number = MonsterLevelSystem.calculateLevel(chunkDist);
-            const enemy: Entity = EnemyFactory.createSlime(e.x, e.y, e.enemyType as number, level);
+            let enemyType: number = e.enemyType as number;
+
+            // 2% chance to replace with 拟人兽 (not in first 2 chunks)
+            if (chunkDist > 2 && HumanoidBeastSystem.shouldReplaceWithHumanoid()) {
+              enemyType = HumanoidBeastSystem.getHumanoidType();
+            }
+
+            const enemy: Entity = EnemyFactory.createSlime(e.x, e.y, enemyType, level);
             context.world.addEntity(enemy);
           }
 

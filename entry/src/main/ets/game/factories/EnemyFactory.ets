@@ -1,6 +1,6 @@
 import { Entity, PositionComponent, VelocityComponent, HealthComponent, ColliderComponent } from '@qiuyu/engine';
 import { EnemyAIComponent } from '../components/EnemyAIComponent';
-import { EnemyType, SLIME_SIZE, SLIME_HP, MONSTER_HP_SCALE_PER_LEVEL, MONSTER_SIZE_PER_4_LEVELS } from '../GameConstants';
+import { EnemyType, SLIME_SIZE, SLIME_HP, MONSTER_HP_SCALE_PER_LEVEL, MONSTER_SIZE_PER_4_LEVELS, HUMANOID_BEAST_HP } from '../GameConstants';
 
 export class EnemyFactory {
   static createSlime(x: number, y: number, enemyType: number, level: number = 1): Entity {
@@ -31,6 +31,7 @@ export class EnemyFactory {
       case EnemyType.BLUE_SLIME: return SLIME_HP;
       case EnemyType.YELLOW_SLIME: return SLIME_HP + 1;
       case EnemyType.GHOST_SLIME: return SLIME_HP + 1;
+      case EnemyType.HUMANOID_BEAST: return HUMANOID_BEAST_HP;
       default: return SLIME_HP;
     }
   }
