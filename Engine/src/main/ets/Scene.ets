@@ -12,8 +12,6 @@ export interface InputState {
 }
 
 export interface BaseContext {
-  ctx: CanvasRenderingContext2D;
-  minimapCtx: CanvasRenderingContext2D;
   screenW: number;
   screenH: number;
   input: InputState;
@@ -28,5 +26,4 @@ export abstract class Scene {
   public onResume(): void {}
 
   abstract update(baseCtx: BaseContext, dt: number): void;
-  abstract render(baseCtx: BaseContext): void;
 }

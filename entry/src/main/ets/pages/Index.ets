@@ -1,4 +1,4 @@
-import { display, router, DrawingRenderingContext, xcomponent } from '@kit.ArkUI';
+import { display, router, xcomponent } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { Engine, Entity, HealthComponent, SystemContext, World } from '@qiuyu/engine';
 import { GameScene } from '../game/GameScene';
@@ -37,12 +37,6 @@ struct Index {
   private gameScene: GameScene | null = null;
   private audio: AudioManager = new AudioManager();
   private settings: GameSettings = { soundEnabled: true, effectsEnabled: true } as GameSettings;
-  // Drawing contexts kept for Engine.tick() compatibility (ECS systems require non-null ctx).
-  // No Canvas UI components are rendered — XComponent + NativeRenderer handle display.
-  private gameDrawingCtx: DrawingRenderingContext = new DrawingRenderingContext();
-  private gameCtx: CanvasRenderingContext2D = CanvasRenderingContext2D.getContext2DFromDrawingContext(this.gameDrawingCtx, { antialias: true });
-  private minimapDrawingCtx: DrawingRenderingContext = new DrawingRenderingContext();
-  private minimapCtx: CanvasRenderingContext2D = CanvasRenderingContext2D.getContext2DFromDrawingContext(this.minimapDrawingCtx, { antialias: true });
   private xComponentController: xcomponent.XComponentController = new xcomponent.XComponentController();
   private nativeRenderer: NativeRenderer = new NativeRenderer();
   private cmdBuffer: DrawCmdBuffer = new DrawCmdBuffer();
@@ -767,7 +761,7 @@ struct Index {
       console.log('[Index] Step 4: Scene pushed successfully');
 
       console.log('[Index] Step 5: Calling engine.init() with pixelW=' + this.pixelW + ' pixelH=' + this.pixelH);
-      this.engine.init(this.gameCtx, this.minimapCtx, this.pixelW, this.pixelH);
+      this.engine.init(this.pixelW, this.pixelH);
       // 使用外部循环：setInterval 只更新游戏状态，onCanvasTickChange 中执行原生渲染
       this.engine.setExternalLoop(true);
       console.log('[Index] Step 6: Engine.init() completed - starting external loop');

@@ -10,12 +10,6 @@ export class SceneManager {
     }
   }
 
-  render(context: BaseContext): void {
-    if (this.active !== null) {
-      this.active.render(context);
-    }
-  }
-
   pushScene(scene: Scene): void {
     if (this.active !== null) {
       this.active.onPause();

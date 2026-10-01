@@ -41,7 +41,6 @@ import { EffectRenderer } from './renderers/EffectRenderer';
 import { EnemyRenderer } from './renderers/EnemyRenderer';
 import { BossRenderer } from './renderers/BossRenderer';
 import { PlayerRenderer } from './renderers/PlayerRenderer';
-import { UIRenderer } from './renderers/UIRenderer';
 import { SpriteManager } from './sprites/SpriteManager';
 
 export class GameScene extends Scene {
@@ -55,7 +54,6 @@ export class GameScene extends Scene {
   private enemyRenderer: EnemyRenderer = new EnemyRenderer();
   private bossRenderer: BossRenderer = new BossRenderer();
   private playerRenderer: PlayerRenderer = new PlayerRenderer();
-  private uiRenderer: UIRenderer = new UIRenderer();
   private spriteManager: SpriteManager = new SpriteManager();
   private harmonyContext: Object | null = null;
   public frameCount: number = 0;
@@ -160,89 +158,6 @@ export class GameScene extends Scene {
     }
     this.world.update(sysCtx, dt);
   }
-
-  render(baseCtx: BaseContext): void {
-    this.frameCount = baseCtx.frameCount;
-    this.screenW = baseCtx.screenW;
-    this.screenH = baseCtx.screenH;
-    const camX: number = this.world.cameraX;
-    const camY: number = this.world.cameraY;
-    const w: World = this.world;
-    const ctx: CanvasRenderingContext2D = baseCtx.ctx;
-    const s: GameSettings = this.settings;
-    const fc: number = baseCtx.frameCount;
-    const sw: number = baseCtx.screenW;
-    const sh: number = baseCtx.screenH;
-
-    if (fc < 5) {
-      console.log('[GameScene] render frame=' + fc + ' sw=' + sw + ' sh=' + sh + ' chunks=' + w.chunks.size + ' camX=' + camX.toFixed(1) + ' camY=' + camY.toFixed(1));
-    }
-    if (fc % 60 === 0) {
-      console.log('[GameScene] render frame=' + fc + ' chunks=' + w.chunks.size + ' entities=' + w.getEntities().length);
-    }
-
-    // 调试：黄色矩形已移至渲染末尾
-
-    // Clear and fill background
-    ctx.clearRect(0, 0, sw, sh);
-    ctx.fillStyle = '#08080f';
-    ctx.fillRect(0, 0, sw, sh);
-
-    // 诊断浮层已移除（曾遮挡画面左上角）；保留低频 console 日志用于排查
-    if (fc % 300 === 0) {
-      const playerEnt: Entity | null = w.findEntityByTag("player");
-      console.log('[GameScene] frame=' + fc + ' chunks=' + w.chunks.size + ' entities=' + w.getEntities().length + ' player=' + (playerEnt !== null) + ' screen=' + sw.toFixed(0) + 'x' + sh.toFixed(0) + ' joy=' + baseCtx.input.joyActive);
-    }
-
-    // Render layers in order with error isolation
-    try {
-      this.tileRenderer.render(w, ctx, camX, camY, sw, sh, s, fc);
-    } catch (e) {
-      if (fc < 10) console.error('[GameScene] tileRenderer error: ' + String(e));
-    }
-
-    try {
-      this.effectRenderer.renderLighting(w, ctx, camX, camY, sw, sh, s, fc);
-    } catch (e) {
-      if (fc < 10) console.error('[GameScene] lighting error: ' + String(e));
-    }
-
-    try {
-      this.enemyRenderer.render(w, ctx, camX, camY, sw, sh, s, fc, this.spriteManager);
-    } catch (e) {
-      if (fc < 10) console.error('[GameScene] enemyRenderer error: ' + String(e));
-    }
-
-    try {
-      this.effectRenderer.render(w, ctx, camX, camY, sw, sh, s, fc);
-    } catch (e) {
-      if (fc < 10) console.error('[GameScene] effectRenderer error: ' + String(e));
-    }
-
-    try {
-      this.bossRenderer.render(w, ctx, camX, camY, sw, sh, s, fc, this.spriteManager);
-    } catch (e) {
-      if (fc < 10) console.error('[GameScene] bossRenderer error: ' + String(e));
-    }
-
-    try {
-      this.playerRenderer.render(w, ctx, camX, camY, sw, sh, s, fc, this.spriteManager);
-    } catch (e) {
-      if (fc < 10) console.error('[GameScene] playerRenderer error: ' + String(e));
-    }
-
-    try {
-      this.effectRenderer.renderVignetteAndDamage(w, ctx, camX, camY, sw, sh, s, fc);
-    } catch (e) {
-      if (fc < 10) console.error('[GameScene] vignette error: ' + String(e));
-    }
-
-    // HUD overlay and minimap removed — now handled by ArkTS UI components in Index.ets
-    // and native rendering pipeline via collectCommands(). UIRenderer is dead code (Task 19 cleanup).
-  }
-
-  // renderMinimap removed — minimap Canvas was replaced by XComponent in Task 9.
-  // Minimap will be re-implemented as native rendering in a future task.
 
   collectCommands(buf: DrawCmdBuffer): void {
     const camX: number = this.world.cameraX;
