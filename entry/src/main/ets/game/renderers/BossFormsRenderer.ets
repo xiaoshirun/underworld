@@ -4,6 +4,14 @@ import {
   COLOR_MUSHROOM_STEM, COLOR_WATER_LIGHT,
 } from '../GameConstants';
 import { BossAIComponent } from '../components/BossAIComponent';
+import { DrawCmdBuffer } from '../../native/DrawCmd';
+
+function hexToRgb(hex: string): number[] {
+  const r: number = parseInt(hex.slice(1, 3), 16) / 255;
+  const g: number = parseInt(hex.slice(3, 5), 16) / 255;
+  const b: number = parseInt(hex.slice(5, 7), 16) / 255;
+  return [r, g, b];
+}
 
 export class BossFormsRenderer {
 
@@ -568,5 +576,293 @@ export class BossFormsRenderer {
 
     c.globalAlpha = 1.0;
     c.lineWidth = 1;
+  }
+
+  collectCrystalGuardianCommands(buf: DrawCmdBuffer, sx: number, sy: number,
+      hs: number, pulse: number, color: string, ai: BossAIComponent, t: number): void {
+    const cRgb: number[] = hexToRgb(color);
+    const s6: number[] = hexToRgb('#67e8f9');
+    const af: number[] = hexToRgb('#a5f3fc');
+    const oe: number[] = hexToRgb('#0e4a5c');
+    const td: number[] = hexToRgb('#22d3ee');
+    const ob: number[] = hexToRgb('#0891b2');
+
+    const ohs: number = hs + pulse + 6;
+    const oAlpha: number = 0.12 + Math.sin(t * 0.04) * 0.05;
+    buf.pushTriangle(sx, sy - ohs, sx + ohs, sy, sx, sy + ohs, s6[0], s6[1], s6[2], oAlpha, 0);
+    buf.pushTriangle(sx, sy - ohs, sx, sy + ohs, sx - ohs, sy, s6[0], s6[1], s6[2], oAlpha, 0);
+
+    const mhs: number = hs + pulse;
+    buf.pushTriangle(sx, sy - mhs, sx + mhs, sy, sx, sy + mhs, cRgb[0], cRgb[1], cRgb[2], 0.9, 0);
+    buf.pushTriangle(sx, sy - mhs, sx, sy + mhs, sx - mhs, sy, cRgb[0], cRgb[1], cRgb[2], 0.9, 0);
+
+    buf.pushLine(sx, sy - mhs, sx + 4, sy + 2, 1, af[0], af[1], af[2], 0.4, 0);
+    buf.pushLine(sx + 4, sy + 2, sx, sy + mhs, 1, af[0], af[1], af[2], 0.4, 0);
+    buf.pushLine(sx, sy - mhs, sx - 4, sy + 2, 1, af[0], af[1], af[2], 0.4, 0);
+    buf.pushLine(sx - 4, sy + 2, sx, sy + mhs, 1, af[0], af[1], af[2], 0.4, 0);
+    buf.pushLine(sx - mhs, sy, sx, sy + 3, 1, af[0], af[1], af[2], 0.4, 0);
+    buf.pushLine(sx, sy + 3, sx + mhs, sy, 1, af[0], af[1], af[2], 0.4, 0);
+
+    buf.pushTriangle(sx - 2, sy - hs * 0.6, sx - hs * 0.7, sy, sx - 2, sy + 2, s6[0], s6[1], s6[2], 0.25, 0);
+    buf.pushTriangle(sx + 2, sy - hs * 0.6, sx + hs * 0.7, sy, sx + 2, sy + 2, oe[0], oe[1], oe[2], 0.2, 0);
+
+    buf.pushTriangle(sx - 4, sy - hs * 0.5, sx - 2, sy - hs * 0.9 - pulse, sx, sy - hs * 0.5, td[0], td[1], td[2], 0.7, 0);
+    buf.pushTriangle(sx + 1, sy - hs * 0.5, sx + 3, sy - hs * 0.85 - pulse, sx + 5, sy - hs * 0.5, td[0], td[1], td[2], 0.7, 0);
+
+    const coreA: number = 0.5 + 0.3 * Math.sin(t * 0.08);
+    buf.pushCircle(sx, sy, hs * 0.35, s6[0], s6[1], s6[2], coreA, 0, 0);
+
+    for (let p: number = 0; p < 5; p++) {
+      const ang: number = (p / 5) * Math.PI * 2 + t * 0.03;
+      const dist: number = hs * 0.7 + Math.sin(t * 0.06 + p * 2) * 3;
+      const px: number = sx + Math.cos(ang) * dist;
+      const py: number = sy + Math.sin(ang) * dist * 0.6;
+      const pA: number = 0.4 + Math.sin(t * 0.1 + p) * 0.2;
+      buf.pushRect(px - 1, py - 1, 2, 2, af[0], af[1], af[2], pA, 0, 0);
+    }
+
+    buf.pushRect(sx - 7, sy - 5, 5, 7, 1, 1, 1, 1, 0, 0);
+    buf.pushRect(sx + 3, sy - 5, 5, 7, 1, 1, 1, 1, 0, 0);
+    buf.pushRect(sx - 6, sy - 3, 3, 4, ob[0], ob[1], ob[2], 1, 0, 0);
+    buf.pushRect(sx + 4, sy - 3, 3, 4, ob[0], ob[1], ob[2], 1, 0, 0);
+    buf.pushRect(sx - 6, sy - 4, 1.5, 1.5, 1, 1, 1, 1, 0, 0);
+    buf.pushRect(sx + 4, sy - 4, 1.5, 1.5, 1, 1, 1, 1, 0, 0);
+  }
+
+  collectMushroomKingCommands(buf: DrawCmdBuffer, sx: number, sy: number,
+      hs: number, pulse: number, color: string, ai: BossAIComponent, t: number): void {
+    const cRgb: number[] = hexToRgb(color);
+    const stemRgb: number[] = hexToRgb(COLOR_MUSHROOM_STEM);
+    const spRgb: number[] = hexToRgb('#ff9ec4');
+    const sdRgb: number[] = hexToRgb('#d4a574');
+    const ssRgb: number[] = hexToRgb('#8b6040');
+    const tlRgb: number[] = hexToRgb('#a07850');
+    const giRgb: number[] = hexToRgb('#cc4488');
+    const glRgb: number[] = hexToRgb('#aa3366');
+    const hlRgb: number[] = hexToRgb('#ffc0e0');
+    const eyRgb: number[] = hexToRgb('#4a2040');
+    const mtRgb: number[] = hexToRgb('#6b3050');
+
+    for (let sp: number = 0; sp < 4; sp++) {
+      const spY: number = sy - hs - 8 - ((t * 0.4 + sp * 12) % 30);
+      const spX: number = sx + Math.sin(t * 0.03 + sp * 3) * 10;
+      const spAlpha: number = 0.3 * (1 - ((t * 0.4 + sp * 12) % 30) / 30);
+      buf.pushCircle(spX, spY, 1.5, spRgb[0], spRgb[1], spRgb[2], spAlpha, 0, 0);
+    }
+
+    buf.pushRect(sx - 9, sy - 4, 18, hs + 4, stemRgb[0], stemRgb[1], stemRgb[2], 1, 0, 0);
+    buf.pushRect(sx - 9, sy - 4, 4, hs + 4, sdRgb[0], sdRgb[1], sdRgb[2], 0.2, 0, 0);
+    buf.pushRect(sx + 5, sy - 4, 4, hs + 4, ssRgb[0], ssRgb[1], ssRgb[2], 0.15, 0, 0);
+    buf.pushLine(sx - 4, sy, sx - 4, sy + hs, 0.8, tlRgb[0], tlRgb[1], tlRgb[2], 0.2, 0);
+    buf.pushLine(sx + 3, sy + 2, sx + 3, sy + hs - 2, 0.8, tlRgb[0], tlRgb[1], tlRgb[2], 0.2, 0);
+
+    buf.pushCircle(sx, sy - 4, hs + pulse, cRgb[0], cRgb[1], cRgb[2], 0.9, 0, 0);
+
+    buf.pushRect(sx - hs + 2, sy - 5, (hs - 2) * 2, 3, giRgb[0], giRgb[1], giRgb[2], 0.3, 0, 0);
+    for (let gl: number = 0; gl < 7; gl++) {
+      const glX: number = sx - hs + 4 + gl * ((hs * 2 - 8) / 6);
+      buf.pushLine(glX, sy - 5, glX, sy - 2, 0.6, glRgb[0], glRgb[1], glRgb[2], 0.25, 0);
+    }
+
+    buf.pushCircle(sx - 10, sy - 14, 5, spRgb[0], spRgb[1], spRgb[2], 0.9, 0, 0);
+    buf.pushCircle(sx + 7, sy - 18, 3.5, spRgb[0], spRgb[1], spRgb[2], 0.9, 0, 0);
+    buf.pushCircle(sx - 2, sy - 20, 2.5, spRgb[0], spRgb[1], spRgb[2], 0.9, 0, 0);
+    buf.pushCircle(sx + 14, sy - 10, 2, spRgb[0], spRgb[1], spRgb[2], 0.9, 0, 0);
+    buf.pushCircle(sx - 11, sy - 15, 2, hlRgb[0], hlRgb[1], hlRgb[2], 0.5, 0, 0);
+    buf.pushCircle(sx + 6, sy - 19, 1.5, hlRgb[0], hlRgb[1], hlRgb[2], 0.5, 0, 0);
+
+    buf.pushCircle(sx - 5, sy - hs * 0.6, hs * 0.35, 1, 1, 1, 0.15, 0, 0);
+
+    buf.pushRect(sx - 6, sy + 2, 5, 6, 1, 1, 1, 1, 0, 0);
+    buf.pushRect(sx + 2, sy + 2, 5, 6, 1, 1, 1, 1, 0, 0);
+    buf.pushRect(sx - 5, sy + 3, 3, 4, eyRgb[0], eyRgb[1], eyRgb[2], 1, 0, 0);
+    buf.pushRect(sx + 3, sy + 3, 3, 4, eyRgb[0], eyRgb[1], eyRgb[2], 1, 0, 0);
+    buf.pushRect(sx - 5, sy + 2, 1.5, 1.5, 1, 1, 1, 1, 0, 0);
+    buf.pushRect(sx + 3, sy + 2, 1.5, 1.5, 1, 1, 1, 1, 0, 0);
+
+    buf.pushRect(sx - 3, sy + 12, 6, 3, mtRgb[0], mtRgb[1], mtRgb[2], 1, 0, 0);
+  }
+
+  collectLavaBeastCommands(buf: DrawCmdBuffer, sx: number, sy: number,
+      hs: number, pulse: number, color: string, ai: BossAIComponent, t: number): void {
+    const bSize: number = BOSS_SIZE;
+    const hRgb: number[] = hexToRgb('#ff4400');
+    const dkRgb: number[] = hexToRgb('#3a1500');
+    const r1Rgb: number[] = hexToRgb('#2a0e00');
+    const r2Rgb: number[] = hexToRgb('#4a2010');
+    const mcRgb: number[] = hexToRgb('#ff6600');
+    const mgRgb: number[] = hexToRgb('#ffd700');
+    const coRgb: number[] = hexToRgb('#ffaa00');
+    const gdRgb: number[] = hexToRgb('#ffd700');
+    const fpRgb: number[] = hexToRgb('#ff4400');
+
+    const hA: number = 0.08 + Math.sin(t * 0.06) * 0.04;
+    buf.pushCircle(sx, sy, hs + 10 + pulse, hRgb[0], hRgb[1], hRgb[2], hA, 0, 0);
+
+    buf.pushRect(sx - hs, sy - hs, bSize, bSize, dkRgb[0], dkRgb[1], dkRgb[2], 1, 0, 0);
+    buf.pushRect(sx - hs + 2, sy - hs + 2, hs, hs * 0.6, r1Rgb[0], r1Rgb[1], r1Rgb[2], 0.4, 0, 0);
+    buf.pushRect(sx + 2, sy + 2, hs - 2, hs * 0.8, r1Rgb[0], r1Rgb[1], r1Rgb[2], 0.4, 0, 0);
+    buf.pushRect(sx - hs + 4, sy - hs + 4, hs * 0.5, hs * 0.3, r2Rgb[0], r2Rgb[1], r2Rgb[2], 0.3, 0, 0);
+    buf.pushRect(sx + 4, sy - 4, hs * 0.4, hs * 0.4, r2Rgb[0], r2Rgb[1], r2Rgb[2], 0.3, 0, 0);
+
+    const crackGlow: number = 0.6 + 0.4 * Math.sin(t * 0.1);
+    buf.pushLine(sx - 12, sy - 14, sx - 4, sy - 2, 2.5, mcRgb[0], mcRgb[1], mcRgb[2], crackGlow * 0.4, 0);
+    buf.pushLine(sx - 4, sy - 2, sx + 6, sy - 8, 2.5, mcRgb[0], mcRgb[1], mcRgb[2], crackGlow * 0.4, 0);
+    buf.pushLine(sx + 4, sy + 2, sx - 6, sy + 14, 2.5, mcRgb[0], mcRgb[1], mcRgb[2], crackGlow * 0.4, 0);
+    buf.pushLine(sx - 10, sy + 6, sx - 2, sy + 10, 2.5, mcRgb[0], mcRgb[1], mcRgb[2], crackGlow * 0.4, 0);
+    buf.pushLine(sx - 2, sy + 10, sx + 8, sy + 6, 2.5, mcRgb[0], mcRgb[1], mcRgb[2], crackGlow * 0.4, 0);
+
+    buf.pushLine(sx - 11, sy - 13, sx - 3, sy - 1, 1.5, mgRgb[0], mgRgb[1], mgRgb[2], crackGlow * 0.7, 0);
+    buf.pushLine(sx - 3, sy - 1, sx + 7, sy - 7, 1.5, mgRgb[0], mgRgb[1], mgRgb[2], crackGlow * 0.7, 0);
+    buf.pushLine(sx + 5, sy + 3, sx - 5, sy + 15, 1.5, mgRgb[0], mgRgb[1], mgRgb[2], crackGlow * 0.7, 0);
+
+    const coreA: number = 0.3 + Math.sin(t * 0.08) * 0.15;
+    buf.pushCircle(sx - 3, sy, 5, coRgb[0], coRgb[1], coRgb[2], coreA, 0, 0);
+    buf.pushCircle(sx + 6, sy + 8, 3, gdRgb[0], gdRgb[1], gdRgb[2], 0.2, 0, 0);
+
+    for (let em: number = 0; em < 4; em++) {
+      const emY: number = sy - hs - ((t * 0.6 + em * 10) % 20);
+      const emX: number = sx - 8 + em * 6 + Math.sin(t * 0.05 + em * 2) * 3;
+      const emAlpha: number = 0.6 * (1 - ((t * 0.6 + em * 10) % 20) / 20);
+      const eRgb: number[] = em % 2 === 0 ? coRgb : hRgb;
+      buf.pushRect(emX, emY, 2, 2, eRgb[0], eRgb[1], eRgb[2], emAlpha, 0, 0);
+    }
+
+    const edgeA: number = 0.3 + Math.sin(t * 0.07) * 0.1;
+    buf.pushRect(sx - hs, sy - hs, bSize, 2, hRgb[0], hRgb[1], hRgb[2], edgeA, 0, 0);
+    buf.pushRect(sx - hs, sy - hs, 2, bSize, hRgb[0], hRgb[1], hRgb[2], edgeA, 0, 0);
+
+    buf.pushRect(sx - 8, sy - 7, 6, 6, gdRgb[0], gdRgb[1], gdRgb[2], 1, 0, 0);
+    buf.pushRect(sx + 3, sy - 7, 6, 6, gdRgb[0], gdRgb[1], gdRgb[2], 1, 0, 0);
+    buf.pushRect(sx - 6, sy - 5, 3, 3, fpRgb[0], fpRgb[1], fpRgb[2], 1, 0, 0);
+    buf.pushRect(sx + 4, sy - 5, 3, 3, fpRgb[0], fpRgb[1], fpRgb[2], 1, 0, 0);
+    buf.pushRect(sx - 7, sy - 6, 1.5, 1.5, 1, 1, 1, 1, 0, 0);
+    buf.pushRect(sx + 4, sy - 6, 1.5, 1.5, 1, 1, 1, 1, 0, 0);
+
+    buf.pushLine(sx - 6, sy + 6, sx - 3, sy + 9, 1, fpRgb[0], fpRgb[1], fpRgb[2], 0.7, 0);
+    buf.pushLine(sx - 3, sy + 9, sx, sy + 6, 1, fpRgb[0], fpRgb[1], fpRgb[2], 0.7, 0);
+    buf.pushLine(sx, sy + 6, sx + 3, sy + 9, 1, fpRgb[0], fpRgb[1], fpRgb[2], 0.7, 0);
+    buf.pushLine(sx + 3, sy + 9, sx + 6, sy + 6, 1, fpRgb[0], fpRgb[1], fpRgb[2], 0.7, 0);
+  }
+
+  collectAbyssSirenCommands(buf: DrawCmdBuffer, sx: number, sy: number,
+      hs: number, pulse: number, color: string, ai: BossAIComponent, t: number): void {
+    const cRgb: number[] = hexToRgb(color);
+    const wlRgb: number[] = hexToRgb(COLOR_WATER_LIGHT);
+    const bbRgb: number[] = hexToRgb('#93c5fd');
+    const scRgb: number[] = hexToRgb('#1a5a8a');
+    const blRgb: number[] = hexToRgb('#67e8f9');
+    const irRgb: number[] = hexToRgb('#0369a1');
+    const ppRgb: number[] = hexToRgb('#0c2d5e');
+    const rnRgb: number[] = hexToRgb('#38bdf8');
+
+    buf.pushCircle(sx, sy, hs + 14 + pulse, wlRgb[0], wlRgb[1], wlRgb[2], 0.1, 0, 0);
+
+    for (let b: number = 0; b < 5; b++) {
+      const bY: number = sy + hs - ((t * 0.3 + b * 8) % (hs * 2 + 16));
+      const bX: number = sx - 10 + b * 5 + Math.sin(t * 0.04 + b * 1.5) * 4;
+      const bSz: number = 1 + (b % 3) * 0.5;
+      const bAlpha: number = 0.3 * (1 - ((t * 0.3 + b * 8) % (hs * 2 + 16)) / (hs * 2 + 16));
+      buf.pushCircle(bX, bY, bSz, bbRgb[0], bbRgb[1], bbRgb[2], bAlpha, 0, 0);
+    }
+
+    buf.pushCircle(sx, sy, hs + pulse, cRgb[0], cRgb[1], cRgb[2], 0.9, 0, 0);
+
+    for (let row: number = 0; row < 4; row++) {
+      for (let col: number = 0; col < 4; col++) {
+        const scX: number = sx - hs + 6 + col * 7 + (row % 2) * 3;
+        const scY: number = sy - hs + 6 + row * 6;
+        const dist: number = Math.sqrt((scX - sx) * (scX - sx) + (scY - sy) * (scY - sy));
+        if (dist < hs - 2) {
+          buf.pushCircle(scX, scY, 2.5, scRgb[0], scRgb[1], scRgb[2], 0.2, 0, 0);
+        }
+      }
+    }
+
+    for (let bl: number = 0; bl < 6; bl++) {
+      const blAng: number = (bl / 6) * Math.PI * 2 + t * 0.01;
+      const blDist: number = hs * 0.5 + Math.sin(t * 0.03 + bl) * 2;
+      const blX: number = sx + Math.cos(blAng) * blDist;
+      const blY: number = sy + Math.sin(blAng) * blDist;
+      const blA: number = 0.3 + Math.sin(t * 0.06 + bl * 2) * 0.2;
+      buf.pushCircle(blX, blY, 1.5, blRgb[0], blRgb[1], blRgb[2], blA, 0, 0);
+    }
+
+    buf.pushCircle(sx - hs * 0.2, sy - hs * 0.3, hs * 0.35, 1, 1, 1, 0.1, 0, 0);
+
+    for (let tn: number = 0; tn < 6; tn++) {
+      const baseAngle: number = (tn / 6) * Math.PI * 2 + t * 0.02;
+      const wave1: number = Math.sin(t * 0.04 + tn * 1.5) * 6;
+      const wave2: number = Math.sin(t * 0.06 + tn * 2) * 4;
+      const startR: number = hs * 0.7;
+      const endR: number = hs + 14;
+      const startX: number = sx + Math.cos(baseAngle) * startR;
+      const startY: number = sy + Math.sin(baseAngle) * startR;
+      const midX: number = sx + Math.cos(baseAngle + 0.3) * (startR + endR) * 0.5 + wave1;
+      const midY: number = sy + Math.sin(baseAngle + 0.3) * (startR + endR) * 0.5 + wave2;
+      const endX: number = sx + Math.cos(baseAngle + 0.5) * endR + wave1 * 0.5;
+      const endY: number = sy + Math.sin(baseAngle + 0.5) * endR + wave2 * 0.5;
+
+      buf.pushLine(startX, startY, midX, midY, 3, wlRgb[0], wlRgb[1], wlRgb[2], 0.5, 0);
+      buf.pushLine(midX, midY, endX, endY, 3, wlRgb[0], wlRgb[1], wlRgb[2], 0.5, 0);
+      buf.pushCircle(endX, endY, 1.5, bbRgb[0], bbRgb[1], bbRgb[2], 0.4, 0, 0);
+    }
+
+    buf.pushCircle(sx, sy, hs * 0.6, rnRgb[0], rnRgb[1], rnRgb[2], 0.3, 0, 0);
+
+    buf.pushCircle(sx - 7, sy - 4, 5, 1, 1, 1, 1, 0, 0);
+    buf.pushCircle(sx + 7, sy - 4, 5, 1, 1, 1, 1, 0, 0);
+    buf.pushCircle(sx - 6, sy - 3, 2.5, irRgb[0], irRgb[1], irRgb[2], 1, 0, 0);
+    buf.pushCircle(sx + 8, sy - 3, 2.5, irRgb[0], irRgb[1], irRgb[2], 1, 0, 0);
+    buf.pushCircle(sx - 6, sy - 3, 1.2, ppRgb[0], ppRgb[1], ppRgb[2], 1, 0, 0);
+    buf.pushCircle(sx + 8, sy - 3, 1.2, ppRgb[0], ppRgb[1], ppRgb[2], 1, 0, 0);
+    buf.pushCircle(sx - 7, sy - 4.5, 1, 1, 1, 1, 1, 0, 0);
+    buf.pushCircle(sx + 7, sy - 4.5, 1, 1, 1, 1, 1, 0, 0);
+  }
+
+  collectVoidRiftCommands(buf: DrawCmdBuffer, sx: number, sy: number,
+      hs: number, pulse: number, color: string, ai: BossAIComponent, t: number): void {
+    const cRgb: number[] = hexToRgb(color);
+    const odRgb: number[] = hexToRgb('#7c3aed');
+    const mrRgb: number[] = hexToRgb('#2d1060');
+    const ehRgb: number[] = hexToRgb('#0d0d1a');
+    const arRgb: number[] = hexToRgb('#a855f7');
+    const icRgb: number[] = hexToRgb('#c084fc');
+    const veRgb: number[] = hexToRgb('#e9d5ff');
+
+    buf.pushCircle(sx, sy, hs + 20 + pulse, odRgb[0], odRgb[1], odRgb[2], 0.06, 0, 0);
+
+    for (let d: number = 0; d < 8; d++) {
+      const dAng: number = (d / 8) * Math.PI * 2 + t * 0.025;
+      const dDist: number = hs + 6 + Math.sin(t * 0.04 + d * 1.7) * 5;
+      const dx: number = sx + Math.cos(dAng) * dDist;
+      const dy: number = sy + Math.sin(dAng) * dDist;
+      const dSize: number = 1 + (d % 3);
+      const dA: number = 0.5 + Math.sin(t * 0.08 + d) * 0.2;
+      const dRgb: number[] = d % 2 === 0 ? arRgb : hexToRgb('#6d28d9');
+      buf.pushRect(dx - dSize / 2, dy - dSize / 2, dSize, dSize, dRgb[0], dRgb[1], dRgb[2], dA, 0, 0);
+    }
+
+    buf.pushCircle(sx, sy, hs + pulse + 4, cRgb[0], cRgb[1], cRgb[2], 0.7, 0, 0);
+    buf.pushCircle(sx, sy, hs * 0.75, mrRgb[0], mrRgb[1], mrRgb[2], 0.8, 0, 0);
+    buf.pushCircle(sx, sy, hs * 0.45, ehRgb[0], ehRgb[1], ehRgb[2], 1, 0, 0);
+    buf.pushCircle(sx, sy, hs * 0.25, 0, 0, 0, 1, 0, 0);
+
+    for (let cr: number = 0; cr < 3; cr++) {
+      const crAng: number = (cr / 3) * Math.PI * 2 + t * 0.06;
+      const crR: number = hs * 0.5;
+      const cx1: number = sx + Math.cos(crAng) * hs * 0.25;
+      const cy1: number = sy + Math.sin(crAng) * hs * 0.25;
+      const cx2: number = sx + Math.cos(crAng + 0.2) * crR * 0.6;
+      const cy2: number = sy + Math.sin(crAng + 0.2) * crR * 0.6;
+      const cx3: number = sx + Math.cos(crAng + 0.1) * crR;
+      const cy3: number = sy + Math.sin(crAng + 0.1) * crR;
+      buf.pushLine(cx1, cy1, cx2, cy2, 1, icRgb[0], icRgb[1], icRgb[2], 0.3, 0);
+      buf.pushLine(cx2, cy2, cx3, cy3, 1, icRgb[0], icRgb[1], icRgb[2], 0.3, 0);
+    }
+
+    const veA: number = 0.4 + Math.sin(t * 0.05) * 0.2;
+    buf.pushCircle(sx, sy, hs * 0.12, odRgb[0], odRgb[1], odRgb[2], veA, 0, 0);
+    buf.pushCircle(sx, sy, hs * 0.05, veRgb[0], veRgb[1], veRgb[2], 0.6, 0, 0);
   }
 }

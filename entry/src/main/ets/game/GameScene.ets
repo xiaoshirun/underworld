@@ -5,7 +5,7 @@ import { WorldGenerator } from './WorldGenerator';
 import { PlayerFactory } from './factories/PlayerFactory';
 import { CameraComponent } from './components/CameraComponent';
 import { GameStateComponent } from './components/GameStateComponent';
-import { DrawCmdBuffer } from './native/DrawCmd';
+import { DrawCmdBuffer } from '../native/DrawCmd';
 
 // Systems
 import { SpatialRebuildSystem } from './systems/SpatialRebuildSystem';
@@ -267,9 +267,28 @@ export class GameScene extends Scene {
     const fc: number = this.frameCount;
     const sw: number = this.screenW;
     const sh: number = this.screenH;
+    const sm: SpriteManager = this.spriteManager;
 
+    // 1. Tiles
     this.tileRenderer.collectCommands(w, buf, camX, camY, sw, sh, s, fc);
-    // More renderers added by later tasks
+
+    // 2. Lighting
+    this.effectRenderer.collectLightingCommands(w, buf, camX, camY, sw, sh, s, fc);
+
+    // 3. Enemies
+    this.enemyRenderer.collectCommands(w, buf, camX, camY, sw, sh, s, fc, sm);
+
+    // 4. Traps, mechanisms, chests
+    this.effectRenderer.collectCommands(w, buf, camX, camY, sw, sh, s, fc);
+
+    // 5. Bosses
+    this.bossRenderer.collectCommands(w, buf, camX, camY, sw, sh, s, fc, sm);
+
+    // 6. Player (includes weapon + transform form)
+    this.playerRenderer.collectCommands(w, buf, camX, camY, sw, sh, s, fc, sm);
+
+    // 7. Vignette + damage flash
+    this.effectRenderer.collectVignetteCommands(w, buf, sw, sh, fc);
   }
 
   getWorld(): World {

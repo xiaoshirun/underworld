@@ -1,7 +1,13 @@
 import { image } from '@kit.ImageKit';
 
+export interface RawFileDescriptor {
+  fd: number;
+  length: number;
+}
+
 export interface RawFileProvider {
   getRawFileContent(path: string): Promise<ArrayBuffer>;
+  getRawFileDescriptor(path: string): Promise<RawFileDescriptor>;
 }
 
 export class SpriteSheet {
@@ -59,8 +65,8 @@ export class ResourceManager {
       if (this.fileProvider === null) {
         throw new Error('RawFileProvider not set. Call setFileProvider() first.');
       }
-      const buffer: ArrayBuffer = await this.fileProvider.getRawFileContent(filePath);
-      const imageSource: image.ImageSource = image.createImageSource(buffer);
+      const descriptor: RawFileDescriptor = await this.fileProvider.getRawFileDescriptor(filePath);
+      const imageSource: image.ImageSource = image.createImageSource(descriptor.fd);
       const imageInfo: image.ImageInfo = await imageSource.getImageInfo();
       const cols: number = Math.floor(imageInfo.size.width / frameWidth);
       const rows: number = Math.floor(imageInfo.size.height / frameHeight);
@@ -105,8 +111,8 @@ export class ResourceManager {
     if (this.fileProvider === null) {
       throw new Error('RawFileProvider not set. Call setFileProvider() first.');
     }
-    const buffer: ArrayBuffer = await this.fileProvider.getRawFileContent(filePath);
-    const imageSource: image.ImageSource = image.createImageSource(buffer);
+    const descriptor: RawFileDescriptor = await this.fileProvider.getRawFileDescriptor(filePath);
+    const imageSource: image.ImageSource = image.createImageSource(descriptor.fd);
     const pixelMap: image.PixelMap = await imageSource.createPixelMap();
     imageSource.release();
     return pixelMap;

@@ -10,7 +10,7 @@ export class SaveManager {
       await pref.put(SAVE_KEY, jsonStr);
       await pref.flush();
     } catch (e) {
-      console.error('SaveManager.save failed: ' + JSON.stringify(e));
+      console.error('SaveManager.save failed: ' + String(e));
     }
   }
 
@@ -27,7 +27,7 @@ export class SaveManager {
       }
       return data;
     } catch (e) {
-      console.error('SaveManager.load failed: ' + JSON.stringify(e));
+      console.error('SaveManager.load failed: ' + String(e));
       return null;
     }
   }
@@ -38,7 +38,7 @@ export class SaveManager {
       await pref.delete(SAVE_KEY);
       await pref.flush();
     } catch (e) {
-      console.error('SaveManager.deleteSave failed: ' + JSON.stringify(e));
+      console.error('SaveManager.deleteSave failed: ' + String(e));
     }
   }
 }

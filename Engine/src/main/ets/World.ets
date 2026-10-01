@@ -75,17 +75,24 @@ export class World {
     return this.entities;
   }
 
+  private updateFrameCount: number = 0;
+
   update(context: SystemContext, dt: number): void {
+    const fc: number = this.updateFrameCount;
+    if (fc < 5) {
+      console.log('[World] update frame=' + fc + ' systems=' + this.systems.length + ' entities=' + this.entities.length + ' chunks=' + this.chunks.size + ' worldGen=' + (this.worldGen !== null));
+    }
     for (let i: number = 0; i < this.systems.length; i++) {
       const sys: System = this.systems[i];
       if (sys.isEnabled()) {
         try {
           sys.update(this.entities, context);
         } catch (e) {
-          console.error('[World] System #' + i + ' error: ' + JSON.stringify(e));
+          console.error('[World] System #' + i + ' error: ' + String(e));
         }
       }
     }
     this.entities = this.entities.filter((e: Entity) => e.active);
+    this.updateFrameCount++;
   }
 }

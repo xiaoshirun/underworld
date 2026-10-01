@@ -5,6 +5,7 @@ import { TransformComponent } from '../components/TransformComponent';
 import { EvolutionComponent } from '../components/EvolutionComponent';
 import { HumanFormComponent } from '../components/HumanFormComponent';
 import { PComp } from './PlayerRenderer';
+import { DrawCmdBuffer } from '../../native/DrawCmd';
 import {
   COLOR_TRANSFORM_ARMOR,
   COLOR_TRANSFORM_ARMOR_ACCENT,
@@ -21,6 +22,13 @@ import {
   TRANSFORM_REVERT_ANIM,
   TransformForm,
 } from '../GameConstants';
+
+function hexToRgb(hex: string): number[] {
+  const h: string = hex.replace('#', '');
+  const full: string = h.length === 3 ? h[0] + h[0] + h[1] + h[1] + h[2] + h[2] : h;
+  const n: number = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
 
 export class TransformFormRenderer {
 
@@ -212,5 +220,116 @@ export class TransformFormRenderer {
     if (branch === EvolutionBranch.TOXIN) return '#32cd32';
     if (branch === EvolutionBranch.TIDE) return '#4169e1';
     return '#ffffff';
+  }
+
+  public collectSlimeFormCommands(buf: DrawCmdBuffer, sx: number, sy: number, pc: PComp, bobY: number): void {
+    const size: number = 18;
+    const cx: number = sx + PLAYER_SIZE / 2;
+    const cy: number = sy + PLAYER_SIZE / 2 + bobY;
+    const rgb1: number[] = hexToRgb(COLOR_TRANSFORM_SLIME);
+    const rgb2: number[] = hexToRgb(COLOR_TRANSFORM_SLIME_DARK);
+
+    buf.pushCircle(cx, cy + 2, size / 2, rgb1[0] / 255, rgb1[1] / 255, rgb1[2] / 255, 1.0, 0, 0);
+    buf.pushCircle(cx, cy + 4, size / 2.5, rgb2[0] / 255, rgb2[1] / 255, rgb2[2] / 255, 1.0, 0, 0);
+
+    // Eyes white
+    buf.pushCircle(cx - 4, cy - 2, 3.5, 1, 1, 1, 1.0, 0, 0);
+    buf.pushCircle(cx + 4, cy - 2, 3.5, 1, 1, 1, 1.0, 0, 0);
+
+    // Pupils
+    const pupilOffX: number = Math.cos(pc.movement.facing) * 1.5;
+    const pupilOffY: number = Math.sin(pc.movement.facing) * 1.5;
+    buf.pushCircle(cx - 4 + pupilOffX, cy - 2 + pupilOffY, 1.5, 0.1, 0.1, 0.18, 1.0, 0, 0);
+    buf.pushCircle(cx + 4 + pupilOffX, cy - 2 + pupilOffY, 1.5, 0.1, 0.1, 0.18, 1.0, 0, 0);
+  }
+
+  public collectGhostFormCommands(buf: DrawCmdBuffer, sx: number, sy: number, pc: PComp, bobY: number): void {
+    const cx: number = sx + PLAYER_SIZE / 2;
+    const cy: number = sy + PLAYER_SIZE / 2 + bobY - 3;
+    const alpha: number = 0.5 + Math.sin(pc.frameCount * 0.06) * 0.15;
+    const rgb1: number[] = hexToRgb(COLOR_TRANSFORM_GHOST);
+    const rgb2: number[] = hexToRgb(COLOR_TRANSFORM_GHOST_DARK);
+
+    // Ghost body approximated as circle
+    buf.pushCircle(cx, cy - 4, 8, rgb1[0] / 255, rgb1[1] / 255, rgb1[2] / 255, alpha, 0, 0);
+    // Inner dark
+    buf.pushCircle(cx, cy - 2, 5, rgb2[0] / 255, rgb2[1] / 255, rgb2[2] / 255, alpha, 0, 0);
+    // Eyes
+    buf.pushCircle(cx - 3, cy - 4, 2.5, 1, 1, 1, alpha, 0, 0);
+    buf.pushCircle(cx + 3, cy - 4, 2.5, 1, 1, 1, alpha, 0, 0);
+  }
+
+  public collectArmorFormCommands(buf: DrawCmdBuffer, sx: number, sy: number, pc: PComp, bobY: number): void {
+    const cx: number = sx + PLAYER_SIZE / 2;
+    const cy: number = sy + PLAYER_SIZE / 2 + bobY;
+    const scale: number = 1.3;
+    const rgb1: number[] = hexToRgb(COLOR_TRANSFORM_ARMOR);
+    const rgb2: number[] = hexToRgb(COLOR_TRANSFORM_ARMOR_ACCENT);
+    const visorAlpha: number = 0.6 + Math.sin(pc.frameCount * 0.08) * 0.3;
+
+    // Body
+    buf.pushRect(cx - 6 * scale, cy - 4 * scale, 12 * scale, 14 * scale, rgb1[0] / 255, rgb1[1] / 255, rgb1[2] / 255, 1.0, 0, 0);
+    // Accent stripe
+    buf.pushRect(cx - 4 * scale, cy - 2 * scale, 8 * scale, 3 * scale, rgb2[0] / 255, rgb2[1] / 255, rgb2[2] / 255, 1.0, 0, 0);
+    // Helmet
+    buf.pushRect(cx - 5 * scale, cy - 9 * scale, 10 * scale, 6 * scale, 0.39, 0.45, 0.55, 1.0, 0, 0);
+    // Visor
+    buf.pushRect(cx - 4 * scale, cy - 7 * scale, 8 * scale, 2 * scale, rgb2[0] / 255, rgb2[1] / 255, rgb2[2] / 255, visorAlpha, 0, 0);
+    // Arms
+    buf.pushRect(cx - 8 * scale, cy + 2 * scale, 3 * scale, 4 * scale, rgb1[0] / 255, rgb1[1] / 255, rgb1[2] / 255, 1.0, 0, 0);
+    buf.pushRect(cx + 5 * scale, cy + 2 * scale, 3 * scale, 4 * scale, rgb1[0] / 255, rgb1[1] / 255, rgb1[2] / 255, 1.0, 0, 0);
+    // Legs
+    buf.pushRect(cx - 4 * scale, cy + 10 * scale, 3 * scale, 4 * scale, 0.28, 0.33, 0.41, 1.0, 0, 0);
+    buf.pushRect(cx + 1 * scale, cy + 10 * scale, 3 * scale, 4 * scale, 0.28, 0.33, 0.41, 1.0, 0, 0);
+  }
+
+  public collectIronManFormCommands(buf: DrawCmdBuffer, sx: number, sy: number, pc: PComp, bobY: number): void {
+    const cx: number = sx + PLAYER_SIZE / 2;
+    const cy: number = sy + PLAYER_SIZE / 2 + bobY - 2;
+    const rgbRed: number[] = hexToRgb(COLOR_TRANSFORM_IRON_RED);
+    const rgbGold: number[] = hexToRgb(COLOR_TRANSFORM_IRON_GOLD);
+    const reactorGlow: number = 0.7 + Math.sin(pc.frameCount * 0.1) * 0.3;
+
+    // Body
+    buf.pushRect(cx - 6, cy - 4, 12, 14, rgbRed[0] / 255, rgbRed[1] / 255, rgbRed[2] / 255, 1.0, 0, 0);
+    // Gold stripe
+    buf.pushRect(cx - 5, cy + 0, 10, 3, rgbGold[0] / 255, rgbGold[1] / 255, rgbGold[2] / 255, 1.0, 0, 0);
+    // Helmet
+    buf.pushRect(cx - 5, cy - 9, 10, 6, rgbRed[0] / 255, rgbRed[1] / 255, rgbRed[2] / 255, 1.0, 0, 0);
+    buf.pushRect(cx - 4, cy - 7, 8, 3, rgbGold[0] / 255, rgbGold[1] / 255, rgbGold[2] / 255, 1.0, 0, 0);
+    // Eye slits
+    buf.pushRect(cx - 3, cy - 7, 2, 1, 1, 1, 1, 1.0, 0, 0);
+    buf.pushRect(cx + 1, cy - 7, 2, 1, 1, 1, 1, 1.0, 0, 0);
+    // Reactor
+    buf.pushCircle(cx, cy + 2, 2.5, 0.4, 0.91, 0.97, reactorGlow, 0, 0);
+
+    // Attack hand cannons
+    if (pc.combat.isAttacking) {
+      buf.pushCircle(cx - 8, cy + 3, 3, rgbGold[0] / 255, rgbGold[1] / 255, rgbGold[2] / 255, 0.9, 0, 0);
+      buf.pushCircle(cx + 8, cy + 3, 3, rgbGold[0] / 255, rgbGold[1] / 255, rgbGold[2] / 255, 0.9, 0, 0);
+    }
+
+    // Legs
+    buf.pushRect(cx - 5, cy + 10, 4, 4, rgbRed[0] / 255, rgbRed[1] / 255, rgbRed[2] / 255, 1.0, 0, 0);
+    buf.pushRect(cx + 1, cy + 10, 4, 4, rgbRed[0] / 255, rgbRed[1] / 255, rgbRed[2] / 255, 1.0, 0, 0);
+  }
+
+  public collectTransformAnimCommands(buf: DrawCmdBuffer, sx: number, sy: number, pc: PComp): void {
+    const maxDuration: number = pc.transformAnimIsRevert ? TRANSFORM_REVERT_ANIM : TRANSFORM_ACTIVATE_ANIM;
+    const progress: number = 1 - (pc.transform.transformAnimTimer / maxDuration);
+    const cx: number = sx + PLAYER_SIZE / 2;
+    const cy: number = sy + PLAYER_SIZE / 2;
+
+    // Expanding ring (stroke → circle with thin radius approximation)
+    const ringAlpha: number = 1 - progress;
+    const flashRgb: number[] = hexToRgb(COLOR_TRANSFORM_FLASH);
+    buf.pushCircle(cx, cy, progress * 30, flashRgb[0] / 255, flashRgb[1] / 255, flashRgb[2] / 255, ringAlpha * 0.5, 0, 0);
+
+    // Inner form color circle
+    const scale: number = 0.5 + progress * 0.7;
+    const formAlpha: number = Math.min(1, progress * 2);
+    const formColor: string = this.getTransformColor((pc.transform.transformForm as TransformForm));
+    const formRgb: number[] = hexToRgb(formColor);
+    buf.pushCircle(cx, cy, 8 * scale, formRgb[0] / 255, formRgb[1] / 255, formRgb[2] / 255, formAlpha, 0, 0);
   }
 }

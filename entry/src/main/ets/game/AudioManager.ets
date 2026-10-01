@@ -54,7 +54,7 @@ export class AudioManager implements IAudioService {
       }
       this.initialized = true;
     } catch (e) {
-      console.error('[Audio] init failed: ' + JSON.stringify(e));
+      console.error('[Audio] init failed: ' + String(e));
     }
   }
 

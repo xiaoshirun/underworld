@@ -16,3 +16,8 @@ local_build-profile.json5
 entry/signature/
 .codegenie/
 .appanalyzer/
+
+# spritegen tool (tools/spritegen)
+/tools/spritegen/node_modules/
+/tools/spritegen/dist/
+/tools/spritegen/preview.html

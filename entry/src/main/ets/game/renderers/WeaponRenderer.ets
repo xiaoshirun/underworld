@@ -6,6 +6,15 @@ import { EvolutionComponent } from '../components/EvolutionComponent';
 import { HumanFormComponent } from '../components/HumanFormComponent';
 import { PComp } from './PlayerRenderer';
 import { ATTACK_DURATION, WEAPON_FORM_STATS, WeaponForm } from '../GameConstants';
+import { drawAttackSlash } from '../sprites/AttackFxSprite';
+import { DrawCmdBuffer } from '../../native/DrawCmd';
+
+function hexToRgb(hex: string): number[] {
+  const h: string = hex.replace('#', '');
+  const full: string = h.length === 3 ? h[0] + h[0] + h[1] + h[1] + h[2] + h[2] : h;
+  const n: number = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
 
 export class WeaponRenderer {
   renderWeaponOnPlayer(c: CanvasRenderingContext2D, sx: number, sy: number, pc: PComp, bobY: number): void {
@@ -1010,6 +1019,197 @@ export class WeaponRenderer {
       }
     }
 
+    // Sweeping slash crescent — same source as the baked attack_fx.png sheet.
+    // Rotates the baked "facing up" crescent to the attack direction and
+    // scales its radius (20px at scale 1) to the weapon's attack range.
+    c.save();
+    c.translate(sx, sy + bobY);
+    c.rotate(pc.movement.facing - Math.PI * 1.5);
+    drawAttackSlash(c, form, atkProg, 0, 0, range * 0.85 / 20);
+    c.restore();
+
     c.globalAlpha = 1.0;
+  }
+
+  public collectWeaponOnPlayerCommands(buf: DrawCmdBuffer, sx: number, sy: number, pc: PComp, bobY: number): void {
+    const form: WeaponForm = (pc.transform.currentWeaponForm as WeaponForm);
+    const handX: number = sx + 5;
+    const handY: number = sy + 2 + bobY;
+    const fAng: number = pc.movement.facing;
+    const cosF: number = Math.cos(fAng);
+    const sinF: number = Math.sin(fAng);
+    const perpX: number = -sinF;
+    const perpY: number = cosF;
+
+    const formColors: string[][] = [
+      ['#60a5fa', '#2563eb'],
+      ['#a78bfa', '#7c3aed'],
+      ['#9ca3af', '#4b5563'],
+      ['#7dd3fc', '#0284c7'],
+      ['#fb923c', '#c2410c'],
+      ['#ef4444', '#991b1b'],
+    ];
+    const colors: string[] = formColors[form];
+    const t: number = pc.frameCount * 0.06;
+
+    if (!pc.combat.isAttacking) {
+      // Orbit ball
+      const orbitR: number = 2.5;
+      const orbitAng: number = t * 0.5;
+      const orbOffX: number = Math.cos(orbitAng) * orbitR;
+      const orbOffY: number = Math.sin(orbitAng) * orbitR * 0.6;
+      const ballX: number = handX + cosF * 3 + orbOffX;
+      const ballY: number = handY + sinF * 3 + orbOffY;
+      const pulse: number = Math.sin(t) * 0.6;
+      const baseR: number = 3.5;
+      const c0Rgb: number[] = hexToRgb(colors[0]);
+
+      // Outer glow
+      const glowAlpha: number = 0.12 + Math.sin(t * 0.7) * 0.04;
+      buf.pushCircle(ballX, ballY, baseR + 2.5 + pulse, c0Rgb[0] / 255, c0Rgb[1] / 255, c0Rgb[2] / 255, glowAlpha, 0, 0);
+      // Main chrome sphere
+      buf.pushCircle(ballX, ballY, baseR + pulse * 0.3, 0.82, 0.84, 0.86, 0.88, 0, 0);
+      // Dark underside
+      buf.pushCircle(ballX + cosF * 0.6, ballY + sinF * 0.6 + 1.2, baseR * 0.65, 0.42, 0.45, 0.5, 0.45, 0, 0);
+      // Primary swirl
+      const swirlX: number = ballX + Math.cos(t * 1.3) * 1.4;
+      const swirlY: number = ballY + Math.sin(t * 1.3) * 1.4;
+      buf.pushCircle(swirlX, swirlY, 1.8, c0Rgb[0] / 255, c0Rgb[1] / 255, c0Rgb[2] / 255, 0.4, 0, 0);
+      // Specular highlight
+      buf.pushCircle(ballX - 1.3, ballY - 1.3, 1.2, 1, 1, 1, 0.92, 0, 0);
+      return;
+    }
+
+    // === Morphing transition: ball → weapon ===
+    const atkProgress: number = 1.0 - (pc.combat.attackTimer / ATTACK_DURATION);
+    if (atkProgress < 0.35) {
+      const morphAlpha: number = (1.0 - atkProgress / 0.35) * 0.6;
+      const stretchLen: number = 8 + (1.0 - atkProgress / 0.35) * 6;
+      // Liquid metal stretching streak
+      buf.pushLine(handX + cosF * 2, handY + sinF * 2, handX + cosF * stretchLen, handY + sinF * stretchLen, 2.5, 0.82, 0.84, 0.86, morphAlpha * 0.5, 0);
+    }
+
+    // Weapon-specific rendering when attacking
+    if (form === WeaponForm.BLADE) {
+      const len: number = 16;
+      const tipX: number = handX + cosF * len;
+      const tipY: number = handY + sinF * len;
+      const baseX: number = handX + cosF * 3;
+      const baseY: number = handY + sinF * 3;
+      buf.pushLine(baseX, baseY, tipX, tipY, 3.5, 0.23, 0.51, 0.96, 1.0, 0);
+      buf.pushLine(baseX, baseY, tipX, tipY, 2.5, 0.38, 0.65, 0.98, 1.0, 0);
+      buf.pushLine(baseX + perpX, baseY + perpY, tipX, tipY, 1, 0.75, 0.86, 0.99, 1.0, 0);
+      // Tip glow
+      buf.pushCircle(tipX, tipY, 1.5, 1, 1, 1, 0.8, 0, 0);
+    } else if (form === WeaponForm.WHIP) {
+      const len: number = 18;
+      const segs: number = 6;
+      let prevWX: number = handX;
+      let prevWY: number = handY;
+      for (let i: number = 1; i <= segs; i++) {
+        const segT: number = i / segs;
+        const wave: number = Math.sin(segT * Math.PI * 2 + pc.frameCount * 0.15) * 3 * segT;
+        const segX: number = handX + cosF * len * segT + perpX * wave;
+        const segY: number = handY + sinF * len * segT + perpY * wave;
+        buf.pushLine(prevWX, prevWY, segX, segY, 2.5, 0.43, 0.16, 0.85, 0.8, 0);
+        prevWX = segX;
+        prevWY = segY;
+      }
+    } else if (form === WeaponForm.HAMMER) {
+      const len: number = 10;
+      const headX: number = handX + cosF * len;
+      const headY: number = handY + sinF * len;
+      buf.pushLine(handX, handY, headX, headY, 3.5, 0.44, 0.25, 0.07, 1.0, 0);
+      // Hammer head as rect
+      buf.pushRect(headX - 6, headY - 6, 12, 12, 0.42, 0.45, 0.5, 1.0, 0, 0);
+      buf.pushRect(headX - 5, headY - 5, 10, 10, 0.6, 0.64, 0.69, 1.0, 0, 0);
+    } else if (form === WeaponForm.STAFF) {
+      const len: number = 18;
+      const orbX: number = handX + cosF * len;
+      const orbY: number = handY + sinF * len;
+      buf.pushLine(handX, handY, orbX, orbY, 3, 0.3, 0.11, 0.58, 1.0, 0);
+      buf.pushLine(handX, handY, orbX, orbY, 2, 0.49, 0.23, 0.93, 1.0, 0);
+      // Orb glow layers
+      const pulse: number = Math.sin(pc.frameCount * 0.1) * 1.5;
+      buf.pushCircle(orbX, orbY, 5 + pulse, 0.22, 0.74, 0.97, 0.3, 0, 0);
+      buf.pushCircle(orbX, orbY, 4, 0.05, 0.65, 0.91, 0.5, 0, 0);
+      buf.pushCircle(orbX, orbY, 3, 0.49, 0.83, 0.99, 0.9, 0, 0);
+    } else if (form === WeaponForm.DUAL_BLADES) {
+      const len: number = 11;
+      // Right blade
+      const rTipX: number = handX + cosF * len + perpX * 1.5;
+      const rTipY: number = handY + sinF * len + perpY * 1.5;
+      buf.pushLine(handX, handY, rTipX, rTipY, 3, 0.76, 0.25, 0.05, 1.0, 0);
+      buf.pushLine(handX, handY, rTipX, rTipY, 2.5, 0.98, 0.57, 0.24, 1.0, 0);
+      // Left blade
+      const handX2: number = sx - 5;
+      const lTipX: number = handX2 + cosF * len - perpX * 1.5;
+      const lTipY: number = handY + sinF * len - perpY * 1.5;
+      buf.pushLine(handX2, handY, lTipX, lTipY, 3, 0.76, 0.25, 0.05, 1.0, 0);
+      buf.pushLine(handX2, handY, lTipX, lTipY, 2.5, 0.98, 0.57, 0.24, 1.0, 0);
+    } else if (form === WeaponForm.GREAT_AXE) {
+      const len: number = 12;
+      const axX: number = handX + cosF * len;
+      const axY: number = handY + sinF * len;
+      buf.pushLine(handX, handY, axX, axY, 4, 0.27, 0.1, 0.01, 1.0, 0);
+      buf.pushLine(handX, handY, axX, axY, 3, 0.47, 0.21, 0.06, 1.0, 0);
+      // Axe head approximated as circle
+      buf.pushCircle(axX, axY, 8, 0.86, 0.15, 0.15, 0.9, 0, 0);
+      buf.pushCircle(axX, axY, 6, 0.96, 0.27, 0.27, 0.9, 0, 0);
+    }
+  }
+
+  public collectAttackEffectCommands(buf: DrawCmdBuffer, sx: number, sy: number, pc: PComp, bobY: number): void {
+    const form: WeaponForm = (pc.transform.currentWeaponForm as WeaponForm);
+    const formStats: number[] = WEAPON_FORM_STATS[form];
+    const range: number = formStats[0];
+    const width: number = formStats[1];
+    const offX: number = Math.cos(pc.movement.facing) * range * 0.7;
+    const offY: number = Math.sin(pc.movement.facing) * range * 0.7;
+    const cx: number = sx + offX;
+    const cy: number = sy + offY + bobY;
+
+    const atkProg: number = 1.0 - (pc.combat.attackTimer / ATTACK_DURATION);
+
+    // Liquid metal flash at attack start
+    if (atkProg < 0.25) {
+      const flashA: number = (1.0 - atkProg / 0.25) * 0.35;
+      buf.pushCircle(sx + Math.cos(pc.movement.facing) * 6, sy + bobY + Math.sin(pc.movement.facing) * 6, 4 + atkProg * 12, 0.9, 0.91, 0.92, flashA, 0, 0);
+    }
+
+    if (form === WeaponForm.BLADE) {
+      // Arc slash approximated as circles
+      buf.pushCircle(sx, sy + bobY, range * 0.85, 0.38, 0.65, 0.98, 0.25, 0, 0);
+      buf.pushCircle(sx, sy + bobY, range * 0.7, 0.87, 0.93, 0.99, 0.5, 0, 0);
+    } else if (form === WeaponForm.WHIP) {
+      const whipLen: number = range * 1.1;
+      const endX: number = sx + Math.cos(pc.movement.facing) * whipLen;
+      const endY: number = sy + bobY + Math.sin(pc.movement.facing) * whipLen;
+      buf.pushLine(sx + Math.cos(pc.movement.facing) * 8, sy + bobY + Math.sin(pc.movement.facing) * 8, endX, endY, 3, 0.65, 0.55, 0.98, 0.8, 0);
+      buf.pushCircle(endX, endY, 5, 0.91, 0.47, 0.98, 0.6, 0, 0);
+      buf.pushCircle(endX, endY, 9, 0.94, 0.67, 0.99, 0.3, 0, 0);
+    } else if (form === WeaponForm.HAMMER) {
+      buf.pushCircle(cx, cy, width * 0.6, 0.98, 0.45, 0.09, 0.5, 0, 0);
+      buf.pushCircle(cx, cy, width * 0.8, 0.99, 0.73, 0.55, 0.4, 0, 0);
+    } else if (form === WeaponForm.STAFF) {
+      const boltX: number = sx + Math.cos(pc.movement.facing) * range;
+      const boltY: number = sy + bobY + Math.sin(pc.movement.facing) * range;
+      buf.pushLine(sx + Math.cos(pc.movement.facing) * 10, sy + bobY + Math.sin(pc.movement.facing) * 10, boltX, boltY, 4, 0.22, 0.74, 0.97, 0.3, 0);
+      buf.pushCircle(boltX, boltY, 12, 0.05, 0.65, 0.91, 0.35, 0, 0);
+      buf.pushCircle(boltX, boltY, 6, 0.49, 0.83, 0.99, 0.85, 0, 0);
+      buf.pushCircle(boltX, boltY, 2.5, 1, 1, 1, 0.9, 0, 0);
+    } else if (form === WeaponForm.DUAL_BLADES) {
+      const perpX: number = -Math.sin(pc.movement.facing);
+      const perpY: number = Math.cos(pc.movement.facing);
+      for (let side: number = -1; side <= 1; side += 2) {
+        const arcCx: number = sx + perpX * 8 * side;
+        const arcCy: number = sy + bobY + perpY * 8 * side;
+        buf.pushCircle(arcCx, arcCy, range * 0.7, 0.98, 0.57, 0.24, 0.5, 0, 0);
+        buf.pushCircle(arcCx, arcCy, range * 0.55, 1, 0.97, 0.93, 0.6, 0, 0);
+      }
+    } else if (form === WeaponForm.GREAT_AXE) {
+      buf.pushCircle(sx, sy + bobY, range * 0.7, 0.94, 0.27, 0.27, 0.35, 0, 0);
+      buf.pushCircle(sx, sy + bobY, range * 0.9, 0.99, 0.65, 0.65, 0.4, 0, 0);
+    }
   }
 }

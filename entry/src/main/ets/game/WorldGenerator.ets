@@ -146,15 +146,15 @@ export class WorldGenerator {
     const chunkBiome: BiomeType = this.getBiome(biomeOriginX + size / 2, biomeOriginY + size / 2);
     const distFromOrigin: number = Math.sqrt(cx * cx + cy * cy);
 
-    let threshold: number = CAVE_THRESHOLD;
-    if (chunkBiome === BiomeType.WATER) threshold += 0.08;
-    if (chunkBiome === BiomeType.LAVA) threshold += 0.05;
-    if (chunkBiome === BiomeType.CRYSTAL) threshold -= 0.05;
-
+    // 全局统一阈值 CAVE_THRESHOLD，不按 biome 偏移。
+    // 此前 WATER/LAVA/CRYSTAL 各自偏移阈值（+0.08/+0.05/-0.05），
+    // biome 分类本身是硬阈值切换，导致 biome 边界处 threshold 跳变，
+    // 同一噪声值在边界两侧映射为 WALL/FLOOR，产生可见地形接缝。
+    // biome 差异化仍通过背景色、装饰瓦片、敌人种类体现，不影响 cave 密度。
     for (let ly: number = 0; ly < size; ly++) {
       tiles[ly] = [];
       for (let lx: number = 0; lx < size; lx++) {
-        tiles[ly][lx] = noiseGrid[ly][lx] < threshold ? TileType.WALL : TileType.FLOOR;
+        tiles[ly][lx] = noiseGrid[ly][lx] < CAVE_THRESHOLD ? TileType.WALL : TileType.FLOOR;
       }
     }
 
@@ -225,17 +225,22 @@ export class WorldGenerator {
         const decR: number = hashToFloat(decH);
         let decorated: boolean = false;
 
-        if (biome === BiomeType.MUSHROOM) {
+        // 逐瓦片求 biome：装饰与地形阈值一样，用世界坐标而非区块中心，
+        // 避免相邻区块 biome 分类不同处边界装饰不匹配（如 SHADOW 化墙）。
+        const tileBiome: BiomeType = this.getBiome(
+          (cx * size + lx) * TILE_SIZE + TILE_SIZE / 2,
+          (cy * size + ly) * TILE_SIZE + TILE_SIZE / 2);
+        if (tileBiome === BiomeType.MUSHROOM) {
           if (decR < 0.06) { tiles[ly][lx] = TileType.MUSHROOM; decorated = true; }
           else if (decR < 0.10) { tiles[ly][lx] = TileType.PLANT; decorated = true; }
-        } else if (biome === BiomeType.CRYSTAL) {
+        } else if (tileBiome === BiomeType.CRYSTAL) {
           if (decR < 0.05) { tiles[ly][lx] = TileType.CRYSTAL; decorated = true; }
           else if (decR < 0.08) { tiles[ly][lx] = TileType.GLOW_STONE; decorated = true; }
-        } else if (biome === BiomeType.WATER) {
+        } else if (tileBiome === BiomeType.WATER) {
           if (decR < 0.03) { tiles[ly][lx] = TileType.PLANT; decorated = true; }
-        } else if (biome === BiomeType.LAVA) {
+        } else if (tileBiome === BiomeType.LAVA) {
           if (decR < 0.02) { tiles[ly][lx] = TileType.GLOW_STONE; decorated = true; }
-        } else if (biome === BiomeType.SHADOW) {
+        } else if (tileBiome === BiomeType.SHADOW) {
           if (decR < 0.04) { tiles[ly][lx] = TileType.GLOW_STONE; decorated = true; }
           else if (decR < 0.06) { tiles[ly][lx] = TileType.WALL; decorated = true; }
         } else {
@@ -249,16 +254,16 @@ export class WorldGenerator {
         let enemyType: EnemyType = EnemyType.GRAY_SLIME;
         let shouldPlaceEnemy: boolean = false;
 
-        if (biome === BiomeType.MUSHROOM) {
+        if (tileBiome === BiomeType.MUSHROOM) {
           if (enemyR < 0.03) { shouldPlaceEnemy = true; enemyType = EnemyType.YELLOW_SLIME; }
           else if (enemyR < 0.05) { shouldPlaceEnemy = true; enemyType = EnemyType.GRAY_SLIME; }
-        } else if (biome === BiomeType.CRYSTAL) {
+        } else if (tileBiome === BiomeType.CRYSTAL) {
           if (enemyR < 0.02) { shouldPlaceEnemy = true; enemyType = EnemyType.GHOST_SLIME; }
           else if (enemyR < 0.04) { shouldPlaceEnemy = true; enemyType = EnemyType.PURPLE_SLIME; }
-        } else if (biome === BiomeType.LAVA) {
+        } else if (tileBiome === BiomeType.LAVA) {
           if (enemyR < 0.03) { shouldPlaceEnemy = true; enemyType = EnemyType.RED_SLIME; }
           else if (enemyR < 0.05) { shouldPlaceEnemy = true; enemyType = EnemyType.PURPLE_SLIME; }
-        } else if (biome === BiomeType.WATER) {
+        } else if (tileBiome === BiomeType.WATER) {
           if (enemyR < 0.03) { shouldPlaceEnemy = true; enemyType = EnemyType.BLUE_SLIME; }
           else if (enemyR < 0.05) { shouldPlaceEnemy = true; enemyType = EnemyType.GRAY_SLIME; }
         } else {
@@ -286,17 +291,17 @@ export class WorldGenerator {
             let trapType: TrapType = TrapType.GROUND_SPIKES;
             let placedTrap: boolean = false;
 
-            if (biome === BiomeType.MUSHROOM) {
+            if (tileBiome === BiomeType.MUSHROOM) {
               if (trapR < trapDensity * 0.5) { trapType = TrapType.POISON_SPORES; placedTrap = true; }
               else if (trapR < trapDensity * 0.8) { trapType = TrapType.FALLING_ROCKS; placedTrap = true; }
-            } else if (biome === BiomeType.WATER) {
+            } else if (tileBiome === BiomeType.WATER) {
               if (trapR < trapDensity * 0.7) { trapType = TrapType.WATER_VORTEX; placedTrap = true; }
-            } else if (biome === BiomeType.LAVA) {
+            } else if (tileBiome === BiomeType.LAVA) {
               if (trapR < trapDensity * 0.5) { trapType = TrapType.LAVA_GEYSER; placedTrap = true; }
               else if (trapR < trapDensity * 0.8) { trapType = TrapType.FALLING_ROCKS; placedTrap = true; }
-            } else if (biome === BiomeType.CRYSTAL) {
+            } else if (tileBiome === BiomeType.CRYSTAL) {
               if (trapR < trapDensity * 0.7) { placedTrap = true; }
-            } else if (biome === BiomeType.SHADOW) {
+            } else if (tileBiome === BiomeType.SHADOW) {
               if (trapR < trapDensity * 0.7) { trapType = TrapType.VOID_CRACK; placedTrap = true; }
             } else {
               if (trapR < trapDensity * 0.5) { placedTrap = true; }
@@ -323,19 +328,19 @@ export class WorldGenerator {
             let mechType: MechanismType = MechanismType.PRESSURE_PLATE;
             let placedMech: boolean = false;
 
-            if (biome === BiomeType.CRYSTAL) {
+            if (tileBiome === BiomeType.CRYSTAL) {
               if (mechR < mechDensity * 0.5) { mechType = MechanismType.CRYSTAL_REFLECTOR; placedMech = true; }
               else if (mechR < mechDensity * 0.8) { placedMech = true; }
-            } else if (biome === BiomeType.MUSHROOM) {
+            } else if (tileBiome === BiomeType.MUSHROOM) {
               if (mechR < mechDensity * 0.5) { mechType = MechanismType.LEVER; placedMech = true; }
               else if (mechR < mechDensity * 0.8) { mechType = MechanismType.PUSH_BLOCK; placedMech = true; }
-            } else if (biome === BiomeType.WATER) {
+            } else if (tileBiome === BiomeType.WATER) {
               if (mechR < mechDensity * 0.5) { mechType = MechanismType.LEVER; placedMech = true; }
               else if (mechR < mechDensity * 0.8) { mechType = MechanismType.TELEPORT_RUNE; placedMech = true; }
-            } else if (biome === BiomeType.LAVA) {
+            } else if (tileBiome === BiomeType.LAVA) {
               if (mechR < mechDensity * 0.5) { placedMech = true; }
               else if (mechR < mechDensity * 0.8) { mechType = MechanismType.LEVER; placedMech = true; }
-            } else if (biome === BiomeType.SHADOW) {
+            } else if (tileBiome === BiomeType.SHADOW) {
               if (mechR < mechDensity * 0.5) { mechType = MechanismType.TELEPORT_RUNE; placedMech = true; }
               else if (mechR < mechDensity * 0.8) { mechType = MechanismType.CRYSTAL_REFLECTOR; placedMech = true; }
             } else {

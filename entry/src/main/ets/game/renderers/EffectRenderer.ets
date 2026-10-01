@@ -13,6 +13,14 @@ import { GameStateComponent } from '../components/GameStateComponent';
 import { WorldGenerator } from '../WorldGenerator';
 import { TrapRenderer } from './TrapRenderer';
 import { ChestRenderer } from './ChestRenderer';
+import { DrawCmdBuffer } from '../../native/DrawCmd';
+
+function hexToRgb(hex: string): number[] {
+  const r: number = parseInt(hex.slice(1, 3), 16) / 255;
+  const g: number = parseInt(hex.slice(3, 5), 16) / 255;
+  const b: number = parseInt(hex.slice(5, 7), 16) / 255;
+  return [r, g, b];
+}
 
 export class EffectRenderer {
   private trapRenderer: TrapRenderer = new TrapRenderer();
@@ -463,5 +471,258 @@ export class EffectRenderer {
     }
 
     c.globalCompositeOperation = prevOp;
+  }
+
+  collectCommands(world: World, buf: DrawCmdBuffer, cameraX: number, cameraY: number,
+      screenW: number, screenH: number, settings: GameSettings, frameCount: number): void {
+    const offX: number = -cameraX;
+    const offY: number = -cameraY;
+    this.trapRenderer.collectCommands(world, buf, offX, offY, screenW, screenH, frameCount);
+    this.collectMechanismsCommands(buf, offX, offY, world, screenW, screenH, frameCount);
+    this.chestRenderer.collectCommands(world, buf, offX, offY, screenW, screenH, settings, frameCount);
+  }
+
+  collectLightingCommands(world: World, buf: DrawCmdBuffer, cameraX: number, cameraY: number,
+      screenW: number, screenH: number, settings: GameSettings, frameCount: number): void {
+    if (!settings.effectsEnabled) return;
+    const offX: number = -cameraX;
+    const offY: number = -cameraY;
+    const chunks: Map<string, Object> = world.chunks;
+    const camWorldX: number = cameraX + screenW / 2;
+    const camWorldY: number = cameraY + screenH / 2;
+    const worldGen: WorldGenerator = world.worldGen as WorldGenerator;
+    const viewBiome: BiomeType = worldGen.getBiome(camWorldX, camWorldY);
+    const depth: number = Math.min(1.0, Math.max(0, cameraY / (TILE_SIZE * 30)));
+    const isShadow: boolean = viewBiome === BiomeType.SHADOW;
+    const isLava: boolean = viewBiome === BiomeType.LAVA;
+
+    const darknessAlpha: number = 0.25 + depth * 0.25 + (isShadow ? 0.15 : 0);
+    let dR: number = 0; let dG: number = 0; let dB: number = 0;
+    if (isShadow) { dR = 10; dG = 0; dB = 20; }
+    else if (isLava) { dR = 15; dG = 5; dB = 0; }
+    const dkRgb: number[] = [dR / 255, dG / 255, dB / 255];
+    buf.pushRect(0, 0, screenW, screenH, dkRgb[0], dkRgb[1], dkRgb[2], darknessAlpha, 0, 0);
+
+    // Player glow
+    const playerEntity: Entity | null = world.findEntityByTag("player");
+    let playerSX: number = screenW / 2;
+    let playerSY: number = screenH / 2;
+    if (playerEntity !== null) {
+      const playerPos: PositionComponent | null = playerEntity.getComponent<PositionComponent>("Position");
+      if (playerPos !== null) {
+        playerSX = playerPos.x + offX;
+        playerSY = playerPos.y + offY;
+      }
+    }
+    const playerRadius: number = 160 + Math.sin(frameCount * 0.02) * 10;
+    buf.pushCircle(playerSX, playerSY, playerRadius, 1, 0.78, 0.39, 0.4, 0, 0);
+    buf.pushCircle(playerSX, playerSY, playerRadius * 0.4, 1, 0.78, 0.39, 0.18, 0, 0);
+
+    // Tile light sources
+    const startTX: number = Math.floor(cameraX / TILE_SIZE) - 1;
+    const startTY: number = Math.floor(cameraY / TILE_SIZE) - 1;
+    const endTX: number = Math.ceil((cameraX + screenW) / TILE_SIZE) + 1;
+    const endTY: number = Math.ceil((cameraY + screenH) / TILE_SIZE) + 1;
+
+    for (let ty: number = startTY; ty <= endTY; ty++) {
+      for (let tx: number = startTX; tx <= endTX; tx++) {
+        const tile: number = this.getTile(chunks, tx * TILE_SIZE, ty * TILE_SIZE);
+        const sx: number = tx * TILE_SIZE + offX + TILE_SIZE / 2;
+        const sy: number = ty * TILE_SIZE + offY + TILE_SIZE / 2;
+        if (sx < -80 || sx > screenW + 80 || sy < -80 || sy > screenH + 80) continue;
+
+        let radius: number = 0;
+        let lr: number = 0; let lg: number = 0; let lb: number = 0; let la: number = 0;
+
+        if (tile === TileType.GLOW_STONE) { radius = 55; lr = 255; lg = 215; lb = 0; la = 0.25; }
+        else if (tile === TileType.CRYSTAL) { radius = 48; lr = 0; lg = 206; lb = 209; la = 0.22; }
+        else if (tile === TileType.MUSHROOM) { radius = 42; lr = 255; lg = 105; lb = 180; la = 0.18; }
+        else if (tile === TileType.LAVA) { radius = 65; lr = 255; lg = 100; lb = 0; la = 0.28; }
+
+        if (radius > 0) {
+          const flicker: number = Math.sin(frameCount * 0.03 + tx * 0.7 + ty * 1.3) * 4;
+          const r: number = radius + flicker;
+          buf.pushCircle(sx, sy, r, lr / 255, lg / 255, lb / 255, la, 0, 0);
+        }
+      }
+    }
+  }
+
+  collectVignetteCommands(world: World, buf: DrawCmdBuffer, screenW: number,
+      screenH: number, frameCount: number): void {
+    const cx: number = screenW / 2;
+    const cy: number = screenH / 2;
+    const radius: number = Math.max(screenW, screenH) * 0.7;
+
+    const playerEntity: Entity | null = world.findEntityByTag("player");
+    let hpRatio: number = 1.0;
+    if (playerEntity !== null) {
+      const health: HealthComponent | null = playerEntity.getComponent<HealthComponent>("Health");
+      if (health !== null) {
+        hpRatio = health.current / health.max;
+      }
+    }
+
+    const isLowHP: boolean = hpRatio < 0.3;
+    const lowHPIntensity: number = isLowHP ? (1.0 - hpRatio / 0.3) : 0;
+    const pulse: number = isLowHP ? 0.5 + 0.5 * Math.sin(frameCount * 0.08) : 0;
+    const vignetteAlpha: number = 0.45 + lowHPIntensity * pulse * 0.25;
+
+    // Vignette approximated as concentric dark rings
+    buf.pushCircle(cx, cy, radius, 0, 0, 0, vignetteAlpha, 0, 0);
+    buf.pushCircle(cx, cy, radius * 0.6, 0, 0, 0, vignetteAlpha * 0.3, 0, 0);
+
+    if (isLowHP) {
+      const redA: number = lowHPIntensity * pulse * 0.15;
+      buf.pushCircle(cx, cy, radius, 0.71, 0, 0, redA, 0, 0);
+    }
+
+    // Damage flash
+    const gameStateEntity: Entity | null = world.findEntityByTag("gameState");
+    let damageFlashTimer: number = 0;
+    if (gameStateEntity !== null) {
+      const gsComp: GameStateComponent | null = gameStateEntity.getComponent<GameStateComponent>("gameState");
+      if (gsComp !== null) {
+        damageFlashTimer = gsComp.damageFlashTimer;
+      }
+    }
+    if (damageFlashTimer > 0) {
+      const flashAlpha: number = (damageFlashTimer / 200) * 0.35;
+      buf.pushRect(0, 0, screenW, screenH, 1, 0, 0, flashAlpha, 0, 0);
+    }
+  }
+
+  collectParticlesCommands(buf: DrawCmdBuffer, offX: number, offY: number,
+      particles: Particle[]): void {
+    for (let i: number = 0; i < particles.length; i++) {
+      const pt: Particle = particles[i];
+      const alpha: number = pt.life / pt.maxLife;
+      const rgb: number[] = hexToRgb(pt.color);
+      const sz: number = pt.size * alpha;
+      buf.pushRect(pt.x + offX - sz / 2, pt.y + offY - sz / 2, sz, sz, rgb[0], rgb[1], rgb[2], alpha, 0, 0);
+    }
+  }
+
+  collectAmbientCommands(buf: DrawCmdBuffer, settings: GameSettings,
+      ambientParticles: AmbientParticle[]): void {
+    if (!settings.effectsEnabled) return;
+    for (let i: number = 0; i < ambientParticles.length; i++) {
+      const ap: AmbientParticle = ambientParticles[i];
+      const fadeRatio: number = ap.life / ap.maxLife;
+      const alpha: number = ap.alpha * (fadeRatio < 0.2 ? fadeRatio / 0.2 : 1.0);
+      const rgb: number[] = hexToRgb(ap.color);
+      buf.pushCircle(ap.x, ap.y, ap.size, rgb[0], rgb[1], rgb[2], alpha, 0, 0);
+    }
+  }
+
+  private collectMechanismsCommands(buf: DrawCmdBuffer, offX: number, offY: number,
+      world: World, screenW: number, screenH: number, frameCount: number): void {
+    const mechEntities: Entity[] = world.queryWithTag("mechanism");
+    for (let i: number = 0; i < mechEntities.length; i++) {
+      const entity: Entity = mechEntities[i];
+      const pos: PositionComponent | null = entity.getComponent<PositionComponent>("Position");
+      const mech: MechanismComponent | null = entity.getComponent<MechanismComponent>("mechanism");
+      if (pos === null || mech === null) continue;
+      const screenX: number = pos.x + offX;
+      const screenY: number = pos.y + offY;
+      if (screenX < -40 || screenX > screenW + 40 || screenY < -40 || screenY > screenH + 40) continue;
+
+      switch (mech.mechanismType) {
+        case MechanismType.PRESSURE_PLATE: {
+          const ppRgb: number[] = hexToRgb('#374151');
+          buf.pushRect(screenX - 13, screenY - 13, 26, 26, ppRgb[0], ppRgb[1], ppRgb[2], 0.3, 0, 0);
+          if (mech.active) {
+            const paRgb: number[] = hexToRgb(COLOR_PLATE_ACTIVE);
+            buf.pushRect(screenX - 10, screenY - 8, 20, 16, paRgb[0], paRgb[1], paRgb[2], 0.9, 0, 0);
+            buf.pushRect(screenX - 8, screenY - 6, 16, 12, 0.29, 0.88, 0.5, 0.4, 0, 0);
+            buf.pushRect(screenX - 6, screenY - 4, 4, 2, 1, 1, 1, 0.3, 0, 0);
+          } else {
+            const ppRgb2: number[] = hexToRgb(COLOR_PRESSURE_PLATE);
+            buf.pushRect(screenX - 10, screenY - 10, 20, 20, ppRgb2[0], ppRgb2[1], ppRgb2[2], 0.6, 0, 0);
+            buf.pushRect(screenX - 8, screenY - 8, 16, 16, 0.42, 0.45, 0.5, 0.3, 0, 0);
+          }
+          break;
+        }
+        case MechanismType.LEVER: {
+          const lvRgb: number[] = hexToRgb('#4b5563');
+          const lvhRgb: number[] = hexToRgb(COLOR_LEVER);
+          buf.pushRect(screenX - 5, screenY + 8, 10, 6, lvRgb[0], lvRgb[1], lvRgb[2], 1, 0, 0);
+          buf.pushRect(screenX - 3, screenY - 12, 6, 24, lvhRgb[0], lvhRgb[1], lvhRgb[2], 1, 0, 0);
+          buf.pushRect(screenX - 2, screenY - 10, 2, 20, 0.42, 0.45, 0.5, 1, 0, 0);
+          // Handle (pre-compute rotation)
+          const angle: number = mech.rotation * Math.PI / 180;
+          const hRgb: number[] = hexToRgb(COLOR_LEVER_HANDLE);
+          const hx: number = screenX;
+          const hy: number = screenY;
+          buf.pushRect(hx - 2.5, hy - 16, 5, 16, hRgb[0], hRgb[1], hRgb[2], 1, angle, 0);
+          // Knob
+          const knobY: number = -16;
+          const knobX: number = 0;
+          const rkx: number = hx + knobX * Math.cos(angle) - knobY * Math.sin(angle);
+          const rky: number = hy + knobX * Math.sin(angle) + knobY * Math.cos(angle);
+          const kRgb: number[] = hexToRgb(mech.active ? '#4ade80' : '#ef4444');
+          buf.pushCircle(rkx, rky, 4, kRgb[0], kRgb[1], kRgb[2], 1, 0, 0);
+          break;
+        }
+        case MechanismType.PUSH_BLOCK: {
+          const bx: number = mech.posX + offX;
+          const by: number = mech.posY + offY;
+          buf.pushRect(bx - 13, by - 11, 26, 26, 0.22, 0.25, 0.32, 0.2, 0, 0);
+          const pbRgb: number[] = hexToRgb(COLOR_PUSH_BLOCK);
+          buf.pushRect(bx - 12, by - 12, 24, 24, pbRgb[0], pbRgb[1], pbRgb[2], 1, 0, 0);
+          buf.pushRect(bx - 10, by - 10, 20, 2, 0.45, 0.45, 0.45, 1, 0, 0);
+          buf.pushRect(bx - 10, by - 10, 2, 20, 0.45, 0.45, 0.45, 1, 0, 0);
+          buf.pushRect(bx - 10, by + 8, 20, 2, 0.32, 0.32, 0.32, 1, 0, 0);
+          buf.pushRect(bx + 8, by - 10, 2, 20, 0.32, 0.32, 0.32, 1, 0, 0);
+          break;
+        }
+        case MechanismType.CRYSTAL_REFLECTOR: {
+          const angle: number = mech.rotation * Math.PI / 180;
+          const bgRgb: number[] = hexToRgb('#1e293b');
+          buf.pushCircle(screenX, screenY, 12, bgRgb[0], bgRgb[1], bgRgb[2], 0.3, 0, 0);
+          const rfRgb: number[] = hexToRgb(COLOR_REFLECTOR);
+          buf.pushCircle(screenX, screenY, 10, rfRgb[0], rfRgb[1], rfRgb[2], 1, 0, 0);
+          const brRgb: number[] = hexToRgb('#a5b4fc');
+          buf.pushCircle(screenX, screenY, 10, brRgb[0], brRgb[1], brRgb[2], 0.6, 0, 0);
+          const glA: number = 0.5 + 0.3 * Math.sin(frameCount * 0.1);
+          buf.pushCircle(screenX, screenY, 4, 1, 1, 1, glA, 0, 0);
+          buf.pushCircle(screenX, screenY, 6, 0.78, 0.82, 0.99, 0.3, 0, 0);
+          break;
+        }
+        case MechanismType.BREAKABLE_WALL: {
+          const bwRgb: number[] = hexToRgb(COLOR_BREAKABLE_WALL);
+          buf.pushRect(screenX - TILE_SIZE / 2, screenY - TILE_SIZE / 2, TILE_SIZE, TILE_SIZE,
+            bwRgb[0], bwRgb[1], bwRgb[2], 1, 0, 0);
+          buf.pushRect(screenX - TILE_SIZE / 2, screenY - TILE_SIZE / 2, TILE_SIZE, 2, 0.29, 0.29, 0.4, 0.3, 0, 0);
+          buf.pushRect(screenX - TILE_SIZE / 2, screenY - TILE_SIZE / 2, 2, TILE_SIZE, 0.29, 0.29, 0.4, 0.3, 0, 0);
+          // Crack lines
+          buf.pushLine(screenX - 8, screenY - 10, screenX - 3, screenY - 2, 1.5, 0.23, 0.23, 0.33, 0.7, 0);
+          buf.pushLine(screenX - 3, screenY - 2, screenX + 2, screenY + 4, 1.5, 0.23, 0.23, 0.33, 0.7, 0);
+          buf.pushLine(screenX + 6, screenY - 8, screenX + 1, screenY, 1.5, 0.23, 0.23, 0.33, 0.7, 0);
+          buf.pushLine(screenX + 1, screenY, screenX - 2, screenY + 8, 1.5, 0.23, 0.23, 0.33, 0.7, 0);
+          buf.pushLine(screenX - 5, screenY + 5, screenX, screenY + 2, 1.5, 0.23, 0.23, 0.33, 0.7, 0);
+          break;
+        }
+        case MechanismType.TELEPORT_RUNE: {
+          const runeColor: string = mech.active ? COLOR_TELEPORT_EXIT : COLOR_TELEPORT_ENTRY;
+          const rRgb: number[] = hexToRgb(runeColor);
+          const spin: number = frameCount * 0.04;
+          buf.pushCircle(screenX, screenY, 16, rRgb[0], rRgb[1], rRgb[2], 0.15, 0, 0);
+          buf.pushCircle(screenX, screenY, 12, rRgb[0], rRgb[1], rRgb[2], 0.6, 0, 0);
+          buf.pushCircle(screenX, screenY, 8, rRgb[0], rRgb[1], rRgb[2], 0.5, 0, 0);
+          for (let rune: number = 0; rune < 3; rune++) {
+            const rAngle: number = spin * 2 + (rune / 3) * Math.PI * 2;
+            const rx: number = screenX + Math.cos(rAngle) * 10;
+            const ry: number = screenY + Math.sin(rAngle) * 10;
+            buf.pushRect(rx - 1.5, ry - 1.5, 3, 3, rRgb[0], rRgb[1], rRgb[2], 0.4, 0, 0);
+          }
+          const trRgb: number[] = hexToRgb(COLOR_TELEPORT_RUNE);
+          const trA: number = 0.3 + 0.2 * Math.sin(frameCount * 0.08);
+          buf.pushCircle(screenX, screenY, 6, trRgb[0], trRgb[1], trRgb[2], trA, 0, 0);
+          buf.pushCircle(screenX, screenY, 2, 1, 1, 1, 0.4, 0, 0);
+          break;
+        }
+      }
+    }
   }
 }

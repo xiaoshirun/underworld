@@ -17,6 +17,7 @@ export class Engine {
   screenH: number = 0;
   cameraX: number = 0;
   cameraY: number = 0;
+  onRender: (() => void) | null = null;
 
   tickInterval: number = 33;
 
@@ -29,6 +30,7 @@ export class Engine {
 
   init(ctx: CanvasRenderingContext2D, minimapCtx: CanvasRenderingContext2D,
     screenW: number, screenH: number): void {
+    console.log('[Engine] init called: screenW=' + screenW + ' screenH=' + screenH);
     this.ctx = ctx;
     this.minimapCtx = minimapCtx;
     this.screenW = screenW;
@@ -38,11 +40,13 @@ export class Engine {
 
   startLoop(): void {
     if (this.externalLoop) return;
+    console.log('[Engine] startLoop: starting game loop with interval=' + this.tickInterval + 'ms');
     this.gameLoopId = setInterval(() => {
       try {
         this.tick(this.tickInterval);
+        this.render();
       } catch (e) {
-        console.error('[Engine] tick error:', JSON.stringify(e));
+        console.error('[Engine] tick error: ' + String(e));
       }
     }, this.tickInterval);
   }
@@ -64,11 +68,52 @@ export class Engine {
         frameCount: this.frameCount
       };
       this.sceneManager.update(baseCtx, dt);
-      this.sceneManager.render(baseCtx);
-    } else if (this.frameCount < 5) {
+    } else if (this.frameCount < 10) {
       console.log('[Engine] tick skipped: activeScene=' + (activeScene !== null) + ' ctx=' + (this.ctx !== null) + ' minimapCtx=' + (this.minimapCtx !== null));
     }
+    if (this.frameCount % 60 === 0) {
+      console.log('[Engine] tick frame=' + this.frameCount + ' screenW=' + this.screenW + ' screenH=' + this.screenH + ' joyActive=' + this.input.joyActive);
+    }
     this.frameCount++;
+  }
+
+  render(): void {
+    if (this.frameCount < 5) {
+      console.log('[Engine] render called: frame=' + this.frameCount + ' activeScene=' + (this.sceneManager.getActiveScene() !== null) + ' ctx=' + (this.ctx !== null));
+    }
+    const activeScene: Scene | null = this.sceneManager.getActiveScene();
+    if (activeScene !== null && this.ctx !== null && this.minimapCtx !== null) {
+      const baseCtx: BaseContext = {
+        ctx: this.ctx,
+        minimapCtx: this.minimapCtx,
+        screenW: this.screenW,
+        screenH: this.screenH,
+        input: this.input,
+        resources: this.resources,
+        frameCount: this.frameCount
+      };
+      this.sceneManager.render(baseCtx);
+    } else if (this.frameCount < 10) {
+      console.log('[Engine] render skipped: activeScene=' + (activeScene !== null) + ' ctx=' + (this.ctx !== null) + ' minimapCtx=' + (this.minimapCtx !== null));
+    }
+    // 触发 Canvas 重绘：ArkUI Canvas 绘制指令需在渲染阶段执行
+    try {
+      const ctxObj = this.ctx as Object as Record<string, Object> | null;
+      if (ctxObj !== null) {
+        const frameNode = ctxObj['canvas'];
+        if (frameNode !== undefined && frameNode !== null) {
+          const fnObj = frameNode as Object as Record<string, () => void>;
+          if (typeof fnObj['invalidate'] === 'function') {
+            fnObj['invalidate']();
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    if (this.onRender !== null) {
+      this.onRender();
+    }
   }
 
   stop(): void {
