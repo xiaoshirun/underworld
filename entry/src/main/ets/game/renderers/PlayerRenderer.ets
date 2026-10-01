@@ -752,7 +752,10 @@ export class PlayerRenderer {
       const drawSize: number = 32;
       buf.pushSprite(spriteManager.getPlayerSlimeAtlasTextureId(),
         screenX - drawSize / 2, screenY + bobY - drawSize / 2, drawSize, drawSize,
-        frame.sx, frame.sy, slimeAtlas.cellW, slimeAtlas.cellH, 1, 1, 1, 1, 0, 0, facingRight ? 0 : 1, 0);
+        frame.sx, frame.sy, slimeAtlas.cellW, slimeAtlas.cellH,
+        spriteManager.getTextureWidth(spriteManager.getPlayerSlimeAtlasTextureId()),
+        spriteManager.getTextureHeight(spriteManager.getPlayerSlimeAtlasTextureId()),
+        1, 1, 1, 1, 0, 0, facingRight ? 0 : 1, 0);
     } else {
       const slimeC: number[] = hexToRgb(COLOR_SLIME_BLUE);
       buf.pushCircle(screenX, screenY + bobY, bodyW * 0.5, slimeC[0], slimeC[1], slimeC[2], 0.9, 0, 0);
@@ -786,7 +789,10 @@ export class PlayerRenderer {
         const srcX: number = frameSrc !== null ? frameSrc.sx : 0;
         const srcY: number = frameSrc !== null ? frameSrc.sy : 0;
         buf.pushSprite(spriteManager.getPlayerCacheTextureId(),
-          sx - 16, sy + bobY - 16, 32, 32, srcX, srcY, 64, 64, 1, 1, 1, alpha, 0, 0, facingRight ? 0 : 1, 0);
+          sx - 16, sy + bobY - 16, 32, 32, srcX, srcY, 64, 64,
+          spriteManager.getTextureWidth(spriteManager.getPlayerCacheTextureId()),
+          spriteManager.getTextureHeight(spriteManager.getPlayerCacheTextureId()),
+          1, 1, 1, alpha, 0, 0, facingRight ? 0 : 1, 0);
       } else {
         this.collectHumanFormProcedural(buf, sx, sy, pc, stage, bobY, facingRight);
       }

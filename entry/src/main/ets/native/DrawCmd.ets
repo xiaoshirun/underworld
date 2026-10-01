@@ -14,17 +14,26 @@ export interface DrawCmd {
   rotation: number;
   srcX: number; srcY: number;
   srcW: number; srcH: number;
+  texW: number; texH: number;
   r: number; g: number; b: number; a: number;
   flipX: number; flipY: number;
   layer: number;
+  x2: number; y2: number;
+  x3: number; y3: number;
 }
 
 export class DrawCmdBuffer {
   private cmds: DrawCmd[] = [];
+  private circleTexId: number = 0;
+
+  setCircleTextureId(texId: number): void {
+    this.circleTexId = texId;
+  }
 
   pushSprite(textureId: number, x: number, y: number,
              width: number, height: number,
              srcX: number, srcY: number, srcW: number, srcH: number,
+             texW: number, texH: number,
              r: number, g: number, b: number, a: number,
              rotation: number, layer: number,
              flipX: number, flipY: number): void {
@@ -32,7 +41,9 @@ export class DrawCmdBuffer {
       type: DrawType.SPRITE,
       textureId, x, y, width, height,
       rotation, srcX, srcY, srcW, srcH,
-      r, g, b, a, flipX, flipY, layer
+      texW, texH,
+      r, g, b, a, flipX, flipY, layer,
+      x2: 0, y2: 0, x3: 0, y3: 0
     });
   }
 
@@ -45,9 +56,11 @@ export class DrawCmdBuffer {
       x, y, width, height,
       rotation,
       srcX: 0, srcY: 0, srcW: 0, srcH: 0,
+      texW: 1, texH: 1,
       r, g, b, a,
       flipX: 0, flipY: 0,
-      layer
+      layer,
+      x2: 0, y2: 0, x3: 0, y3: 0
     });
   }
 
@@ -56,24 +69,18 @@ export class DrawCmdBuffer {
                x3: number, y3: number,
                r: number, g: number, b: number, a: number,
                layer: number): void {
-    // 三角形用包围盒 + 裁剪近似，或分解为 Rect 近似
-    // 简化实现：用 3 个极细 Rect 画三角形边框
-    // 完整实现需要 C++ 端支持真正的三角形渲染
-    // 暂用 pushRect 近似
-    const cx: number = (x1 + x2 + x3) / 3;
-    const cy: number = (y1 + y2 + y3) / 3;
-    const maxW: number = Math.max(Math.abs(x2 - x1), Math.abs(x3 - x1), 1);
-    const maxH: number = Math.max(Math.abs(y2 - y1), Math.abs(y3 - y1), 1);
     this.cmds.push({
-      type: DrawType.RECT,
+      type: DrawType.TRIANGLE,
       textureId: 0,
-      x: cx - maxW / 2, y: cy - maxH / 2,
-      width: maxW, height: maxH,
+      x: x1, y: y1,
+      width: 0, height: 0,
       rotation: 0,
       srcX: 0, srcY: 0, srcW: 0, srcH: 0,
+      texW: 1, texH: 1,
       r, g, b, a,
       flipX: 0, flipY: 0,
-      layer
+      layer,
+      x2, y2, x3, y3
     });
   }
 
@@ -82,14 +89,16 @@ export class DrawCmdBuffer {
              layer: number, textureId: number): void {
     this.cmds.push({
       type: DrawType.SPRITE,
-      textureId,
+      textureId: this.circleTexId,
       x: cx - radius, y: cy - radius,
       width: radius * 2, height: radius * 2,
       rotation: 0,
       srcX: 0, srcY: 0, srcW: 1, srcH: 1,
+      texW: 1, texH: 1,
       r, g, b, a,
       flipX: 0, flipY: 0,
-      layer
+      layer,
+      x2: 0, y2: 0, x3: 0, y3: 0
     });
   }
 
@@ -110,9 +119,11 @@ export class DrawCmdBuffer {
       width: len, height: thickness,
       rotation: angle,
       srcX: 0, srcY: 0, srcW: 0, srcH: 0,
+      texW: 1, texH: 1,
       r, g, b, a,
       flipX: 0, flipY: 0,
-      layer
+      layer,
+      x2: 0, y2: 0, x3: 0, y3: 0
     });
   }
 

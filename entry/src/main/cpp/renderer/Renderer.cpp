@@ -149,11 +149,9 @@ void Renderer::executeCmd(const DrawCmdData& cmd) {
         if (tex != currentBatchTexture_) {
             flushBatch(tex);
         }
-        // 获取纹理实际尺寸用于 UV 计算
-        // 简化：假设 srcW/srcH 已经是归一化 UV 或由调用方计算好
         addSpriteQuad(cmd.x, cmd.y, cmd.width, cmd.height,
                       cmd.srcX, cmd.srcY, cmd.srcW, cmd.srcH,
-                      1.0f, 1.0f, cmd.rotation,
+                      cmd.texW, cmd.texH, cmd.rotation,
                       cmd.r, cmd.g, cmd.b, cmd.a,
                       cmd.flipX, cmd.flipY);
     } else if (cmd.type == 1) {
@@ -170,10 +168,8 @@ void Renderer::executeCmd(const DrawCmdData& cmd) {
         if (whiteTex != currentBatchTexture_) {
             flushBatch(whiteTex);
         }
-        // Triangle 分解为 1 个三角形（非 quad）
-        // 通过 addQuad 实现：重复最后一个顶点
-        addRectQuad(cmd.x, cmd.y, cmd.width, cmd.height,
-                    cmd.rotation, cmd.r, cmd.g, cmd.b, cmd.a);
+        addTriangle(cmd.x, cmd.y, cmd.x2, cmd.y2, cmd.x3, cmd.y3,
+                    cmd.r, cmd.g, cmd.b, cmd.a);
     }
 }
 
@@ -268,6 +264,21 @@ void Renderer::addSpriteQuad(float x, float y, float w, float h,
     Vertex bl = {x3, y3, u0, v1, cr, cg, cb, ca};
 
     batcher_.addQuad(tl, tr, br, bl);
+}
+
+void Renderer::addTriangle(float x1, float y1, float x2, float y2, float x3, float y3,
+                           float r, float g, float b, float a) {
+    unsigned char cr = (unsigned char)(r * 255);
+    unsigned char cg = (unsigned char)(g * 255);
+    unsigned char cb = (unsigned char)(b * 255);
+    unsigned char ca = (unsigned char)(a * 255);
+
+    Vertex v0 = {x1, y1, 0.5f, 0.5f, cr, cg, cb, ca};
+    Vertex v1 = {x2, y2, 0.5f, 0.5f, cr, cg, cb, ca};
+    Vertex v2 = {x3, y3, 0.5f, 0.5f, cr, cg, cb, ca};
+    Vertex v3 = {x3, y3, 0.5f, 0.5f, cr, cg, cb, ca};
+
+    batcher_.addQuad(v0, v1, v2, v3);
 }
 
 bool Renderer::loadTexture(int textureId, const unsigned char* pixels, int width, int height) {

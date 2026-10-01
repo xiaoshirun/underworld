@@ -68,6 +68,8 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"nativeLoadTextureRaw", nullptr, NativeLoadTextureRaw, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"nativeUnloadTexture", nullptr, NativeUnloadTexture, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"nativeSetCamera", nullptr, NativeSetCamera, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"nativeGetCircleTextureId", nullptr, NativeGetCircleTextureId, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"nativeGetWhiteTextureId", nullptr, NativeGetWhiteTextureId, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"nativeTouchInput", nullptr, NativeTouchInput, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"onSurfaceCreated", nullptr, OnSurfaceCreated, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"onSurfaceChanged", nullptr, OnSurfaceChanged, nullptr, nullptr, nullptr, napi_default, nullptr},

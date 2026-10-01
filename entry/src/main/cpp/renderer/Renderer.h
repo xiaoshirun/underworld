@@ -15,10 +15,10 @@ struct DrawCmdData {
     float width, height;
     float rotation;
     float srcX, srcY, srcW, srcH;
+    float texW, texH;
     float r, g, b, a;
     int flipX, flipY;
     int layer;
-    // Triangle 特有（3 个顶点）
     float x2, y2, x3, y3;
 };
 
@@ -74,4 +74,6 @@ private:
                        float texW, float texH, float rotation,
                        float r, float g, float b, float a,
                        int flipX, int flipY);
+    void addTriangle(float x1, float y1, float x2, float y2, float x3, float y3,
+                     float r, float g, float b, float a);
 };

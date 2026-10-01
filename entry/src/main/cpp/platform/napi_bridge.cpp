@@ -137,6 +137,30 @@ napi_value NativeSubmitCommands(napi_env env, napi_callback_info info) {
 
         napi_get_named_property(env, elem, "layer", &val);
         napi_get_value_int32(env, val, &cmds[i].layer);
+
+        napi_get_named_property(env, elem, "texW", &val);
+        napi_get_value_double(env, val, &tmpD);
+        cmds[i].texW = (float)tmpD;
+
+        napi_get_named_property(env, elem, "texH", &val);
+        napi_get_value_double(env, val, &tmpD);
+        cmds[i].texH = (float)tmpD;
+
+        napi_get_named_property(env, elem, "x2", &val);
+        napi_get_value_double(env, val, &tmpD);
+        cmds[i].x2 = (float)tmpD;
+
+        napi_get_named_property(env, elem, "y2", &val);
+        napi_get_value_double(env, val, &tmpD);
+        cmds[i].y2 = (float)tmpD;
+
+        napi_get_named_property(env, elem, "x3", &val);
+        napi_get_value_double(env, val, &tmpD);
+        cmds[i].x3 = (float)tmpD;
+
+        napi_get_named_property(env, elem, "y3", &val);
+        napi_get_value_double(env, val, &tmpD);
+        cmds[i].y3 = (float)tmpD;
     }
 
     Renderer::instance().submitCommands(cmds.data(), (int)length);
@@ -230,6 +254,18 @@ napi_value NativeSetCamera(napi_env env, napi_callback_info info) {
 
     Renderer::instance().setCamera((float)x, (float)y, (float)zoom);
     return nullptr;
+}
+
+napi_value NativeGetCircleTextureId(napi_env env, napi_callback_info info) {
+    napi_value result;
+    napi_create_int32(env, Renderer::instance().circleTextureId(), &result);
+    return result;
+}
+
+napi_value NativeGetWhiteTextureId(napi_env env, napi_callback_info info) {
+    napi_value result;
+    napi_create_int32(env, Renderer::instance().whiteTextureId(), &result);
+    return result;
 }
 
 napi_value NativeTouchInput(napi_env env, napi_callback_info info) {

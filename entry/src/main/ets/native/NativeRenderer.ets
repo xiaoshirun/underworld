@@ -98,6 +98,24 @@ export class NativeRenderer {
     }
   }
 
+  getCircleTextureId(): number {
+    if (this.nativeModule === null) return 0;
+    const m: Record<string, Function> = this.nativeModule as Record<string, Function>;
+    if (m['nativeGetCircleTextureId'] !== undefined) {
+      return (m['nativeGetCircleTextureId'] as Function)() as number;
+    }
+    return 0;
+  }
+
+  getWhiteTextureId(): number {
+    if (this.nativeModule === null) return 0;
+    const m: Record<string, Function> = this.nativeModule as Record<string, Function>;
+    if (m['nativeGetWhiteTextureId'] !== undefined) {
+      return (m['nativeGetWhiteTextureId'] as Function)() as number;
+    }
+    return 0;
+  }
+
   touchInput(touchId: number, action: number, x: number, y: number): void {
     if (this.nativeModule === null) return;
     const m: Record<string, Function> = this.nativeModule as Record<string, Function>;

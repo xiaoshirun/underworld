@@ -1216,7 +1216,9 @@ export class EnemyRenderer {
       const destW: number = atlas.cellW * sc;
       const destH: number = atlas.cellH * sc;
       buf.pushSprite(sm.getEnemyAtlasTextureId(), screenX - destW / 2, screenY - destH / 2, destW, destH,
-        frame.sx, frame.sy, atlas.cellW, atlas.cellH, 1, 1, 1, 1, 0, 0, 0, 0);
+        frame.sx, frame.sy, atlas.cellW, atlas.cellH,
+        sm.getTextureWidth(sm.getEnemyAtlasTextureId()), sm.getTextureHeight(sm.getEnemyAtlasTextureId()),
+        1, 1, 1, 1, 0, 0, 0, 0);
       if (flash && (ai.enemyType === EnemyType.PURPLE_SLIME || ai.enemyType === EnemyType.RED_SLIME)) {
         buf.pushCircle(screenX, screenY, 15 * sc, 1, 1, 1, 0.6, 0, 0);
       }

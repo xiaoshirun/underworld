@@ -61,6 +61,7 @@ export class SpriteManager {
   // Native texture pipeline
   private nativeRenderer: NativeRenderer | null = null;
   private nextTextureId: number = 1;
+  private textureDimensions: Map<number, [number, number]> = new Map<number, [number, number]>();
 
   // Texture ID constants — assigned during uploadNativeTextures()
   private enemyAtlasTexId: number = 0;
@@ -167,6 +168,16 @@ export class SpriteManager {
   getAttackFxAtlasTextureId(): number { return this.attackFxAtlasTexId; }
   getPlayerCacheTextureId(): number { return this.playerCacheTexId; }
 
+  getTextureWidth(texId: number): number {
+    const dim: [number, number] | undefined = this.textureDimensions.get(texId);
+    return dim !== undefined ? dim[0] : 1;
+  }
+
+  getTextureHeight(texId: number): number {
+    const dim: [number, number] | undefined = this.textureDimensions.get(texId);
+    return dim !== undefined ? dim[1] : 1;
+  }
+
   /**
    * Return the source rect (srcX, srcY) for a named player-cache frame inside
    * the packed native texture (4 cols x 3 rows of 64px cells).
@@ -202,20 +213,26 @@ export class SpriteManager {
     this.enemyAtlasTexId = this.nextTextureId++;
     const enemyCols: number = Math.ceil(Math.sqrt(16));
     const enemyRows: number = Math.ceil(16 / enemyCols);
+    const enemyW: number = enemyCols * sz;
+    const enemyH: number = enemyRows * sz;
+    this.textureDimensions.set(this.enemyAtlasTexId, [enemyW, enemyH]);
     const enemyPixels: Uint8Array = this.generatePlaceholderPixels(
-      enemyCols * sz, enemyRows * sz, 0.7, 0.45, 0.3);
+      enemyW, enemyH, 0.7, 0.45, 0.3);
     nr.loadTextureRaw(this.enemyAtlasTexId, enemyPixels.buffer as ArrayBuffer,
-      enemyCols * sz, enemyRows * sz);
+      enemyW, enemyH);
     this.setAtlasTextureId(this.enemyAtlases, this.enemyAtlasTexId);
 
     // Boss atlas: 4x3 grid of 128px cells = 512x384, tinted purple
     this.bossAtlasTexId = this.nextTextureId++;
     const bossCols: number = Math.ceil(Math.sqrt(12));
     const bossRows: number = Math.ceil(12 / bossCols);
+    const bossW: number = bossCols * bSz;
+    const bossH: number = bossRows * bSz;
+    this.textureDimensions.set(this.bossAtlasTexId, [bossW, bossH]);
     const bossPixels: Uint8Array = this.generatePlaceholderPixels(
-      bossCols * bSz, bossRows * bSz, 0.55, 0.2, 0.7);
+      bossW, bossH, 0.55, 0.2, 0.7);
     nr.loadTextureRaw(this.bossAtlasTexId, bossPixels.buffer as ArrayBuffer,
-      bossCols * bSz, bossRows * bSz);
+      bossW, bossH);
     this.setAtlasTextureId(this.bossAtlases, this.bossAtlasTexId);
 
     // Player slime atlas: 4x4 grid of 64px = 256x256, tinted blue
@@ -223,10 +240,13 @@ export class SpriteManager {
       this.playerSlimeAtlasTexId = this.nextTextureId++;
       const psCols: number = Math.ceil(Math.sqrt(16));
       const psRows: number = Math.ceil(16 / psCols);
+      const psW: number = psCols * sz;
+      const psH: number = psRows * sz;
+      this.textureDimensions.set(this.playerSlimeAtlasTexId, [psW, psH]);
       const psPixels: Uint8Array = this.generatePlaceholderPixels(
-        psCols * sz, psRows * sz, 0.3, 0.5, 0.85);
+        psW, psH, 0.3, 0.5, 0.85);
       nr.loadTextureRaw(this.playerSlimeAtlasTexId, psPixels.buffer as ArrayBuffer,
-        psCols * sz, psRows * sz);
+        psW, psH);
       this.playerSlimeAtlas.textureId = this.playerSlimeAtlasTexId;
     }
 
@@ -235,10 +255,13 @@ export class SpriteManager {
       this.weaponAtlasTexId = this.nextTextureId++;
       const wCols: number = Math.ceil(Math.sqrt(6));
       const wRows: number = Math.ceil(6 / wCols);
+      const wW: number = wCols * sz;
+      const wH: number = wRows * sz;
+      this.textureDimensions.set(this.weaponAtlasTexId, [wW, wH]);
       const wPixels: Uint8Array = this.generatePlaceholderPixels(
-        wCols * sz, wRows * sz, 0.75, 0.75, 0.8);
+        wW, wH, 0.75, 0.75, 0.8);
       nr.loadTextureRaw(this.weaponAtlasTexId, wPixels.buffer as ArrayBuffer,
-        wCols * sz, wRows * sz);
+        wW, wH);
       this.weaponAtlas.textureId = this.weaponAtlasTexId;
     }
 
@@ -247,10 +270,13 @@ export class SpriteManager {
       this.attackFxAtlasTexId = this.nextTextureId++;
       const fxCols: number = Math.ceil(Math.sqrt(36));
       const fxRows: number = Math.ceil(36 / fxCols);
+      const fxW: number = fxCols * sz;
+      const fxH: number = fxRows * sz;
+      this.textureDimensions.set(this.attackFxAtlasTexId, [fxW, fxH]);
       const fxPixels: Uint8Array = this.generatePlaceholderPixels(
-        fxCols * sz, fxRows * sz, 0.9, 0.7, 0.2);
+        fxW, fxH, 0.9, 0.7, 0.2);
       nr.loadTextureRaw(this.attackFxAtlasTexId, fxPixels.buffer as ArrayBuffer,
-        fxCols * sz, fxRows * sz);
+        fxW, fxH);
       this.attackFxAtlas.textureId = this.attackFxAtlasTexId;
     }
 
@@ -258,10 +284,13 @@ export class SpriteManager {
     this.playerCacheTexId = this.nextTextureId++;
     const pcCols: number = 4;
     const pcRows: number = 3;
+    const pcW: number = pcCols * sz;
+    const pcH: number = pcRows * sz;
+    this.textureDimensions.set(this.playerCacheTexId, [pcW, pcH]);
     const pcPixels: Uint8Array = this.generatePlaceholderPixels(
-      pcCols * sz, pcRows * sz, 0.3, 0.75, 0.4);
+      pcW, pcH, 0.3, 0.75, 0.4);
     nr.loadTextureRaw(this.playerCacheTexId, pcPixels.buffer as ArrayBuffer,
-      pcCols * sz, pcRows * sz);
+      pcW, pcH);
 
     console.info(`[SpriteManager] Uploaded ${this.nextTextureId - 1} native textures`);
   }

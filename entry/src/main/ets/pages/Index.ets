@@ -168,6 +168,7 @@ struct Index {
           console.log('[Index] XComponent onLoad');
           this.nativeRenderer.loadModule();
           this.nativeRenderer.init(this.pixelW, this.pixelH);
+          this.cmdBuffer.setCircleTextureId(this.nativeRenderer.getCircleTextureId());
           try {
             this.tryInitEngine();
           } catch (initErr) {

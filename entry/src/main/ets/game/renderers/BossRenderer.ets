@@ -1099,7 +1099,9 @@ export class BossRenderer {
 
     buf.pushSprite(sm.getBossAtlasTextureId(), screenX - atlas.cellW / 2, screenY - atlas.cellH / 2,
       atlas.cellW, atlas.cellH,
-      frame.sx, frame.sy, atlas.cellW, atlas.cellH, 1, 1, 1, 1, 0, 0, 0, 0);
+      frame.sx, frame.sy, atlas.cellW, atlas.cellH,
+      sm.getTextureWidth(sm.getBossAtlasTextureId()), sm.getTextureHeight(sm.getBossAtlasTextureId()),
+      1, 1, 1, 1, 0, 0, 0, 0);
 
     if (hitFlash > 0) {
       buf.pushRect(screenX - halfSize, screenY - halfSize, BOSS_SIZE, BOSS_SIZE, 1, 1, 1, 0.5, 0, 0);
