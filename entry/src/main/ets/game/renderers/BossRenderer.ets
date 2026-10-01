@@ -1097,7 +1097,8 @@ export class BossRenderer {
     const halfSize: number = BOSS_SIZE / 2;
     const hitFlash: number = ai.extraData.length > 0 ? ai.extraData[0] : 0;
 
-    buf.pushSprite(0, screenX - atlas.cellW / 2, screenY - atlas.cellH / 2, atlas.cellW, atlas.cellH,
+    buf.pushSprite(sm.getBossAtlasTextureId(), screenX - atlas.cellW / 2, screenY - atlas.cellH / 2,
+      atlas.cellW, atlas.cellH,
       frame.sx, frame.sy, atlas.cellW, atlas.cellH, 1, 1, 1, 1, 0, 0, 0, 0);
 
     if (hitFlash > 0) {

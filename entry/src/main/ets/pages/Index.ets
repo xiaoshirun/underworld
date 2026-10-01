@@ -773,7 +773,7 @@ struct Index {
       console.log('[Index] External game loop started at ~30fps');
 
       console.log('[Index] Step 7: Starting sprite generation...');
-      this.gameScene.initSprites().then(() => {
+      this.gameScene.initSprites(this.nativeRenderer).then(() => {
         console.log('[Index] Step 8: Sprite generation complete');
       }).catch((err: Error) => {
         console.error('[Index] Sprite generation FAILED: ' + String(err));
@@ -1247,6 +1247,9 @@ struct Index {
     const newScene: GameScene = new GameScene(this.audio, this.settings, harmonyCtx);
     this.engine.sceneManager.replaceScene(newScene);
     this.gameScene = newScene;
+    newScene.initSprites(this.nativeRenderer).catch((err: Error) => {
+      console.error('[Index] Sprite re-init FAILED on restart: ' + String(err));
+    });
 
     this.gameState = GameState.PLAYING;
     this.showPauseMenu = false;

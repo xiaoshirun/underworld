@@ -65,6 +65,7 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"nativeSubmitCommands", nullptr, NativeSubmitCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"nativeEndFrame", nullptr, NativeEndFrame, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"nativeLoadTexture", nullptr, NativeLoadTexture, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"nativeLoadTextureRaw", nullptr, NativeLoadTextureRaw, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"nativeUnloadTexture", nullptr, NativeUnloadTexture, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"nativeSetCamera", nullptr, NativeSetCamera, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"nativeTouchInput", nullptr, NativeTouchInput, nullptr, nullptr, nullptr, napi_default, nullptr},

@@ -6,6 +6,7 @@ import { PlayerFactory } from './factories/PlayerFactory';
 import { CameraComponent } from './components/CameraComponent';
 import { GameStateComponent } from './components/GameStateComponent';
 import { DrawCmdBuffer } from '../native/DrawCmd';
+import { NativeRenderer } from '../native/NativeRenderer';
 
 // Systems
 import { SpatialRebuildSystem } from './systems/SpatialRebuildSystem';
@@ -130,7 +131,10 @@ export class GameScene extends Scene {
     this.world.cameraY = startY - 780 / 2;
   }
 
-  async initSprites(): Promise<void> {
+  async initSprites(nativeRenderer?: NativeRenderer): Promise<void> {
+    if (nativeRenderer !== undefined) {
+      this.spriteManager.setNativeRenderer(nativeRenderer);
+    }
     await this.spriteManager.generateAll(this.harmonyContext);
   }
 

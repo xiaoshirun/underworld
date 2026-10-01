@@ -750,7 +750,8 @@ export class PlayerRenderer {
       const frameIndex: number = (facingRight ? 0 : 8) + bounceFrame;
       const frame: FrameCoord = slimeAtlas.getFrame(frameIndex);
       const drawSize: number = 32;
-      buf.pushSprite(0, screenX - drawSize / 2, screenY + bobY - drawSize / 2, drawSize, drawSize,
+      buf.pushSprite(spriteManager.getPlayerSlimeAtlasTextureId(),
+        screenX - drawSize / 2, screenY + bobY - drawSize / 2, drawSize, drawSize,
         frame.sx, frame.sy, slimeAtlas.cellW, slimeAtlas.cellH, 1, 1, 1, 1, 0, 0, facingRight ? 0 : 1, 0);
     } else {
       const slimeC: number[] = hexToRgb(COLOR_SLIME_BLUE);
@@ -781,7 +782,11 @@ export class PlayerRenderer {
         let alpha: number = 1.0;
         if (stage === HumanFormStage.PROTO) alpha = 0.4 + Math.sin(pc.frameCount * 0.1) * 0.1;
         else if (stage === HumanFormStage.PHANTOM) alpha = 0.55 + Math.sin(pc.frameCount * 0.08) * 0.1;
-        buf.pushSprite(0, sx - 16, sy + bobY - 16, 32, 32, 0, 0, 64, 64, 1, 1, 1, alpha, 0, 0, facingRight ? 0 : 1, 0);
+        const frameSrc: FrameCoord | null = spriteManager.getPlayerCacheFrameSrc(key);
+        const srcX: number = frameSrc !== null ? frameSrc.sx : 0;
+        const srcY: number = frameSrc !== null ? frameSrc.sy : 0;
+        buf.pushSprite(spriteManager.getPlayerCacheTextureId(),
+          sx - 16, sy + bobY - 16, 32, 32, srcX, srcY, 64, 64, 1, 1, 1, alpha, 0, 0, facingRight ? 0 : 1, 0);
       } else {
         this.collectHumanFormProcedural(buf, sx, sy, pc, stage, bobY, facingRight);
       }

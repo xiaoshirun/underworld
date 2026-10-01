@@ -15,6 +15,8 @@ export class SpriteAtlas {
   readonly cols: number;
   readonly rows: number;
   readonly frameCount: number;
+  /** Native GPU texture ID (0 = not yet uploaded). */
+  textureId: number = 0;
 
   constructor(canvas: OffscreenCanvas, cellW: number, cellH: number, frameCount: number) {
     this.canvas = canvas;

@@ -74,6 +74,14 @@ export class NativeRenderer {
     }
   }
 
+  loadTextureRaw(textureId: number, rgbaBuffer: ArrayBuffer, width: number, height: number): void {
+    if (this.nativeModule === null) return;
+    const m: Record<string, Function> = this.nativeModule as Record<string, Function>;
+    if (m['nativeLoadTextureRaw'] !== undefined) {
+      (m['nativeLoadTextureRaw'] as Function)(textureId, rgbaBuffer, width, height);
+    }
+  }
+
   unloadTexture(textureId: number): void {
     if (this.nativeModule === null) return;
     const m: Record<string, Function> = this.nativeModule as Record<string, Function>;

@@ -1,11 +1,12 @@
 import { image } from '@kit.ImageKit';
 import { common } from '@kit.AbilityKit';
-import { SpriteAtlas } from './SpriteAtlas';
+import { SpriteAtlas, FrameCoord } from './SpriteAtlas';
 import { SpriteCache } from './SpriteCache';
 import { generateEnemyAtlas } from './EnemySpriteGenerator';
 import { generateBossAtlas } from './BossSpriteGenerator';
 import { generatePlayerCache } from './PlayerSpriteGenerator';
 import { EnemyType, BossType } from '../GameConstants';
+import { NativeRenderer } from '../../native/NativeRenderer';
 
 // External PNG sprite sheets in rawfile/sprites/. They are rendered from these
 // same generators by tools/spritegen/generate.js — keep the file names in sync.
@@ -57,6 +58,26 @@ export class SpriteManager {
   private attackFxAtlas: SpriteAtlas | null = null;
   private ready: boolean = false;
 
+  // Native texture pipeline
+  private nativeRenderer: NativeRenderer | null = null;
+  private nextTextureId: number = 1;
+
+  // Texture ID constants — assigned during uploadNativeTextures()
+  private enemyAtlasTexId: number = 0;
+  private bossAtlasTexId: number = 0;
+  private playerSlimeAtlasTexId: number = 0;
+  private weaponAtlasTexId: number = 0;
+  private attackFxAtlasTexId: number = 0;
+  private playerCacheTexId: number = 0;
+
+  /** Placeholder atlas dimensions for native texture generation. */
+  private static readonly TEX_SIZE: number = 64;
+  private static readonly BOSS_TEX_SIZE: number = 128;
+
+  setNativeRenderer(nr: NativeRenderer): void {
+    this.nativeRenderer = nr;
+  }
+
   async generateAll(harmonyContext: Object | null = null): Promise<void> {
     try {
       // Test OffscreenCanvas support
@@ -97,6 +118,9 @@ export class SpriteManager {
       if (harmonyContext !== null) {
         await this.overlayExternalSheets(harmonyContext);
       }
+
+      // Upload placeholder native textures for the GPU pipeline
+      this.uploadNativeTextures();
     } catch (e) {
       console.warn(`[SpriteManager] Sprite generation failed: ${e}, using procedural fallback`);
       this.ready = false;
@@ -132,6 +156,147 @@ export class SpriteManager {
   /** Attack slash frames: form * 6 + progress step. */
   getAttackFxAtlas(): SpriteAtlas | null {
     return this.attackFxAtlas;
+  }
+
+  // ── Native texture ID getters ──────────────────────────────────────
+
+  getEnemyAtlasTextureId(): number { return this.enemyAtlasTexId; }
+  getBossAtlasTextureId(): number { return this.bossAtlasTexId; }
+  getPlayerSlimeAtlasTextureId(): number { return this.playerSlimeAtlasTexId; }
+  getWeaponAtlasTextureId(): number { return this.weaponAtlasTexId; }
+  getAttackFxAtlasTextureId(): number { return this.attackFxAtlasTexId; }
+  getPlayerCacheTextureId(): number { return this.playerCacheTexId; }
+
+  /**
+   * Return the source rect (srcX, srcY) for a named player-cache frame inside
+   * the packed native texture (4 cols x 3 rows of 64px cells).
+   * Returns null if the key is unknown.
+   */
+  getPlayerCacheFrameSrc(key: string): FrameCoord | null {
+    const idx: number = PLAYER_SHEET_KEYS.indexOf(key);
+    if (idx < 0) return null;
+    const cols: number = 4;
+    const col: number = idx % cols;
+    const row: number = Math.floor(idx / cols);
+    return new FrameCoord(col * 64, row * 64);
+  }
+
+  // ── Native texture upload ──────────────────────────────────────────
+
+  /**
+   * Generate placeholder RGBA pixel data for each atlas and upload to the GPU
+   * via NativeRenderer.loadTextureRaw(). Each atlas gets a distinctive colour so
+   * that mis-wired texture IDs are immediately visible during debugging.
+   */
+  private uploadNativeTextures(): void {
+    const nr: NativeRenderer | null = this.nativeRenderer;
+    if (nr === null) {
+      console.warn('[SpriteManager] No NativeRenderer set — skipping native texture upload');
+      return;
+    }
+
+    const sz: number = SpriteManager.TEX_SIZE;
+    const bSz: number = SpriteManager.BOSS_TEX_SIZE;
+
+    // Enemy atlas: 4x4 grid of 64px cells = 256x256, tinted red-orange
+    this.enemyAtlasTexId = this.nextTextureId++;
+    const enemyCols: number = Math.ceil(Math.sqrt(16));
+    const enemyRows: number = Math.ceil(16 / enemyCols);
+    const enemyPixels: Uint8Array = this.generatePlaceholderPixels(
+      enemyCols * sz, enemyRows * sz, 0.7, 0.45, 0.3);
+    nr.loadTextureRaw(this.enemyAtlasTexId, enemyPixels.buffer as ArrayBuffer,
+      enemyCols * sz, enemyRows * sz);
+    this.setAtlasTextureId(this.enemyAtlases, this.enemyAtlasTexId);
+
+    // Boss atlas: 4x3 grid of 128px cells = 512x384, tinted purple
+    this.bossAtlasTexId = this.nextTextureId++;
+    const bossCols: number = Math.ceil(Math.sqrt(12));
+    const bossRows: number = Math.ceil(12 / bossCols);
+    const bossPixels: Uint8Array = this.generatePlaceholderPixels(
+      bossCols * bSz, bossRows * bSz, 0.55, 0.2, 0.7);
+    nr.loadTextureRaw(this.bossAtlasTexId, bossPixels.buffer as ArrayBuffer,
+      bossCols * bSz, bossRows * bSz);
+    this.setAtlasTextureId(this.bossAtlases, this.bossAtlasTexId);
+
+    // Player slime atlas: 4x4 grid of 64px = 256x256, tinted blue
+    if (this.playerSlimeAtlas !== null) {
+      this.playerSlimeAtlasTexId = this.nextTextureId++;
+      const psCols: number = Math.ceil(Math.sqrt(16));
+      const psRows: number = Math.ceil(16 / psCols);
+      const psPixels: Uint8Array = this.generatePlaceholderPixels(
+        psCols * sz, psRows * sz, 0.3, 0.5, 0.85);
+      nr.loadTextureRaw(this.playerSlimeAtlasTexId, psPixels.buffer as ArrayBuffer,
+        psCols * sz, psRows * sz);
+      this.playerSlimeAtlas.textureId = this.playerSlimeAtlasTexId;
+    }
+
+    // Weapon atlas: 3x2 grid of 64px = 192x128, tinted silver
+    if (this.weaponAtlas !== null) {
+      this.weaponAtlasTexId = this.nextTextureId++;
+      const wCols: number = Math.ceil(Math.sqrt(6));
+      const wRows: number = Math.ceil(6 / wCols);
+      const wPixels: Uint8Array = this.generatePlaceholderPixels(
+        wCols * sz, wRows * sz, 0.75, 0.75, 0.8);
+      nr.loadTextureRaw(this.weaponAtlasTexId, wPixels.buffer as ArrayBuffer,
+        wCols * sz, wRows * sz);
+      this.weaponAtlas.textureId = this.weaponAtlasTexId;
+    }
+
+    // Attack FX atlas: 6x6 grid of 64px = 384x384, tinted yellow-orange
+    if (this.attackFxAtlas !== null) {
+      this.attackFxAtlasTexId = this.nextTextureId++;
+      const fxCols: number = Math.ceil(Math.sqrt(36));
+      const fxRows: number = Math.ceil(36 / fxCols);
+      const fxPixels: Uint8Array = this.generatePlaceholderPixels(
+        fxCols * sz, fxRows * sz, 0.9, 0.7, 0.2);
+      nr.loadTextureRaw(this.attackFxAtlasTexId, fxPixels.buffer as ArrayBuffer,
+        fxCols * sz, fxRows * sz);
+      this.attackFxAtlas.textureId = this.attackFxAtlasTexId;
+    }
+
+    // Player cache: pack 10 frames into 4x3 grid of 64px = 256x192, tinted green
+    this.playerCacheTexId = this.nextTextureId++;
+    const pcCols: number = 4;
+    const pcRows: number = 3;
+    const pcPixels: Uint8Array = this.generatePlaceholderPixels(
+      pcCols * sz, pcRows * sz, 0.3, 0.75, 0.4);
+    nr.loadTextureRaw(this.playerCacheTexId, pcPixels.buffer as ArrayBuffer,
+      pcCols * sz, pcRows * sz);
+
+    console.info(`[SpriteManager] Uploaded ${this.nextTextureId - 1} native textures`);
+  }
+
+  /** Fill a WxH RGBA buffer with a soft gradient placeholder in the given colour. */
+  private generatePlaceholderPixels(w: number, h: number,
+      r: number, g: number, b: number): Uint8Array {
+    const pixels: Uint8Array = new Uint8Array(w * h * 4);
+    const rB: number = Math.floor(r * 255);
+    const gB: number = Math.floor(g * 255);
+    const bB: number = Math.floor(b * 255);
+    for (let y: number = 0; y < h; y++) {
+      for (let x: number = 0; x < w; x++) {
+        const idx: number = (y * w + x) * 4;
+        // Slight vignette gradient for visual interest
+        const cx: number = (x / w - 0.5) * 2;
+        const cy: number = (y / h - 0.5) * 2;
+        const vignette: number = Math.max(0.5, 1.0 - (cx * cx + cy * cy) * 0.3);
+        pixels[idx] = Math.floor(rB * vignette);
+        pixels[idx + 1] = Math.floor(gB * vignette);
+        pixels[idx + 2] = Math.floor(bB * vignette);
+        pixels[idx + 3] = 255;
+      }
+    }
+    return pixels;
+  }
+
+  /** Set textureId on all SpriteAtlas entries in a map. */
+  private setAtlasTextureId(atlases: Map<number, SpriteAtlas>, texId: number): void {
+    const iter = atlases.entries();
+    let entry = iter.next();
+    while (!entry.done) {
+      entry.value[1].textureId = texId;
+      entry = iter.next();
+    }
   }
 
   /** Replace procedural atlases with rawfile PNG sheets where available. */

@@ -5,6 +5,7 @@
 #include <hilog_ndk.h>
 #include <string>
 #include <vector>
+#include <cstring>
 
 static const char* TAG = "NapiBridge";
 
@@ -171,6 +172,38 @@ napi_value NativeLoadTexture(napi_env env, napi_callback_info info) {
 
     Renderer::instance().loadTexture(textureId, rgba, w, h);
     stbi_image_free(rgba);
+    return nullptr;
+}
+
+napi_value NativeLoadTextureRaw(napi_env env, napi_callback_info info) {
+    size_t argc = 4;
+    napi_value argv[4];
+    napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+
+    int32_t textureId;
+    napi_get_value_int32(env, argv[0], &textureId);
+
+    int32_t width, height;
+    napi_get_value_int32(env, argv[1], &width);
+    napi_get_value_int32(env, argv[2], &height);
+
+    // argv[3] = ArrayBuffer (raw RGBA pixels, width * height * 4 bytes)
+    void* data;
+    size_t byteLength;
+    napi_get_arraybuffer_info(env, argv[3], &data, &byteLength);
+
+    size_t expected = (size_t)width * height * 4;
+    if (byteLength < expected) {
+        OH_LOG_ERROR(LOG_APP, "NativeLoadTextureRaw: buffer too small %{public}zu < %{public}zu",
+                     byteLength, expected);
+        return nullptr;
+    }
+
+    // Copy pixels since loadTexture may upload asynchronously
+    unsigned char* pixels = new unsigned char[expected];
+    memcpy(pixels, data, expected);
+    Renderer::instance().loadTexture(textureId, pixels, width, height);
+    delete[] pixels;
     return nullptr;
 }
 
