@@ -724,8 +724,7 @@ struct Index {
     // 1. 收集绘制命令（所有 renderer 写入 cmdBuffer）
     this.cmdBuffer.clear();
     if (this.gameScene !== null) {
-      // TODO: Task 10 will add collectCommands to GameScene
-      // this.gameScene.collectCommands(this.cmdBuffer);
+      this.gameScene.collectCommands(this.cmdBuffer);
     }
     // 2. 提交到原生渲染器
     this.nativeRenderer.beginFrame();

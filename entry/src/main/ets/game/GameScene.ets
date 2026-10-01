@@ -1,10 +1,11 @@
 import { Scene, BaseContext, World, Entity, SystemContext } from '@qiuyu/engine';
 import { AudioManager } from './AudioManager';
-import { GameSettings, CHUNK_SIZE, TILE_SIZE } from './GameConstants';
+import { GameSettings, CHUNK_SIZE, TILE_SIZE, ChunkData } from './GameConstants';
 import { WorldGenerator } from './WorldGenerator';
 import { PlayerFactory } from './factories/PlayerFactory';
 import { CameraComponent } from './components/CameraComponent';
 import { GameStateComponent } from './components/GameStateComponent';
+import { DrawCmdBuffer } from './native/DrawCmd';
 
 // Systems
 import { SpatialRebuildSystem } from './systems/SpatialRebuildSystem';
@@ -55,16 +56,30 @@ export class GameScene extends Scene {
   private playerRenderer: PlayerRenderer = new PlayerRenderer();
   private uiRenderer: UIRenderer = new UIRenderer();
   private spriteManager: SpriteManager = new SpriteManager();
+  private harmonyContext: Object | null = null;
+  public frameCount: number = 0;
+  public screenW: number = 360;
+  public screenH: number = 780;
 
   constructor(audio: AudioManager, settings: GameSettings, harmonyContext: Object | null = null) {
     super();
     this.audio = audio;
     this.settings = settings;
+    this.harmonyContext = harmonyContext;
     this.world = new World();
 
     // Initialize world generator
     const worldGen: WorldGenerator = new WorldGenerator();
     this.world.worldGen = worldGen;
+
+    // Pre-load spawn chunk to guarantee the player's starting area renders immediately
+    try {
+      const spawnChunk: ChunkData = worldGen.generateChunk(0, 0);
+      this.world.chunks.set('0,0', spawnChunk as Object);
+      console.log('[GameScene] Pre-loaded spawn chunk (0,0)');
+    } catch (e) {
+      console.error('[GameScene] Failed to pre-load spawn chunk: ' + String(e));
+    }
 
     // Create singleton entities
     const startX: number = CHUNK_SIZE * TILE_SIZE / 2;
@@ -116,7 +131,7 @@ export class GameScene extends Scene {
   }
 
   async initSprites(): Promise<void> {
-    await this.spriteManager.generateAll();
+    await this.spriteManager.generateAll(this.harmonyContext);
   }
 
   getSpriteManager(): SpriteManager {
@@ -134,12 +149,15 @@ export class GameScene extends Scene {
       dt: dt
     };
     if (baseCtx.frameCount < 5) {
-      console.log('[GameScene] update frame=' + baseCtx.frameCount + ' dt=' + dt + ' entities=' + this.world.getEntities().length);
+      console.log('[GameScene] update frame=' + baseCtx.frameCount + ' dt=' + dt + ' entities=' + this.world.getEntities().length + ' joyActive=' + baseCtx.input.joyActive + ' chunks=' + this.world.chunks.size);
     }
     this.world.update(sysCtx, dt);
   }
 
   render(baseCtx: BaseContext): void {
+    this.frameCount = baseCtx.frameCount;
+    this.screenW = baseCtx.screenW;
+    this.screenH = baseCtx.screenH;
     const camX: number = this.world.cameraX;
     const camY: number = this.world.cameraY;
     const w: World = this.world;
@@ -150,37 +168,108 @@ export class GameScene extends Scene {
     const sh: number = baseCtx.screenH;
 
     if (fc < 5) {
-      console.log('[GameScene] render frame=' + fc + ' chunks=' + w.chunks.size + ' camX=' + camX.toFixed(1) + ' camY=' + camY.toFixed(1));
+      console.log('[GameScene] render frame=' + fc + ' sw=' + sw + ' sh=' + sh + ' chunks=' + w.chunks.size + ' camX=' + camX.toFixed(1) + ' camY=' + camY.toFixed(1));
     }
+    if (fc % 60 === 0) {
+      console.log('[GameScene] render frame=' + fc + ' chunks=' + w.chunks.size + ' entities=' + w.getEntities().length);
+    }
+
+    // 调试：黄色矩形已移至渲染末尾
 
     // Clear and fill background
     ctx.clearRect(0, 0, sw, sh);
     ctx.fillStyle = '#08080f';
     ctx.fillRect(0, 0, sw, sh);
 
-    // Diagnostic: bright rectangle to confirm canvas is drawing
-    if (fc < 10) {
-      ctx.fillStyle = '#ff0000';
-      ctx.fillRect(10, 10, 60, 30);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '14px sans-serif';
-      ctx.fillText('RENDER OK', 14, 30);
+    // 诊断浮层已移除（曾遮挡画面左上角）；保留低频 console 日志用于排查
+    if (fc % 300 === 0) {
+      const playerEnt: Entity | null = w.findEntityByTag("player");
+      console.log('[GameScene] frame=' + fc + ' chunks=' + w.chunks.size + ' entities=' + w.getEntities().length + ' player=' + (playerEnt !== null) + ' screen=' + sw.toFixed(0) + 'x' + sh.toFixed(0) + ' joy=' + baseCtx.input.joyActive);
     }
 
-    // Render layers in order
-    this.tileRenderer.render(w, ctx, camX, camY, sw, sh, s, fc);
-    this.effectRenderer.renderLighting(w, ctx, camX, camY, sw, sh, s, fc);
-    this.enemyRenderer.render(w, ctx, camX, camY, sw, sh, s, fc, this.spriteManager);
-    this.effectRenderer.render(w, ctx, camX, camY, sw, sh, s, fc);
-    this.bossRenderer.render(w, ctx, camX, camY, sw, sh, s, fc, this.spriteManager);
-    this.playerRenderer.render(w, ctx, camX, camY, sw, sh, s, fc);
-    this.effectRenderer.renderVignetteAndDamage(w, ctx, camX, camY, sw, sh, s, fc);
+    // Render layers in order with error isolation
+    try {
+      this.tileRenderer.render(w, ctx, camX, camY, sw, sh, s, fc);
+    } catch (e) {
+      if (fc < 10) console.error('[GameScene] tileRenderer error: ' + String(e));
+    }
 
-    // Minimap (throttled by UIRenderer internally)
-    this.uiRenderer.renderMinimap(w, baseCtx.minimapCtx, camX, camY, sw, sh, fc);
+    try {
+      this.effectRenderer.renderLighting(w, ctx, camX, camY, sw, sh, s, fc);
+    } catch (e) {
+      if (fc < 10) console.error('[GameScene] lighting error: ' + String(e));
+    }
+
+    try {
+      this.enemyRenderer.render(w, ctx, camX, camY, sw, sh, s, fc, this.spriteManager);
+    } catch (e) {
+      if (fc < 10) console.error('[GameScene] enemyRenderer error: ' + String(e));
+    }
+
+    try {
+      this.effectRenderer.render(w, ctx, camX, camY, sw, sh, s, fc);
+    } catch (e) {
+      if (fc < 10) console.error('[GameScene] effectRenderer error: ' + String(e));
+    }
+
+    try {
+      this.bossRenderer.render(w, ctx, camX, camY, sw, sh, s, fc, this.spriteManager);
+    } catch (e) {
+      if (fc < 10) console.error('[GameScene] bossRenderer error: ' + String(e));
+    }
+
+    try {
+      this.playerRenderer.render(w, ctx, camX, camY, sw, sh, s, fc, this.spriteManager);
+    } catch (e) {
+      if (fc < 10) console.error('[GameScene] playerRenderer error: ' + String(e));
+    }
+
+    try {
+      this.effectRenderer.renderVignetteAndDamage(w, ctx, camX, camY, sw, sh, s, fc);
+    } catch (e) {
+      if (fc < 10) console.error('[GameScene] vignette error: ' + String(e));
+    }
 
     // HUD overlay (level, skills, devour indicator, human form energy)
-    this.uiRenderer.renderHUD(w, ctx, camX, camY, sw, sh, fc);
+    try {
+      this.uiRenderer.renderHUD(w, ctx, camX, camY, sw, sh, fc);
+    } catch (e) {
+      if (fc < 10) console.error('[GameScene] HUD error: ' + String(e));
+    }
+
+    // Render minimap on the same frame
+    try {
+      this.uiRenderer.renderMinimap(w, baseCtx.minimapCtx, camX, camY, sw, sh, fc);
+    } catch (e) {
+      if (fc < 10) console.error('[GameScene] minimap error: ' + String(e));
+    }
+  }
+
+  renderMinimap(baseCtx: BaseContext): void {
+    const camX: number = this.world.cameraX;
+    const camY: number = this.world.cameraY;
+    const w: World = this.world;
+    const sw: number = baseCtx.screenW;
+    const sh: number = baseCtx.screenH;
+    const fc: number = baseCtx.frameCount;
+    try {
+      this.uiRenderer.renderMinimap(w, baseCtx.minimapCtx, camX, camY, sw, sh, fc);
+    } catch (e) {
+      if (fc < 10) console.error('[GameScene] minimap error: ' + String(e));
+    }
+  }
+
+  collectCommands(buf: DrawCmdBuffer): void {
+    const camX: number = this.world.cameraX;
+    const camY: number = this.world.cameraY;
+    const w: World = this.world;
+    const s: GameSettings = this.settings;
+    const fc: number = this.frameCount;
+    const sw: number = this.screenW;
+    const sh: number = this.screenH;
+
+    this.tileRenderer.collectCommands(w, buf, camX, camY, sw, sh, s, fc);
+    // More renderers added by later tasks
   }
 
   getWorld(): World {
