@@ -1,11 +1,13 @@
-import { display, router } from '@kit.ArkUI';
+import { display, router, DrawingRenderingContext, xcomponent } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { Engine, Entity, HealthComponent, SystemContext, World } from '@qiuyu/engine';
 import { GameScene } from '../game/GameScene';
 import { AudioManager } from '../game/AudioManager';
 import { SaveManager } from '../game/SaveManager';
+import { NativeRenderer } from '../native/NativeRenderer';
+import { DrawCmdBuffer } from '../native/DrawCmd';
 import {
-  PLAYER_MAX_HP, JOYSTICK_RADIUS, MINIMAP_SIZE,
+  PLAYER_MAX_HP, JOYSTICK_RADIUS,
   DASH_COOLDOWN, WeaponForm,
   TransformForm, TRANSFORM_MAX_ENERGY,
   COLOR_TRANSFORM_BTN_LOCKED, COLOR_TRANSFORM_BTN_READY,
@@ -35,12 +37,21 @@ struct Index {
   private gameScene: GameScene | null = null;
   private audio: AudioManager = new AudioManager();
   private settings: GameSettings = { soundEnabled: true, effectsEnabled: true } as GameSettings;
-  private gameCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
-  private minimapCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
-  private gameCanvasReady: boolean = false;
-  private minimapCanvasReady: boolean = false;
+  // Drawing contexts kept for Engine.tick() compatibility (ECS systems require non-null ctx).
+  // No Canvas UI components are rendered — XComponent + NativeRenderer handle display.
+  private gameDrawingCtx: DrawingRenderingContext = new DrawingRenderingContext();
+  private gameCtx: CanvasRenderingContext2D = CanvasRenderingContext2D.getContext2DFromDrawingContext(this.gameDrawingCtx, { antialias: true });
+  private minimapDrawingCtx: DrawingRenderingContext = new DrawingRenderingContext();
+  private minimapCtx: CanvasRenderingContext2D = CanvasRenderingContext2D.getContext2DFromDrawingContext(this.minimapDrawingCtx, { antialias: true });
+  private xComponentController: xcomponent.XComponentController = new xcomponent.XComponentController();
+  private nativeRenderer: NativeRenderer = new NativeRenderer();
+  private cmdBuffer: DrawCmdBuffer = new DrawCmdBuffer();
   @State screenW: number = 360;
   @State screenH: number = 780;
+  // Canvas 绘图坐标系是像素，而 screenW/screenH（vp）用于 UI 定位。
+  // 引擎渲染必须用像素尺寸，否则只渲染屏幕左上角一小块（vp < px）。
+  private pixelW: number = 1260;
+  private pixelH: number = 2720;
   @State playerHp: number = PLAYER_MAX_HP;
   @State playerXp: number = 0;
   @State playerLevel: number = 1;
@@ -89,6 +100,9 @@ struct Index {
   @State showSaveIndicator: boolean = false;
   @State deathLevel: number = 1;
   @State deathChunks: number = 0;
+  @State @Watch('onCanvasTickChange') canvasTick: number = 0;
+  private loopIntervalId: number = -1;
+  private lastTickTime: number = 0;
   private branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
   private weaponFormNames: string[] = ['刃', '鞭', '锤', '杖', '双刃', '巨斧'];
   private monitorIntervalId: number = -1;
@@ -100,12 +114,19 @@ struct Index {
       const pxH: number = displayInfo.height;
       const vpW: number = px2vp(pxW);
       const vpH: number = px2vp(pxH);
+      // 应用锁定横屏（module.json5 orientation=landscape），而 display 在手机上
+      // 常返回自然竖屏尺寸。必须强制换算成横屏，否则所有下半屏控件
+      // （摇杆/攻击/跳跃/冲刺/工具）会被定位到窗口之外，表现为"按键无反应"。
       if (pxW > pxH) {
         this.screenW = vpW;
         this.screenH = vpH;
+        this.pixelW = pxW;
+        this.pixelH = pxH;
       } else {
         this.screenW = vpH;
         this.screenH = vpW;
+        this.pixelW = pxH;
+        this.pixelH = pxW;
       }
       const params: Object | null = router.getParams();
       if (params !== null && params !== undefined) {
@@ -118,8 +139,11 @@ struct Index {
         }
       }
     } catch (e) {
+      // 兜底尺寸与横屏锁定保持一致
       this.screenW = 780;
       this.screenH = 360;
+      this.pixelW = 2720;
+      this.pixelH = 1260;
     }
   }
 
@@ -127,22 +151,36 @@ struct Index {
     if (this.monitorIntervalId !== -1) {
       clearInterval(this.monitorIntervalId);
     }
+    if (this.loopIntervalId !== -1) {
+      clearInterval(this.loopIntervalId);
+      this.loopIntervalId = -1;
+    }
     this.engine.stop();
+    this.nativeRenderer.destroy();
     this.audio.destroy();
   }
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Canvas(this.gameCtx)
-        .width('100%')
-        .height('100%')
-        .onReady(() => {
-          this.gameCanvasReady = true;
-          console.log('[Index] Game Canvas ready, context obtained');
-          this.tryInitEngine();
+      XComponent({
+        id: 'gameSurface',
+        type: xcomponent.XComponentType.SURFACE,
+        controller: this.xComponentController
+      })
+        .width(this.screenW)
+        .height(this.screenH)
+        .hitTestBehavior(HitTestMode.Transparent)
+        .onLoad(() => {
+          console.log('[Index] XComponent onLoad');
+          this.nativeRenderer.loadModule();
+          this.nativeRenderer.init(this.pixelW, this.pixelH);
+          try {
+            this.tryInitEngine();
+          } catch (initErr) {
+            console.error('[Index] tryInitEngine FAILED: ' + String(initErr));
+            console.error('[Index] Error stack: ' + (initErr as Error).stack);
+          }
         })
-
-      this.MinimapView()
 
       this.WeaponFormView()
 
@@ -223,26 +261,6 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor(Color.Black)
-  }
-
-  @Builder
-  MinimapView() {
-    Stack() {
-      Canvas(this.minimapCtx)
-        .width(MINIMAP_SIZE)
-        .height(MINIMAP_SIZE)
-        .onReady(() => {
-          this.minimapCanvasReady = true;
-          console.log('[Index] Minimap Canvas ready, context obtained');
-          this.tryInitEngine();
-        })
-    }
-    .width(MINIMAP_SIZE + 6)
-    .height(MINIMAP_SIZE + 6)
-    .margin({ left: 8, top: 72 })
-    .borderRadius(4)
-    .border({ width: 3, color: '#475569' })
-    .backgroundColor('#0a0a15')
   }
 
   @Builder
@@ -509,6 +527,9 @@ struct Index {
 
   @Builder
   ActionButtonsView() {
+    // 全屏透明包裹层：按钮全部用 position() 悬浮定位，必须给包裹层真实尺寸，
+    // 否则 0×0 容器会把命中测试困在自身边界内（子组件悬在边界外可能点不到）。
+    // Transparent 保证不遮挡下方同层的摇杆与游戏 Canvas。
     Stack() {
       Stack() {
         Column()
@@ -632,6 +653,9 @@ struct Index {
         }
       })
     }
+    .width('100%')
+    .height('100%')
+    .hitTestBehavior(HitTestMode.Transparent)
   }
 
   @Builder
@@ -696,35 +720,99 @@ struct Index {
     this.evoMaxLevel = this.evoLevel >= 3;
   }
 
-  private tryInitEngine(): void {
-    console.log('[Index] tryInitEngine: gameCanvasReady=' + this.gameCanvasReady + ' minimapCanvasReady=' + this.minimapCanvasReady);
-    if (this.gameCanvasReady && this.minimapCanvasReady) {
-      const harmonyCtx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
-      this.gameScene = new GameScene(this.audio, this.settings, harmonyCtx);
-      this.engine.sceneManager.pushScene(this.gameScene);
-      this.engine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH);
+  onCanvasTickChange(): void {
+    // 1. 收集绘制命令（所有 renderer 写入 cmdBuffer）
+    this.cmdBuffer.clear();
+    if (this.gameScene !== null) {
+      // TODO: Task 10 will add collectCommands to GameScene
+      // this.gameScene.collectCommands(this.cmdBuffer);
+    }
+    // 2. 提交到原生渲染器
+    this.nativeRenderer.beginFrame();
+    if (this.gameScene !== null) {
+      const world: World = this.gameScene.getWorld();
+      this.nativeRenderer.setCamera(world.cameraX, world.cameraY, 1.0);
+    }
+    this.nativeRenderer.submitCommands(this.cmdBuffer.getCommands());
+    this.nativeRenderer.endFrame();
+  }
 
-      // Start async sprite generation (non-blocking)
+  private tryInitEngine(): void {
+    console.log('[Index] tryInitEngine CALLED');
+
+    if (this.gameScene !== null) {
+      console.log('[Index] Engine already initialized, skipping');
+      return;
+    }
+
+    console.log('[Index] XComponent ready, starting initialization...');
+    try {
+      const harmonyCtx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+      console.log('[Index] Step 1: Creating GameScene...');
+      this.gameScene = new GameScene(this.audio, this.settings, harmonyCtx);
+      console.log('[Index] Step 2: GameScene created successfully');
+
+      console.log('[Index] Step 3: Pushing scene to engine...');
+      this.engine.sceneManager.pushScene(this.gameScene);
+      console.log('[Index] Step 4: Scene pushed successfully');
+
+      console.log('[Index] Step 5: Calling engine.init() with pixelW=' + this.pixelW + ' pixelH=' + this.pixelH);
+      this.engine.init(this.gameCtx, this.minimapCtx, this.pixelW, this.pixelH);
+      // 使用外部循环：setInterval 只更新游戏状态，onCanvasTickChange 中执行原生渲染
+      this.engine.setExternalLoop(true);
+      console.log('[Index] Step 6: Engine.init() completed - starting external loop');
+
+      // 外部游戏循环：每帧更新游戏状态
+      this.lastTickTime = Date.now();
+      this.loopIntervalId = setInterval(() => {
+        const now: number = Date.now();
+        const dt: number = (now - this.lastTickTime) / 1000.0;
+        this.lastTickTime = now;
+        this.engine.tick(dt);
+        this.canvasTick++;
+      }, 33);
+      console.log('[Index] External game loop started at ~30fps');
+
+      console.log('[Index] Step 7: Starting sprite generation...');
       this.gameScene.initSprites().then(() => {
-        console.log('[Index] Sprite generation complete');
+        console.log('[Index] Step 8: Sprite generation complete');
+      }).catch((err: Error) => {
+        console.error('[Index] Sprite generation FAILED: ' + String(err));
       });
 
-      console.log('[Index] Engine initialized with GameScene, screenW:', this.screenW, 'screenH:', this.screenH);
+      console.log('[Index] Step 9: Starting status monitor...');
       this.startStatusMonitor();
 
       if (!this.isNewGame) {
+        console.log('[Index] Step 10: Loading saved game...');
         SaveManager.load(harmonyCtx).then((data: Object | null) => {
           if (data !== null) {
+            console.log('[Index] Step 11: Save data loaded');
             this.handleLoadGame(data as SaveData);
+          } else {
+            console.log('[Index] Step 11: No save data found');
           }
+        }).catch((err: Error) => {
+          console.error('[Index] Save load FAILED: ' + String(err));
         });
+      } else {
+        console.log('[Index] New game mode, skipping save load');
       }
+
+      console.log('[Index] INITIALIZATION COMPLETE - game loop is running');
+    } catch (e) {
+      console.error('[Index] tryInitEngine EXCEPTION: ' + String(e));
+      console.error('[Index] Error stack: ' + (e as Error).stack);
     }
   }
 
+  private joyPointerId: number = -1;
+
   private handleJoystickTouch(event: TouchEvent): void {
     if (event.type === TouchType.Down) {
-      const touch: TouchObject = event.touches[0];
+      if (event.changedTouches.length === 0) return;
+      const touch: TouchObject = event.changedTouches[0];
+      this.joyPointerId = touch.id;
       this.joyCenterX = touch.x;
       this.joyCenterY = touch.y;
       this.joyActive = true;
@@ -732,7 +820,9 @@ struct Index {
       this.joyKnobY = 0;
       this.engine.setInputJoy(true, 0, 0);
     } else if (event.type === TouchType.Move && this.joyActive) {
-      const touch: TouchObject = event.touches[0];
+      // 只跟踪按下摇杆的那根手指：touches[0] 可能是同时按住的其他按钮的手指
+      const touch: TouchObject | null = this.findTouchById(event, this.joyPointerId);
+      if (touch === null) return;
       let dx: number = touch.x - this.joyCenterX;
       let dy: number = touch.y - this.joyCenterY;
       const dist: number = Math.sqrt(dx * dx + dy * dy);
@@ -744,11 +834,33 @@ struct Index {
       this.joyKnobY = dy;
       this.engine.setInputJoy(true, dx / JOYSTICK_RADIUS, dy / JOYSTICK_RADIUS);
     } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+      const touch: TouchObject | null = this.findTouchById(event, this.joyPointerId);
+      if (this.joyActive && touch === null && event.touches.length > 0) {
+        // 抬起的是别的手指，摇杆仍在操作中
+        return;
+      }
       this.joyActive = false;
+      this.joyPointerId = -1;
       this.joyKnobX = 0;
       this.joyKnobY = 0;
       this.engine.setInputJoy(false, 0, 0);
     }
+  }
+
+  private findTouchById(event: TouchEvent, pointerId: number): TouchObject | null {
+    const all: TouchObject[] = event.touches;
+    for (let i: number = 0; i < all.length; i++) {
+      if (all[i].id === pointerId) {
+        return all[i];
+      }
+    }
+    const changed: TouchObject[] = event.changedTouches;
+    for (let i: number = 0; i < changed.length; i++) {
+      if (changed[i].id === pointerId) {
+        return changed[i];
+      }
+    }
+    return null;
   }
 
   private startStatusMonitor(): void {
@@ -1124,6 +1236,7 @@ struct Index {
 
   private quitGame(): void {
     this.engine.stop();
+    this.nativeRenderer.destroy();
     this.audio.destroy();
     router.replaceUrl({ url: 'pages/LoginPage' });
   }
