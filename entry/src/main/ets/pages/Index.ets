@@ -181,6 +181,17 @@ struct Index {
             console.error('[Index] Error stack: ' + (initErr as Error).stack);
           }
         })
+        .onTouch((event: TouchEvent) => {
+          for (let i: number = 0; i < event.touches.length; i++) {
+            const touch: TouchObject = event.touches[i];
+            const action: number = event.type === TouchType.Down ? 0 :
+                                   event.type === TouchType.Move ? 1 : 2;
+            this.nativeRenderer.touchInput(
+              touch.id, action,
+              vp2px(touch.x), vp2px(touch.y)
+            );
+          }
+        })
 
       this.WeaponFormView()
 

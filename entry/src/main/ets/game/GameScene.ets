@@ -234,34 +234,12 @@ export class GameScene extends Scene {
       if (fc < 10) console.error('[GameScene] vignette error: ' + String(e));
     }
 
-    // HUD overlay (level, skills, devour indicator, human form energy)
-    try {
-      this.uiRenderer.renderHUD(w, ctx, camX, camY, sw, sh, fc);
-    } catch (e) {
-      if (fc < 10) console.error('[GameScene] HUD error: ' + String(e));
-    }
-
-    // Render minimap on the same frame
-    try {
-      this.uiRenderer.renderMinimap(w, baseCtx.minimapCtx, camX, camY, sw, sh, fc);
-    } catch (e) {
-      if (fc < 10) console.error('[GameScene] minimap error: ' + String(e));
-    }
+    // HUD overlay and minimap removed — now handled by ArkTS UI components in Index.ets
+    // and native rendering pipeline via collectCommands(). UIRenderer is dead code (Task 19 cleanup).
   }
 
-  renderMinimap(baseCtx: BaseContext): void {
-    const camX: number = this.world.cameraX;
-    const camY: number = this.world.cameraY;
-    const w: World = this.world;
-    const sw: number = baseCtx.screenW;
-    const sh: number = baseCtx.screenH;
-    const fc: number = baseCtx.frameCount;
-    try {
-      this.uiRenderer.renderMinimap(w, baseCtx.minimapCtx, camX, camY, sw, sh, fc);
-    } catch (e) {
-      if (fc < 10) console.error('[GameScene] minimap error: ' + String(e));
-    }
-  }
+  // renderMinimap removed — minimap Canvas was replaced by XComponent in Task 9.
+  // Minimap will be re-implemented as native rendering in a future task.
 
   collectCommands(buf: DrawCmdBuffer): void {
     const camX: number = this.world.cameraX;
