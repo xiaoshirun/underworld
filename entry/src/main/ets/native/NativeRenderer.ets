@@ -77,8 +77,8 @@ export class NativeRenderer {
   unloadTexture(textureId: number): void {
     if (this.nativeModule === null) return;
     const m: Record<string, Function> = this.nativeModule as Record<string, Function>;
-    if (m['nativeUnload_texture'] !== undefined) {
-      (m['nativeUnload_texture'] as Function)(textureId);
+    if (m['nativeUnloadTexture'] !== undefined) {
+      (m['nativeUnloadTexture'] as Function)(textureId);
     }
   }
 
