@@ -143,6 +143,9 @@ export class GameScene extends Scene {
   }
 
   update(baseCtx: BaseContext, dt: number): void {
+    this.frameCount = baseCtx.frameCount;
+    this.screenW = baseCtx.screenW;
+    this.screenH = baseCtx.screenH;
     const sysCtx: SystemContext = {
       world: this.world,
       screenW: baseCtx.screenW,
