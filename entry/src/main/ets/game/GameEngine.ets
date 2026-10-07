@@ -395,6 +395,7 @@ export class GameEngine {
     const lx: number = tx - cx * CHUNK_SIZE;
     const ly: number = ty - cy * CHUNK_SIZE;
     chunk.tiles[ly][lx] = tileType;
+    this.chunkCacheDirty.add(key);
   }
 
   private isWalkable(tile: number): boolean {
