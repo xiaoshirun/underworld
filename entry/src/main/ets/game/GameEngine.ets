@@ -105,6 +105,18 @@ export class GameEngine {
   private chunkRenderQueued: Set<string> = new Set();
   private chunkGenQueue: string[] = [];
   private chunkGenQueued: Set<string> = new Set();
+  private bgGradCache: CanvasGradient | null = null;
+  private bgGradDepth: number = -1;
+  private bgGradW: number = 0;
+  private bgGradH: number = 0;
+  private vignetteGradCache: CanvasGradient | null = null;
+  private vignetteW: number = 0;
+  private vignetteH: number = 0;
+  private bgParallaxCache: OffscreenCanvas | null = null;
+  private bgParallaxW: number = 0;
+  private bgParallaxH: number = 0;
+  private bgParallaxCamCX: number = -999;
+  private bgParallaxCamCY: number = -999;
   private input: InputState = {
     joyActive: false, joyDx: 0, joyDy: 0,
     jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false,
@@ -1875,84 +1887,112 @@ export class GameEngine {
     const h: number = this.screenH;
     const depth: number = Math.min(1.0, Math.max(0, this.cameraY / (TILE_SIZE * 30)));
 
-    // Layer 1: Depth-based gradient (deeper = darker, more purple)
-    const grad: CanvasGradient = c.createLinearGradient(0, 0, 0, h);
-    if (depth < 0.3) {
-      grad.addColorStop(0, '#0c0c1e');
-      grad.addColorStop(0.5, '#080814');
-      grad.addColorStop(1, '#050510');
-    } else if (depth < 0.7) {
-      grad.addColorStop(0, '#0a0818');
-      grad.addColorStop(0.5, '#06050f');
-      grad.addColorStop(1, '#03030a');
-    } else {
-      grad.addColorStop(0, '#0d0520');
-      grad.addColorStop(0.5, '#080315');
-      grad.addColorStop(1, '#04020a');
+    // Layer 1: Depth-based gradient (cached)
+    const depthBucket: number = depth < 0.3 ? 0 : (depth < 0.7 ? 1 : 2);
+    if (this.bgGradCache === null || this.bgGradDepth !== depthBucket ||
+        this.bgGradW !== w || this.bgGradH !== h) {
+      const grad: CanvasGradient = c.createLinearGradient(0, 0, 0, h);
+      if (depthBucket === 0) {
+        grad.addColorStop(0, '#0c0c1e');
+        grad.addColorStop(0.5, '#080814');
+        grad.addColorStop(1, '#050510');
+      } else if (depthBucket === 1) {
+        grad.addColorStop(0, '#0a0818');
+        grad.addColorStop(0.5, '#06050f');
+        grad.addColorStop(1, '#03030a');
+      } else {
+        grad.addColorStop(0, '#0d0520');
+        grad.addColorStop(0.5, '#080315');
+        grad.addColorStop(1, '#04020a');
+      }
+      this.bgGradCache = grad;
+      this.bgGradDepth = depthBucket;
+      this.bgGradW = w;
+      this.bgGradH = h;
     }
-    c.fillStyle = grad;
+    c.fillStyle = this.bgGradCache;
     c.fillRect(0, 0, w, h);
 
-    // Layer 2: Far cave silhouettes (0.1x parallax)
-    const farOffX: number = this.cameraX * 0.1;
-    const farOffY: number = this.cameraY * 0.1;
-    c.fillStyle = depth > 0.5 ? '#0d0520' : '#0e0e1c';
-    c.globalAlpha = 0.6;
-    const farStep: number = 80;
-    const farStart: number = Math.floor(farOffX / farStep) * farStep;
-    for (let fx: number = farStart - farStep; fx < farStart + w + farStep * 2; fx += farStep) {
-      const sx: number = fx - farOffX;
-      const hash: number = Math.abs(Math.floor(fx / farStep) * 2654435761) % 100;
-      const stalH: number = 30 + (hash % 50);
-      const stalW: number = 25 + (hash % 35);
-      // Ceiling stalactite
-      const ceilY: number = -(farOffY * 0.3) + (hash % 20);
-      c.beginPath();
-      c.moveTo(sx, ceilY);
-      c.lineTo(sx + stalW / 2, ceilY + stalH);
-      c.lineTo(sx + stalW, ceilY);
-      c.fill();
-      // Floor stalagmite
-      const floorY: number = h - (farOffY * 0.2) - (hash % 15);
-      const stgH: number = 20 + (hash % 35);
-      c.beginPath();
-      c.moveTo(sx + 10, floorY);
-      c.lineTo(sx + 10 + stalW / 2 - 5, floorY - stgH);
-      c.lineTo(sx + 10 + stalW - 10, floorY);
-      c.fill();
-    }
-    c.globalAlpha = 1.0;
+    // Layers 2+3: Parallax cave formations (cached to offscreen canvas)
+    const parallaxChunkSize: number = 200;
+    const camCX: number = Math.floor(this.cameraX / parallaxChunkSize);
+    const camCY: number = Math.floor(this.cameraY / parallaxChunkSize);
+    if (this.bgParallaxCache === null || this.bgParallaxW !== w || this.bgParallaxH !== h ||
+        this.bgParallaxCamCX !== camCX || this.bgParallaxCamCY !== camCY) {
+      const pw: number = w + parallaxChunkSize * 2;
+      const ph: number = h + parallaxChunkSize * 2;
+      const offscreen: OffscreenCanvas = new OffscreenCanvas(pw, ph);
+      const pc: OffscreenCanvasRenderingContext2D = offscreen.getContext('2d') as OffscreenCanvasRenderingContext2D;
+      const baseOffX: number = camCX * parallaxChunkSize - parallaxChunkSize;
+      const baseOffY: number = camCY * parallaxChunkSize - parallaxChunkSize;
 
-    // Layer 3: Mid cave formations (0.3x parallax)
-    const midOffX: number = this.cameraX * 0.3;
-    const midOffY: number = this.cameraY * 0.3;
-    c.fillStyle = depth > 0.5 ? '#0a0318' : '#0a0a16';
-    c.globalAlpha = 0.4;
-    const midStep: number = 50;
-    const midStart: number = Math.floor(midOffX / midStep) * midStep;
-    for (let mx: number = midStart - midStep; mx < midStart + w + midStep * 2; mx += midStep) {
-      const sx: number = mx - midOffX;
-      const hash: number = Math.abs(Math.floor(mx / midStep) * 48271) % 100;
-      if (hash < 40) {
-        const mStalH: number = 15 + (hash % 25);
-        const ceilY: number = -(midOffY * 0.4) + (hash % 30);
-        c.beginPath();
-        c.moveTo(sx, ceilY);
-        c.lineTo(sx + 8, ceilY + mStalH);
-        c.lineTo(sx + 16, ceilY);
-        c.fill();
+      // Far layer (0.1x parallax)
+      const farStep: number = 80;
+      const farBaseOffX: number = baseOffX * 0.1;
+      const farBaseOffY: number = baseOffY * 0.1;
+      pc.fillStyle = depth > 0.5 ? '#0d0520' : '#0e0e1c';
+      pc.globalAlpha = 0.6;
+      const farStart: number = Math.floor(farBaseOffX / farStep) * farStep;
+      for (let fx: number = farStart - farStep; fx < farBaseOffX + pw + farStep * 2; fx += farStep) {
+        const sx: number = fx - farBaseOffX + parallaxChunkSize;
+        const hash: number = Math.abs(Math.floor(fx / farStep) * 2654435761) % 100;
+        const stalH: number = 30 + (hash % 50);
+        const stalW: number = 25 + (hash % 35);
+        const ceilY: number = -(farBaseOffY * 0.3) + (hash % 20) + parallaxChunkSize;
+        pc.beginPath();
+        pc.moveTo(sx, ceilY);
+        pc.lineTo(sx + stalW / 2, ceilY + stalH);
+        pc.lineTo(sx + stalW, ceilY);
+        pc.fill();
+        const floorY: number = ph - parallaxChunkSize - (farBaseOffY * 0.2) - (hash % 15);
+        const stgH: number = 20 + (hash % 35);
+        pc.beginPath();
+        pc.moveTo(sx + 10, floorY);
+        pc.lineTo(sx + 10 + stalW / 2 - 5, floorY - stgH);
+        pc.lineTo(sx + 10 + stalW - 10, floorY);
+        pc.fill();
       }
-      if (hash > 60) {
-        const mStgH: number = 10 + (hash % 20);
-        const floorY: number = h - (midOffY * 0.3) - (hash % 20);
-        c.beginPath();
-        c.moveTo(sx + 5, floorY);
-        c.lineTo(sx + 12, floorY - mStgH);
-        c.lineTo(sx + 19, floorY);
-        c.fill();
+
+      // Mid layer (0.3x parallax)
+      const midStep: number = 50;
+      const midBaseOffX: number = baseOffX * 0.3;
+      const midBaseOffY: number = baseOffY * 0.3;
+      pc.fillStyle = depth > 0.5 ? '#0a0318' : '#0a0a16';
+      pc.globalAlpha = 0.4;
+      const midStart: number = Math.floor(midBaseOffX / midStep) * midStep;
+      for (let mx: number = midStart - midStep; mx < midBaseOffX + pw + midStep * 2; mx += midStep) {
+        const sx: number = mx - midBaseOffX + parallaxChunkSize;
+        const hash: number = Math.abs(Math.floor(mx / midStep) * 48271) % 100;
+        if (hash < 40) {
+          const mStalH: number = 15 + (hash % 25);
+          const ceilY: number = -(midBaseOffY * 0.4) + (hash % 30) + parallaxChunkSize;
+          pc.beginPath();
+          pc.moveTo(sx, ceilY);
+          pc.lineTo(sx + 8, ceilY + mStalH);
+          pc.lineTo(sx + 16, ceilY);
+          pc.fill();
+        }
+        if (hash > 60) {
+          const mStgH: number = 10 + (hash % 20);
+          const floorY: number = ph - parallaxChunkSize - (midBaseOffY * 0.3) - (hash % 20);
+          pc.beginPath();
+          pc.moveTo(sx + 5, floorY);
+          pc.lineTo(sx + 12, floorY - mStgH);
+          pc.lineTo(sx + 19, floorY);
+          pc.fill();
+        }
       }
+      pc.globalAlpha = 1.0;
+      this.bgParallaxCache = offscreen;
+      this.bgParallaxW = w;
+      this.bgParallaxH = h;
+      this.bgParallaxCamCX = camCX;
+      this.bgParallaxCamCY = camCY;
     }
-    c.globalAlpha = 1.0;
+
+    const drawOffX: number = -(this.cameraX - camCX * parallaxChunkSize) * 0.1 + parallaxChunkSize - this.cameraX * 0.1 + camCX * parallaxChunkSize * 0.1;
+    const drawOffY: number = -(this.cameraY - camCY * parallaxChunkSize) * 0.1 + parallaxChunkSize - this.cameraY * 0.1 + camCY * parallaxChunkSize * 0.1;
+    c.drawImage(this.bgParallaxCache, drawOffX, drawOffY);
   }
 
   private renderChunkStaticLayer(cx: number, cy: number, isShadow: boolean): ImageBitmap {
@@ -2833,6 +2873,12 @@ export class GameEngine {
       const flash: boolean = s.hitFlash > 0;
       const cx: number = screenX;
       const cy: number = screenY;
+      const halfW: number = this.screenW * 0.5;
+      const halfH: number = this.screenH * 0.5;
+      const dxCenter: number = screenX - halfW;
+      const dyCenter: number = screenY - halfH;
+      const lodThresholdSq: number = (halfW * halfW + halfH * halfH) * 0.35;
+      const isDistant: boolean = (dxCenter * dxCenter + dyCenter * dyCenter) > lodThresholdSq;
 
       if (s.enemyType === EnemyType.GRAY_SLIME) {
         const bounce: number = Math.sin(bp) * 2 * sc;
@@ -2893,7 +2939,7 @@ export class GameEngine {
         const bounce: number = Math.sin(bp * 1.3) * 1.5 * sc;
         c.save();
         c.translate(cx, cy + bounce);
-        if (!flash) {
+        if (!flash && !isDistant) {
           c.globalAlpha = 0.12 + Math.sin(this.frameCount * 0.05) * 0.05;
           c.fillStyle = COLOR_SLIME_PURPLE;
           c.beginPath();
@@ -2905,7 +2951,8 @@ export class GameEngine {
         c.beginPath();
         c.ellipse(0, 14 * sc, 13 * sc, 3.5 * sc, 0, 0, Math.PI * 2);
         c.fill();
-        for (let t: number = 0; t < 4; t++) {
+        if (!isDistant) {
+          for (let t: number = 0; t < 4; t++) {
           const angle: number = (t / 4) * Math.PI * 2 + this.frameCount * 0.03;
           const tx: number = Math.cos(angle) * 16 * sc;
           const ty: number = Math.sin(angle) * 10 * sc + 4 * sc;
@@ -2919,6 +2966,7 @@ export class GameEngine {
           c.beginPath();
           c.ellipse(tx, ty, 3 * sc, 2 * sc, angle, 0, Math.PI * 2);
           c.fill();
+        }
         }
         if (flash) {
           c.globalAlpha = 0.9;
@@ -2986,7 +3034,7 @@ export class GameEngine {
         const charge: number = s.isCharging ? Math.abs(Math.sin(this.frameCount * 0.08)) : Math.abs(Math.sin(this.frameCount * 0.04)) * 0.3;
         c.save();
         c.translate(cx, cy);
-        if (!flash) {
+        if (!flash && !isDistant) {
           c.globalAlpha = 0.1 + charge * 0.1;
           c.fillStyle = '#ff4444';
           c.beginPath();
@@ -2998,7 +3046,7 @@ export class GameEngine {
         c.beginPath();
         c.ellipse(0, 13 * sc, 12 * sc, 3 * sc, 0, 0, Math.PI * 2);
         c.fill();
-        if (!flash) {
+        if (!flash && !isDistant) {
           for (let fi: number = 0; fi < 5; fi++) {
             const angle: number = -Math.PI * 0.8 + (fi / 4) * Math.PI * 0.6;
             const len: number = (5 + Math.sin(this.frameCount * 0.1 + fi) * 2) * sc;
@@ -3068,7 +3116,7 @@ export class GameEngine {
         const bounce: number = Math.sin(bp * 0.8) * 1.5 * sc;
         c.save();
         c.translate(cx, cy + bounce);
-        if (!flash) {
+        if (!flash && !isDistant) {
           for (let d: number = 0; d < 5; d++) {
             const angle: number = (d / 5) * Math.PI * 2 + this.frameCount * 0.02;
             const dist: number = (16 + Math.sin(this.frameCount * 0.03 + d * 2) * 3) * sc;
@@ -3096,7 +3144,7 @@ export class GameEngine {
         c.beginPath();
         c.ellipse(0, 0, 14 * sc, 12 * sc, 0, 0, Math.PI * 2);
         c.fill();
-        if (!flash) {
+        if (!flash && !isDistant) {
           c.globalAlpha = 0.3;
           c.fillStyle = COLOR_SLIME_BLUE_LIGHT;
           const rippleOff: number = Math.sin(this.frameCount * 0.04) * 1.5 * sc;
@@ -3142,7 +3190,7 @@ export class GameEngine {
         const bounce: number = Math.abs(Math.sin(bp * 1.1)) * 3 * sc;
         c.save();
         c.translate(cx, cy - bounce);
-        if (!flash) {
+        if (!flash && !isDistant) {
           c.globalAlpha = 0.08 + Math.sin(this.frameCount * 0.04) * 0.03;
           c.fillStyle = COLOR_SLIME_YELLOW_LIGHT;
           c.beginPath();
@@ -3231,7 +3279,7 @@ export class GameEngine {
         const phase: number = Math.sin(this.frameCount * 0.05) * 0.15;
         c.save();
         c.translate(cx, cy + float);
-        if (!flash) {
+        if (!flash && !isDistant) {
           c.globalAlpha = 0.06 + Math.sin(this.frameCount * 0.04) * 0.03;
           c.fillStyle = COLOR_SLIME_GHOST;
           c.beginPath();
@@ -3706,14 +3754,21 @@ export class GameEngine {
   }
 
   private renderVignette(c: CanvasRenderingContext2D): void {
-    const cx: number = this.screenW / 2;
-    const cy: number = this.screenH / 2;
-    const radius: number = Math.max(this.screenW, this.screenH) * 0.7;
-    const gradient: CanvasGradient = c.createRadialGradient(cx, cy, radius * 0.4, cx, cy, radius);
-    gradient.addColorStop(0, 'rgba(0,0,0,0)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0.45)');
-    c.fillStyle = gradient;
-    c.fillRect(0, 0, this.screenW, this.screenH);
+    const w: number = this.screenW;
+    const h: number = this.screenH;
+    if (this.vignetteGradCache === null || this.vignetteW !== w || this.vignetteH !== h) {
+      const cx: number = w / 2;
+      const cy: number = h / 2;
+      const radius: number = Math.max(w, h) * 0.7;
+      const gradient: CanvasGradient = c.createRadialGradient(cx, cy, radius * 0.4, cx, cy, radius);
+      gradient.addColorStop(0, 'rgba(0,0,0,0)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0.45)');
+      this.vignetteGradCache = gradient;
+      this.vignetteW = w;
+      this.vignetteH = h;
+    }
+    c.fillStyle = this.vignetteGradCache;
+    c.fillRect(0, 0, w, h);
   }
 
   private renderPlayerLight(c: CanvasRenderingContext2D, offX: number, offY: number, p: PlayerState): void {

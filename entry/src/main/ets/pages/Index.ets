@@ -376,7 +376,7 @@ struct Index {
             .height(38)
             .fill(this.toolReady ? COLOR_TOOL_BTN : '#4a3520')
             .opacity(this.toolReady ? 0.85 : 0.5)
-            .shadow({ radius: 4, color: '#f59e0b40', offsetX: 0, offsetY: 2 })
+            .border({ width: 1, color: '#f59e0b50' })
 
           Text('钻')
             .fontSize(12)
@@ -401,7 +401,7 @@ struct Index {
             .height(38)
             .fill(COLOR_BTN_JUMP)
             .opacity(0.85)
-            .shadow({ radius: 4, color: '#22c55e40', offsetX: 0, offsetY: 2 })
+            .border({ width: 1, color: '#22c55e50' })
 
           Text('跳')
             .fontSize(12)
@@ -423,7 +423,7 @@ struct Index {
             .height(38)
             .fill(this.dashReady ? COLOR_BTN_DASH : '#1e3a5f')
             .opacity(this.dashReady ? 0.85 : 0.5)
-            .shadow({ radius: 4, color: '#3b82f640', offsetX: 0, offsetY: 2 })
+            .border({ width: 1, color: '#3b82f650' })
 
           Text('闪')
             .fontSize(12)
@@ -451,7 +451,7 @@ struct Index {
             .height(48)
             .fill(COLOR_BTN_ATTACK)
             .opacity(0.85)
-            .shadow({ radius: 6, color: '#ef444450', offsetX: 0, offsetY: 3 })
+            .border({ width: 1.5, color: '#ef444460' })
 
           Circle()
             .width(42)
