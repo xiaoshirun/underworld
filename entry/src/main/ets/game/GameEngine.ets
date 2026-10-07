@@ -376,7 +376,7 @@ export class GameEngine {
   }
 
   private isWalkable(tile: number): boolean {
-    return tile !== TileType.WALL && tile !== TileType.VOID && tile !== TileType.BROKEN_WALL;
+    return tile !== TileType.WALL && tile !== TileType.VOID;
   }
 
   private update(dt: number): void {
