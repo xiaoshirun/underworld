@@ -1082,7 +1082,7 @@ struct Index {
         this.transformUnlockForm = notify.form;
         setTimeout(() => { this.transformUnlockActive = false; }, 3000);
       }
-    }, 100);
+    }, 250);
   }
 
   @Builder

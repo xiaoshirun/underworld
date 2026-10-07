@@ -75,6 +75,7 @@ export class GameEngine {
   private screenW: number = 0;
   private screenH: number = 0;
   private gameLoopId: number = -1;
+  private lastFrameTime: number = 0;
   private frameCount: number = 0;
   private shakeX: number = 0;
   private shakeY: number = 0;
@@ -102,6 +103,8 @@ export class GameEngine {
   private chunkCacheDirty: Set<string> = new Set();
   private chunkRenderQueue: string[] = [];
   private chunkRenderQueued: Set<string> = new Set();
+  private chunkGenQueue: string[] = [];
+  private chunkGenQueued: Set<string> = new Set();
   private input: InputState = {
     joyActive: false, joyDx: 0, joyDy: 0,
     jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false,
@@ -177,8 +180,12 @@ export class GameEngine {
   }
 
   private startLoop(): void {
+    this.lastFrameTime = Date.now();
     this.gameLoopId = setInterval(() => {
-      this.update(FRAME_INTERVAL);
+      const now: number = Date.now();
+      const dt: number = Math.min(now - this.lastFrameTime, 50);
+      this.lastFrameTime = now;
+      this.update(dt);
       this.render();
       this.frameCount++;
     }, FRAME_INTERVAL);
@@ -301,50 +308,65 @@ export class GameEngine {
         const cx: number = pcx + dx;
         const cy: number = pcy + dy;
         const key: string = this.chunkKey(cx, cy);
-        if (!this.chunks.has(key)) {
-          const chunk: ChunkData = this.worldGen.generateChunk(cx, cy);
-          this.chunks.set(key, chunk);
-          this.chunkCacheDirty.add(key);
-          for (let i: number = 0; i < chunk.enemies.length; i++) {
-            this.enemies.push(chunk.enemies[i]);
-          }
-          for (let i: number = 0; i < chunk.traps.length; i++) {
-            this.traps.push(chunk.traps[i]);
-          }
-          for (let i: number = 0; i < chunk.mechanisms.length; i++) {
-            this.mechanisms.push(chunk.mechanisms[i]);
-          }
-          for (let i: number = 0; i < chunk.secretRooms.length; i++) {
-            this.secretRooms.push(chunk.secretRooms[i]);
-          }
-          // Extract boss data
-          for (let i: number = 0; i < chunk.bosses.length; i++) {
-            this.bosses.push(chunk.bosses[i]);
-          }
-          // Extract chest data
-          for (let i: number = 0; i < chunk.chests.length; i++) {
-            this.chests.push(chunk.chests[i]);
-          }
+        if (!this.chunks.has(key) && !this.chunkGenQueued.has(key)) {
+          this.chunkGenQueue.push(key);
+          this.chunkGenQueued.add(key);
         }
       }
     }
-    // Sync boss rooms from WorldGenerator
-    const wgRooms: BossRoom[] = this.worldGen.getBossRooms();
-    for (let i: number = 0; i < wgRooms.length; i++) {
-      const wgRoom: BossRoom = wgRooms[i];
-      let found: boolean = false;
-      for (let j: number = 0; j < this.bossRooms.length; j++) {
-        if (this.bossRooms[j].chunkX === wgRoom.chunkX && this.bossRooms[j].chunkY === wgRoom.chunkY) {
-          found = true;
-          break;
-        }
+  }
+
+  private processChunkGenQueue(): void {
+    const maxPerFrame: number = 2;
+    let processed: number = 0;
+    while (this.chunkGenQueue.length > 0 && processed < maxPerFrame) {
+      const key: string = this.chunkGenQueue.shift() as string;
+      this.chunkGenQueued.delete(key);
+      if (this.chunks.has(key)) continue;
+      const idx: number = key.indexOf(',');
+      const cx: number = parseInt(key.substring(0, idx));
+      const cy: number = parseInt(key.substring(idx + 1));
+      const chunk: ChunkData = this.worldGen.generateChunk(cx, cy);
+      this.chunks.set(key, chunk);
+      this.chunkCacheDirty.add(key);
+      for (let i: number = 0; i < chunk.enemies.length; i++) {
+        this.enemies.push(chunk.enemies[i]);
       }
-      if (!found) {
-        this.bossRooms.push({
-          chunkX: wgRoom.chunkX, chunkY: wgRoom.chunkY,
-          bossType: wgRoom.bossType,
-          entered: false, defeated: false, chestSpawned: false
-        });
+      for (let i: number = 0; i < chunk.traps.length; i++) {
+        this.traps.push(chunk.traps[i]);
+      }
+      for (let i: number = 0; i < chunk.mechanisms.length; i++) {
+        this.mechanisms.push(chunk.mechanisms[i]);
+      }
+      for (let i: number = 0; i < chunk.secretRooms.length; i++) {
+        this.secretRooms.push(chunk.secretRooms[i]);
+      }
+      for (let i: number = 0; i < chunk.bosses.length; i++) {
+        this.bosses.push(chunk.bosses[i]);
+      }
+      for (let i: number = 0; i < chunk.chests.length; i++) {
+        this.chests.push(chunk.chests[i]);
+      }
+      processed++;
+    }
+    if (processed > 0) {
+      const wgRooms: BossRoom[] = this.worldGen.getBossRooms();
+      for (let i: number = 0; i < wgRooms.length; i++) {
+        const wgRoom: BossRoom = wgRooms[i];
+        let found: boolean = false;
+        for (let j: number = 0; j < this.bossRooms.length; j++) {
+          if (this.bossRooms[j].chunkX === wgRoom.chunkX && this.bossRooms[j].chunkY === wgRoom.chunkY) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          this.bossRooms.push({
+            chunkX: wgRoom.chunkX, chunkY: wgRoom.chunkY,
+            bossType: wgRoom.bossType,
+            entered: false, defeated: false, chestSpawned: false
+          });
+        }
       }
     }
   }
@@ -386,6 +408,7 @@ export class GameEngine {
     const ptx: number = Math.floor(p.x / TILE_SIZE);
     const pty: number = Math.floor(p.y / TILE_SIZE);
     this.loadChunksAround(ptx, pty);
+    this.processChunkGenQueue();
     this.processChunkRenderQueue();
 
     this.updatePlayer(p, dt);
@@ -970,6 +993,7 @@ export class GameEngine {
   private updateEnemies(dt: number): void {
     if (this.player === null) return;
     const p: PlayerState = this.player;
+    const cullDist: number = Math.max(this.screenW, this.screenH) * 1.5;
 
     for (let i: number = 0; i < this.enemies.length; i++) {
       const s: SlimeState = this.enemies[i];
@@ -985,6 +1009,8 @@ export class GameEngine {
       const dx: number = p.x - s.x;
       const dy: number = p.y - s.y;
       const dist: number = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > cullDist) continue;
 
       switch (s.enemyType) {
         case EnemyType.GRAY_SLIME: {
@@ -1785,7 +1811,8 @@ export class GameEngine {
       pt.vy *= 0.95;
       pt.life -= dt;
       if (pt.life <= 0) {
-        this.particles.splice(i, 1);
+        this.particles[i] = this.particles[this.particles.length - 1];
+        this.particles.pop();
       }
     }
   }
