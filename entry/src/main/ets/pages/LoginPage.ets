@@ -18,8 +18,8 @@ struct LoginPage {
   private bgParticles: BgParticle[] = [];
   private screenW: number = 360;
   private screenH: number = 780;
-  @State username: string = 'player';
-  @State password: string = '';
+  @State username: string = 'test';
+  @State password: string = 'test';
   @State errorMsg: string = '';
   @State isLoading: boolean = false;
   @State loginBtnScale: number = 1.0;
@@ -44,6 +44,9 @@ struct LoginPage {
       this.screenH = 360;
       this.isLandscape = true;
     }
+    setTimeout(() => {
+      this.handleLogin();
+    }, 500);
   }
 
   aboutToDisappear(): void {
