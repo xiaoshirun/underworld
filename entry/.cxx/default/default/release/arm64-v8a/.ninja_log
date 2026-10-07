@@ -1,0 +1,10 @@
+# ninja log v7
+42	467	8125763572563298	CMakeFiles/game_native.dir/renderer/Camera2D.cpp.o	2b416498a339ba72
+86	599	8125763573021487	CMakeFiles/game_native.dir/renderer/SpriteBatcher.cpp.o	bd2b639cfebf40d3
+230	1125	8125763574460567	CMakeFiles/game_native.dir/platform/stb_image_impl.c.o	f9ae6c1ba7253f64
+65	1520	8125763572805535	CMakeFiles/game_native.dir/renderer/ShaderProgram.cpp.o	e3908ff8aa3d88a5
+111	1657	8125763573276963	CMakeFiles/game_native.dir/renderer/TextureManager.cpp.o	d8f9178b1abb3433
+138	1948	8125763573546557	CMakeFiles/game_native.dir/renderer/renderer.cpp.o	755256b5736bdfc4
+175	1950	8125763573914999	CMakeFiles/game_native.dir/platform/napi_bridge.cpp.o	e71fd6bf69f556ff
+201	1952	8125763574176039	CMakeFiles/game_native.dir/platform/napi_init.cpp.o	84a310036e632a5f
+1953	2532	8125763591680116	D:/Projects/DevEcoStudioProjects/Game/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libgame_native.so	fc9db4208c26332d

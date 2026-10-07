@@ -1,0 +1,13 @@
+Not searching for unused variables given on the command line.
+-- Configuring done (0.4s)
+CMake Error: The following variables are used in this project, but they are set to NOTFOUND.
+Please set them or make sure they are set and tested correctly in the CMake files:
+ANDROID_LIB
+    linked by target "native_renderer" in directory D:/Projects/DevEcoStudioProjects/Game/entry/src/main/cpp
+LOG_LIB
+    linked by target "native_renderer" in directory D:/Projects/DevEcoStudioProjects/Game/entry/src/main/cpp
+RAWFILE_LIB
+    linked by target "native_renderer" in directory D:/Projects/DevEcoStudioProjects/Game/entry/src/main/cpp
+
+-- Generating done (0.0s)
+CMake Generate step failed.  Build files cannot be regenerated correctly.

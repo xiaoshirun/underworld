@@ -1,0 +1,3 @@
+D:/Projects/DevEcoStudioProjects/Game/entry/.cxx/default/default/release/arm64-v8a/CMakeFiles/game_native.dir
+D:/Projects/DevEcoStudioProjects/Game/entry/.cxx/default/default/release/arm64-v8a/CMakeFiles/edit_cache.dir
+D:/Projects/DevEcoStudioProjects/Game/entry/.cxx/default/default/release/arm64-v8a/CMakeFiles/rebuild_cache.dir

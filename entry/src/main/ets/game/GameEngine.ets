@@ -97,6 +97,11 @@ export class GameEngine {
   private transformUnlockNotifyTimer: number = 0;
   private transformUnlockNotifyForm: TransformForm = TransformForm.NONE;
   private transformAnimIsRevert: boolean = false;
+  private chunkCanvasCache: Map<string, ImageBitmap> = new Map();
+  private chunkCacheShadow: Map<string, boolean> = new Map();
+  private chunkCacheDirty: Set<string> = new Set();
+  private chunkRenderQueue: string[] = [];
+  private chunkRenderQueued: Set<string> = new Set();
   private input: InputState = {
     joyActive: false, joyDx: 0, joyDy: 0,
     jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false,
@@ -296,6 +301,7 @@ export class GameEngine {
         if (!this.chunks.has(key)) {
           const chunk: ChunkData = this.worldGen.generateChunk(cx, cy);
           this.chunks.set(key, chunk);
+          this.chunkCacheDirty.add(key);
           for (let i: number = 0; i < chunk.enemies.length; i++) {
             this.enemies.push(chunk.enemies[i]);
           }
@@ -377,6 +383,7 @@ export class GameEngine {
     const ptx: number = Math.floor(p.x / TILE_SIZE);
     const pty: number = Math.floor(p.y / TILE_SIZE);
     this.loadChunksAround(ptx, pty);
+    this.processChunkRenderQueue();
 
     this.updatePlayer(p, dt);
     // === Transform System Update ===
@@ -1917,20 +1924,252 @@ export class GameEngine {
     c.globalAlpha = 1.0;
   }
 
+  private renderChunkStaticLayer(cx: number, cy: number, isShadow: boolean): ImageBitmap {
+    const chunkPixelSize: number = CHUNK_SIZE * TILE_SIZE;
+    const offscreen: OffscreenCanvas = new OffscreenCanvas(chunkPixelSize, chunkPixelSize);
+    const oc: OffscreenCanvasRenderingContext2D = offscreen.getContext('2d') as OffscreenCanvasRenderingContext2D;
+
+    const floorColor: string = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
+    const floorVarColor: string = isShadow ? '#0a0a16' : COLOR_FLOOR_VAR;
+    const wallColor: string = isShadow ? COLOR_SHADOW_WALL : COLOR_WALL;
+
+    const baseTX: number = cx * CHUNK_SIZE;
+    const baseTY: number = cy * CHUNK_SIZE;
+
+    for (let ly: number = 0; ly < CHUNK_SIZE; ly++) {
+      for (let lx: number = 0; lx < CHUNK_SIZE; lx++) {
+        const tx: number = baseTX + lx;
+        const ty: number = baseTY + ly;
+        const screenX: number = lx * TILE_SIZE;
+        const screenY: number = ly * TILE_SIZE;
+        const tile: number = this.getTile(tx * TILE_SIZE, ty * TILE_SIZE);
+
+        if (tile === TileType.WALL) {
+          oc.fillStyle = wallColor;
+          oc.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+          const brickH: number = 8;
+          const brickW: number = 16;
+          const row: number = ty % 2;
+          oc.fillStyle = isShadow ? '#2d1050' : COLOR_WALL_EDGE;
+          oc.fillRect(screenX, screenY, TILE_SIZE, 1);
+          oc.fillRect(screenX, screenY + brickH, TILE_SIZE, 1);
+          oc.fillRect(screenX, screenY + brickH * 2, TILE_SIZE, 1);
+          oc.fillRect(screenX, screenY + brickH * 3, TILE_SIZE, 1);
+          const vOff: number = row === 0 ? 0 : brickW / 2;
+          oc.fillRect(screenX + vOff, screenY, 1, brickH);
+          oc.fillRect(screenX + vOff + brickW, screenY, 1, brickH);
+          oc.fillRect(screenX + vOff + brickW / 2, screenY + brickH, 1, brickH);
+          oc.fillRect(screenX + vOff + brickW * 1.5, screenY + brickH, 1, brickH);
+          oc.fillRect(screenX + vOff, screenY + brickH * 2, 1, brickH);
+          oc.fillRect(screenX + vOff + brickW, screenY + brickH * 2, 1, brickH);
+          oc.fillRect(screenX + vOff + brickW / 2, screenY + brickH * 3, 1, brickH);
+          const hash: number = ((tx * 31 + ty * 17) % 7);
+          if (hash === 0) {
+            oc.fillStyle = '#1f1f35';
+            oc.fillRect(screenX + 4, screenY + 3, 3, 2);
+          } else if (hash === 1) {
+            oc.fillStyle = '#1f1f35';
+            oc.fillRect(screenX + 20, screenY + 18, 4, 2);
+          } else if (hash === 3) {
+            oc.fillStyle = '#22223a';
+            oc.fillRect(screenX + 10, screenY + 12, 2, 3);
+          }
+          const oreHash: number = ((tx * 73 + ty * 137) % 47);
+          if (oreHash < 3) {
+            oc.fillStyle = '#8b4513';
+            oc.fillRect(screenX + 6, screenY + 8, 4, 3);
+            oc.fillRect(screenX + 9, screenY + 10, 3, 4);
+            oc.fillStyle = '#cd7f32';
+            oc.fillRect(screenX + 7, screenY + 9, 2, 2);
+            oc.fillRect(screenX + 10, screenY + 11, 2, 2);
+          } else if (oreHash === 3) {
+            oc.fillStyle = '#4a5568';
+            oc.fillRect(screenX + 18, screenY + 4, 5, 3);
+            oc.fillRect(screenX + 20, screenY + 6, 3, 4);
+            oc.fillStyle = '#718096';
+            oc.fillRect(screenX + 19, screenY + 5, 3, 2);
+          } else if (oreHash === 4) {
+            oc.fillStyle = '#a0aec0';
+            oc.fillRect(screenX + 4, screenY + 20, 3, 3);
+            oc.fillRect(screenX + 6, screenY + 22, 4, 2);
+            oc.fillStyle = '#e2e8f0';
+            oc.fillRect(screenX + 5, screenY + 21, 2, 2);
+          } else if (oreHash === 5) {
+            oc.fillStyle = '#b7791f';
+            oc.fillRect(screenX + 14, screenY + 14, 4, 3);
+            oc.fillRect(screenX + 16, screenY + 16, 3, 4);
+            oc.fillStyle = '#ecc94b';
+            oc.fillRect(screenX + 15, screenY + 15, 2, 2);
+          }
+          const belowTile: number = this.getTile(tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
+          if (belowTile === TileType.FLOOR || belowTile === TileType.BROKEN_WALL) {
+            oc.fillStyle = isShadow ? '#4a1a6a' : '#2d6b3a';
+            oc.fillRect(screenX, screenY + TILE_SIZE - 3, TILE_SIZE, 3);
+            oc.fillStyle = isShadow ? '#6b2a9a' : '#3d8a4e';
+            oc.fillRect(screenX + 2, screenY + TILE_SIZE - 5, 2, 3);
+            oc.fillRect(screenX + 8, screenY + TILE_SIZE - 4, 1, 2);
+            oc.fillRect(screenX + 14, screenY + TILE_SIZE - 6, 2, 4);
+            oc.fillRect(screenX + 22, screenY + TILE_SIZE - 4, 1, 2);
+            oc.fillRect(screenX + 28, screenY + TILE_SIZE - 5, 2, 3);
+          }
+          const belowWall: number = this.getTile(tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
+          if (belowWall !== TileType.WALL && belowWall !== TileType.FLOOR) {
+            const vineHash: number = ((tx * 41 + ty * 67) % 11);
+            if (vineHash < 3) {
+              const vineLen: number = 6 + (vineHash * 4);
+              oc.fillStyle = isShadow ? '#3a1a5a' : '#1a4a2a';
+              oc.fillRect(screenX + 4 + vineHash * 3, screenY + TILE_SIZE, 1, vineLen);
+              oc.fillRect(screenX + 5 + vineHash * 3, screenY + TILE_SIZE + vineLen - 2, 1, 3);
+              oc.fillStyle = isShadow ? '#5a2a8a' : '#2d6b3a';
+              oc.fillRect(screenX + 3 + vineHash * 3, screenY + TILE_SIZE + vineLen, 3, 2);
+            } else if (vineHash < 5) {
+              oc.fillStyle = isShadow ? '#3a1a5a' : '#1a4a2a';
+              oc.fillRect(screenX + 8, screenY + TILE_SIZE, 1, 4);
+              oc.fillRect(screenX + 18, screenY + TILE_SIZE, 1, 6);
+              oc.fillRect(screenX + 26, screenY + TILE_SIZE, 1, 3);
+            }
+          }
+        } else if (tile === TileType.FLOOR) {
+          const variant: number = ((tx * 7 + ty * 13) % 5);
+          oc.fillStyle = variant === 0 ? floorColor : variant === 1 ? floorVarColor : variant === 2 ? '#14142a' : variant === 3 ? '#10101e' : floorColor;
+          oc.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+          const hash: number = ((tx * 23 + ty * 11) % 8);
+          if (hash === 0) {
+            oc.fillStyle = '#1e1e38';
+            oc.fillRect(screenX + 4, screenY + 8, 4, 3);
+            oc.fillRect(screenX + 18, screenY + 20, 3, 2);
+          } else if (hash === 1) {
+            oc.fillStyle = '#0e0e1a';
+            oc.fillRect(screenX + 12, screenY + 4, 2, 2);
+            oc.fillRect(screenX + 24, screenY + 16, 3, 2);
+            oc.fillRect(screenX + 6, screenY + 24, 2, 2);
+          } else if (hash === 2) {
+            oc.fillStyle = '#1a1a30';
+            oc.fillRect(screenX + 8, screenY + 14, 5, 3);
+          } else if (hash === 4) {
+            oc.fillStyle = '#0c0c18';
+            oc.fillRect(screenX + 20, screenY + 6, 2, 3);
+            oc.fillRect(screenX + 2, screenY + 22, 3, 2);
+          }
+          oc.fillStyle = '#0a0a14';
+          oc.globalAlpha = 0.12;
+          oc.fillRect(screenX, screenY + TILE_SIZE - 1, TILE_SIZE, 1);
+          oc.fillRect(screenX + TILE_SIZE - 1, screenY, 1, TILE_SIZE);
+          oc.globalAlpha = 1.0;
+          const aboveTile: number = this.getTile(tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
+          if (aboveTile === TileType.WALL) {
+            oc.fillStyle = isShadow ? '#1a0a2e' : '#1a1a28';
+            oc.fillRect(screenX, screenY, TILE_SIZE, 3);
+          }
+          if (aboveTile !== TileType.WALL && aboveTile !== TileType.FLOOR) {
+            const stHash: number = ((tx * 53 + ty * 97) % 13);
+            if (stHash < 2) {
+              oc.fillStyle = isShadow ? '#2a1a4a' : '#2a2a3e';
+              oc.fillRect(screenX + 12, screenY, 8, 2);
+              oc.fillRect(screenX + 14, screenY + 2, 4, 4);
+              oc.fillRect(screenX + 15, screenY + 6, 2, 4);
+              oc.fillStyle = isShadow ? '#3a2a5a' : '#3a3a50';
+              oc.fillRect(screenX + 13, screenY, 2, 3);
+            } else if (stHash < 5) {
+              oc.fillStyle = isShadow ? '#2a1a4a' : '#2a2a3e';
+              oc.fillRect(screenX + 6 + stHash * 4, screenY, 3, 2);
+              oc.fillRect(screenX + 7 + stHash * 4, screenY + 2, 1, 3 + stHash);
+            }
+          }
+          const belowFloor: number = this.getTile(tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
+          if (belowFloor !== TileType.FLOOR && belowFloor !== TileType.WALL) {
+            const smHash: number = ((tx * 37 + ty * 79) % 17);
+            if (smHash < 2) {
+              oc.fillStyle = isShadow ? '#2a1a4a' : '#2a2a3e';
+              oc.fillRect(screenX + 10, screenY + TILE_SIZE - 2, 12, 2);
+              oc.fillRect(screenX + 12, screenY + TILE_SIZE - 6, 8, 4);
+              oc.fillRect(screenX + 14, screenY + TILE_SIZE - 9, 4, 3);
+              oc.fillStyle = isShadow ? '#3a2a5a' : '#3a3a50';
+              oc.fillRect(screenX + 15, screenY + TILE_SIZE - 8, 2, 2);
+            } else if (smHash < 5) {
+              oc.fillStyle = isShadow ? '#2a1a4a' : '#2a2a3e';
+              oc.fillRect(screenX + 4 + smHash * 5, screenY + TILE_SIZE - 2, 3, 2);
+              oc.fillRect(screenX + 5 + smHash * 5, screenY + TILE_SIZE - 4 - smHash, 1, 2 + smHash);
+            }
+          }
+        } else if (tile === TileType.BROKEN_WALL) {
+          oc.fillStyle = '#2a2a3e';
+          oc.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+          oc.fillStyle = '#3a3a50';
+          oc.fillRect(screenX + 2, screenY + 2, 8, 6);
+          oc.fillRect(screenX + 16, screenY + 10, 10, 7);
+          oc.fillRect(screenX + 6, screenY + 20, 7, 8);
+          oc.fillStyle = '#4a4a60';
+          oc.fillRect(screenX + 4, screenY + 4, 4, 3);
+          oc.fillRect(screenX + 18, screenY + 12, 5, 3);
+          oc.fillStyle = '#1a1a2e';
+          oc.fillRect(screenX + 12, screenY + 2, 1, 8);
+          oc.fillRect(screenX + 14, screenY + 6, 1, 6);
+          oc.fillRect(screenX + 26, screenY + 18, 1, 10);
+        }
+      }
+    }
+    return offscreen.transferToImageBitmap();
+  }
+
+  private processChunkRenderQueue(): void {
+    if (this.chunkRenderQueue.length === 0) return;
+    const key: string = this.chunkRenderQueue.shift() as string;
+    this.chunkRenderQueued.delete(key);
+    const idx: number = key.indexOf(',');
+    const cx: number = parseInt(key.substring(0, idx));
+    const cy: number = parseInt(key.substring(idx + 1));
+    const chunkWorldX: number = (cx + 0.5) * CHUNK_SIZE * TILE_SIZE;
+    const chunkWorldY: number = (cy + 0.5) * CHUNK_SIZE * TILE_SIZE;
+    const biome: BiomeType = this.worldGen.getBiome(chunkWorldX, chunkWorldY);
+    const isShadow: boolean = biome === BiomeType.SHADOW;
+    const bitmap: ImageBitmap = this.renderChunkStaticLayer(cx, cy, isShadow);
+    const old: ImageBitmap | undefined = this.chunkCanvasCache.get(key);
+    if (old !== undefined) {
+      old.close();
+    }
+    this.chunkCanvasCache.set(key, bitmap);
+    this.chunkCacheShadow.set(key, isShadow);
+    this.chunkCacheDirty.delete(key);
+  }
+
   private renderWorld(c: CanvasRenderingContext2D, offX: number, offY: number): void {
     const startTX: number = Math.floor(this.cameraX / TILE_SIZE) - 1;
     const startTY: number = Math.floor(this.cameraY / TILE_SIZE) - 1;
     const endTX: number = Math.ceil((this.cameraX + this.screenW) / TILE_SIZE) + 1;
     const endTY: number = Math.ceil((this.cameraY + this.screenH) / TILE_SIZE) + 1;
 
-    // Check biome at camera center for biome-specific rendering
     const camWorldX: number = this.cameraX + this.screenW / 2;
     const camWorldY: number = this.cameraY + this.screenH / 2;
     const viewBiome: BiomeType = this.worldGen.getBiome(camWorldX, camWorldY);
     const isShadow: boolean = viewBiome === BiomeType.SHADOW;
     const floorColor: string = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
-    const floorVarColor: string = isShadow ? '#0a0a16' : COLOR_FLOOR_VAR;
     const wallColor: string = isShadow ? COLOR_SHADOW_WALL : COLOR_WALL;
+
+    const chunkPixelSize: number = CHUNK_SIZE * TILE_SIZE;
+    const startCX: number = Math.floor(startTX / CHUNK_SIZE);
+    const startCY: number = Math.floor(startTY / CHUNK_SIZE);
+    const endCX: number = Math.floor(endTX / CHUNK_SIZE);
+    const endCY: number = Math.floor(endTY / CHUNK_SIZE);
+
+    for (let cy: number = startCY; cy <= endCY; cy++) {
+      for (let cx: number = startCX; cx <= endCX; cx++) {
+        const key: string = this.chunkKey(cx, cy);
+        if (!this.chunks.has(key)) continue;
+        const cached: ImageBitmap | undefined = this.chunkCanvasCache.get(key);
+        if (cached !== undefined) {
+          const drawX: number = cx * chunkPixelSize + offX;
+          const drawY: number = cy * chunkPixelSize + offY;
+          c.drawImage(cached, drawX, drawY);
+        }
+        if (this.chunkCacheDirty.has(key) || cached === undefined) {
+          if (!this.chunkRenderQueued.has(key)) {
+            this.chunkRenderQueue.push(key);
+            this.chunkRenderQueued.add(key);
+          }
+        }
+      }
+    }
 
     for (let ty: number = startTY; ty <= endTY; ty++) {
       for (let tx: number = startTX; tx <= endTX; tx++) {
@@ -1938,208 +2177,17 @@ export class GameEngine {
         const screenY: number = ty * TILE_SIZE + offY;
         const tile: number = this.getTile(tx * TILE_SIZE, ty * TILE_SIZE);
 
-        if (tile === TileType.WALL) {
-          // Terraria-style wall with brick texture
-          c.fillStyle = wallColor;
+        if (tile === TileType.WALL || tile === TileType.FLOOR || tile === TileType.BROKEN_WALL) {
+          const tileCX: number = Math.floor(tx / CHUNK_SIZE);
+          const tileCY: number = Math.floor(ty / CHUNK_SIZE);
+          const tileKey: string = this.chunkKey(tileCX, tileCY);
+          if (this.chunkCanvasCache.has(tileKey)) continue;
+          c.fillStyle = tile === TileType.WALL ? wallColor : (tile === TileType.FLOOR ? floorColor : '#2a2a3e');
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+          continue;
+        }
 
-          // Brick pattern
-          const brickH: number = 8;
-          const brickW: number = 16;
-          const row: number = ty % 2;
-          c.fillStyle = isShadow ? '#2d1050' : COLOR_WALL_EDGE;
-          // Horizontal mortar lines
-          c.fillRect(screenX, screenY, TILE_SIZE, 1);
-          c.fillRect(screenX, screenY + brickH, TILE_SIZE, 1);
-          c.fillRect(screenX, screenY + brickH * 2, TILE_SIZE, 1);
-          c.fillRect(screenX, screenY + brickH * 3, TILE_SIZE, 1);
-          // Vertical mortar lines (offset every other row)
-          const vOff: number = row === 0 ? 0 : brickW / 2;
-          c.fillRect(screenX + vOff, screenY, 1, brickH);
-          c.fillRect(screenX + vOff + brickW, screenY, 1, brickH);
-          c.fillRect(screenX + vOff + brickW / 2, screenY + brickH, 1, brickH);
-          c.fillRect(screenX + vOff + brickW * 1.5, screenY + brickH, 1, brickH);
-          c.fillRect(screenX + vOff, screenY + brickH * 2, 1, brickH);
-          c.fillRect(screenX + vOff + brickW, screenY + brickH * 2, 1, brickH);
-          c.fillRect(screenX + vOff + brickW / 2, screenY + brickH * 3, 1, brickH);
-
-          // Subtle stone texture noise
-          const hash: number = ((tx * 31 + ty * 17) % 7);
-          if (hash === 0) {
-            c.fillStyle = '#1f1f35';
-            c.fillRect(screenX + 4, screenY + 3, 3, 2);
-          } else if (hash === 1) {
-            c.fillStyle = '#1f1f35';
-            c.fillRect(screenX + 20, screenY + 18, 4, 2);
-          } else if (hash === 3) {
-            c.fillStyle = '#22223a';
-            c.fillRect(screenX + 10, screenY + 12, 2, 3);
-          }
-
-          // Terraria-style ore veins in stone
-          const oreHash: number = ((tx * 73 + ty * 137) % 47);
-          if (oreHash < 3) {
-            // Copper ore — warm orange-brown cluster
-            c.fillStyle = '#8b4513';
-            c.fillRect(screenX + 6, screenY + 8, 4, 3);
-            c.fillRect(screenX + 9, screenY + 10, 3, 4);
-            c.fillStyle = '#cd7f32';
-            c.fillRect(screenX + 7, screenY + 9, 2, 2);
-            c.fillRect(screenX + 10, screenY + 11, 2, 2);
-          } else if (oreHash === 3) {
-            // Iron ore — blue-gray cluster
-            c.fillStyle = '#4a5568';
-            c.fillRect(screenX + 18, screenY + 4, 5, 3);
-            c.fillRect(screenX + 20, screenY + 6, 3, 4);
-            c.fillStyle = '#718096';
-            c.fillRect(screenX + 19, screenY + 5, 3, 2);
-          } else if (oreHash === 4) {
-            // Silver ore — bright white-gray
-            c.fillStyle = '#a0aec0';
-            c.fillRect(screenX + 4, screenY + 20, 3, 3);
-            c.fillRect(screenX + 6, screenY + 22, 4, 2);
-            c.fillStyle = '#e2e8f0';
-            c.fillRect(screenX + 5, screenY + 21, 2, 2);
-          } else if (oreHash === 5) {
-            // Gold ore — yellow cluster (rarer, deeper)
-            c.fillStyle = '#b7791f';
-            c.fillRect(screenX + 14, screenY + 14, 4, 3);
-            c.fillRect(screenX + 16, screenY + 16, 3, 4);
-            c.fillStyle = '#ecc94b';
-            c.fillRect(screenX + 15, screenY + 15, 2, 2);
-          }
-
-          // Check if floor is below — add mossy/grass top edge (Terraria style)
-          const belowTile: number = this.getTile(tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
-          if (belowTile === TileType.FLOOR || belowTile === TileType.BROKEN_WALL) {
-            c.fillStyle = isShadow ? '#4a1a6a' : '#2d6b3a';
-            c.fillRect(screenX, screenY + TILE_SIZE - 3, TILE_SIZE, 3);
-            // Grass tufts
-            c.fillStyle = isShadow ? '#6b2a9a' : '#3d8a4e';
-            c.fillRect(screenX + 2, screenY + TILE_SIZE - 5, 2, 3);
-            c.fillRect(screenX + 8, screenY + TILE_SIZE - 4, 1, 2);
-            c.fillRect(screenX + 14, screenY + TILE_SIZE - 6, 2, 4);
-            c.fillRect(screenX + 22, screenY + TILE_SIZE - 4, 1, 2);
-            c.fillRect(screenX + 28, screenY + TILE_SIZE - 5, 2, 3);
-          }
-
-          // Hanging vines from wall ceiling (where below is empty/open)
-          const belowWall: number = this.getTile(tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
-          if (belowWall !== TileType.WALL && belowWall !== TileType.FLOOR) {
-            const vineHash: number = ((tx * 41 + ty * 67) % 11);
-            if (vineHash < 3) {
-              // Long vine
-              const vineLen: number = 6 + (vineHash * 4);
-              c.fillStyle = isShadow ? '#3a1a5a' : '#1a4a2a';
-              c.fillRect(screenX + 4 + vineHash * 3, screenY + TILE_SIZE, 1, vineLen);
-              c.fillRect(screenX + 5 + vineHash * 3, screenY + TILE_SIZE + vineLen - 2, 1, 3);
-              // Leaf at tip
-              c.fillStyle = isShadow ? '#5a2a8a' : '#2d6b3a';
-              c.fillRect(screenX + 3 + vineHash * 3, screenY + TILE_SIZE + vineLen, 3, 2);
-            } else if (vineHash < 5) {
-              // Short vine cluster
-              c.fillStyle = isShadow ? '#3a1a5a' : '#1a4a2a';
-              c.fillRect(screenX + 8, screenY + TILE_SIZE, 1, 4);
-              c.fillRect(screenX + 18, screenY + TILE_SIZE, 1, 6);
-              c.fillRect(screenX + 26, screenY + TILE_SIZE, 1, 3);
-            }
-          }
-        } else if (tile === TileType.FLOOR) {
-          // Terraria-style floor with varied stone/dirt texture
-          const variant: number = ((tx * 7 + ty * 13) % 5);
-          c.fillStyle = variant === 0 ? floorColor : variant === 1 ? floorVarColor : variant === 2 ? '#14142a' : variant === 3 ? '#10101e' : floorColor;
-          c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-
-          // Stone pebble details
-          const hash: number = ((tx * 23 + ty * 11) % 8);
-          if (hash === 0) {
-            c.fillStyle = '#1e1e38';
-            c.fillRect(screenX + 4, screenY + 8, 4, 3);
-            c.fillRect(screenX + 18, screenY + 20, 3, 2);
-          } else if (hash === 1) {
-            c.fillStyle = '#0e0e1a';
-            c.fillRect(screenX + 12, screenY + 4, 2, 2);
-            c.fillRect(screenX + 24, screenY + 16, 3, 2);
-            c.fillRect(screenX + 6, screenY + 24, 2, 2);
-          } else if (hash === 2) {
-            c.fillStyle = '#1a1a30';
-            c.fillRect(screenX + 8, screenY + 14, 5, 3);
-          } else if (hash === 4) {
-            c.fillStyle = '#0c0c18';
-            c.fillRect(screenX + 20, screenY + 6, 2, 3);
-            c.fillRect(screenX + 2, screenY + 22, 3, 2);
-          }
-
-          // Subtle grid lines for stone block look
-          c.fillStyle = '#0a0a14';
-          c.globalAlpha = 0.12;
-          c.fillRect(screenX, screenY + TILE_SIZE - 1, TILE_SIZE, 1);
-          c.fillRect(screenX + TILE_SIZE - 1, screenY, 1, TILE_SIZE);
-          c.globalAlpha = 1.0;
-
-          // Check if wall is above — add dark dirt edge
-          const aboveTile: number = this.getTile(tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
-          if (aboveTile === TileType.WALL) {
-            c.fillStyle = isShadow ? '#1a0a2e' : '#1a1a28';
-            c.fillRect(screenX, screenY, TILE_SIZE, 3);
-          }
-
-          // Stalactites hanging from ceiling (where above is open/empty)
-          if (aboveTile !== TileType.WALL && aboveTile !== TileType.FLOOR) {
-            const stHash: number = ((tx * 53 + ty * 97) % 13);
-            if (stHash < 2) {
-              // Large stalactite
-              c.fillStyle = isShadow ? '#2a1a4a' : '#2a2a3e';
-              c.fillRect(screenX + 12, screenY, 8, 2);
-              c.fillRect(screenX + 14, screenY + 2, 4, 4);
-              c.fillRect(screenX + 15, screenY + 6, 2, 4);
-              c.fillStyle = isShadow ? '#3a2a5a' : '#3a3a50';
-              c.fillRect(screenX + 13, screenY, 2, 3);
-            } else if (stHash < 5) {
-              // Small stalactite
-              c.fillStyle = isShadow ? '#2a1a4a' : '#2a2a3e';
-              c.fillRect(screenX + 6 + stHash * 4, screenY, 3, 2);
-              c.fillRect(screenX + 7 + stHash * 4, screenY + 2, 1, 3 + stHash);
-            }
-          }
-
-          // Stalagmites rising from floor edges
-          const belowFloor: number = this.getTile(tx * TILE_SIZE, (ty + 1) * TILE_SIZE);
-          if (belowFloor !== TileType.FLOOR && belowFloor !== TileType.WALL) {
-            const smHash: number = ((tx * 37 + ty * 79) % 17);
-            if (smHash < 2) {
-              // Large stalagmite
-              c.fillStyle = isShadow ? '#2a1a4a' : '#2a2a3e';
-              c.fillRect(screenX + 10, screenY + TILE_SIZE - 2, 12, 2);
-              c.fillRect(screenX + 12, screenY + TILE_SIZE - 6, 8, 4);
-              c.fillRect(screenX + 14, screenY + TILE_SIZE - 9, 4, 3);
-              c.fillStyle = isShadow ? '#3a2a5a' : '#3a3a50';
-              c.fillRect(screenX + 15, screenY + TILE_SIZE - 8, 2, 2);
-            } else if (smHash < 5) {
-              // Small stalagmite
-              c.fillStyle = isShadow ? '#2a1a4a' : '#2a2a3e';
-              c.fillRect(screenX + 4 + smHash * 5, screenY + TILE_SIZE - 2, 3, 2);
-              c.fillRect(screenX + 5 + smHash * 5, screenY + TILE_SIZE - 4 - smHash, 1, 2 + smHash);
-            }
-          }
-        } else if (tile === TileType.BROKEN_WALL) {
-          // Rubble/debris appearance
-          c.fillStyle = '#2a2a3e';
-          c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          // Rubble chunks
-          c.fillStyle = '#3a3a50';
-          c.fillRect(screenX + 2, screenY + 2, 8, 6);
-          c.fillRect(screenX + 16, screenY + 10, 10, 7);
-          c.fillRect(screenX + 6, screenY + 20, 7, 8);
-          c.fillStyle = '#4a4a60';
-          c.fillRect(screenX + 4, screenY + 4, 4, 3);
-          c.fillRect(screenX + 18, screenY + 12, 5, 3);
-          // Cracks
-          c.fillStyle = '#1a1a2e';
-          c.fillRect(screenX + 12, screenY + 2, 1, 8);
-          c.fillRect(screenX + 14, screenY + 6, 1, 6);
-          c.fillRect(screenX + 26, screenY + 18, 1, 10);
-        } else if (tile === TileType.GLOW_STONE) {
+        if (tile === TileType.GLOW_STONE) {
           c.fillStyle = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
           const glowR: number = 20 + Math.sin(this.frameCount * 0.05 + tx) * 4;
@@ -2173,20 +2221,14 @@ export class GameEngine {
         } else if (tile === TileType.WATER) {
           const waveOff: number = Math.sin(this.frameCount * 0.03 + tx * 0.5) * 2;
           const waveOff2: number = Math.sin(this.frameCount * 0.05 + tx * 0.8) * 1.5;
-
-          // Water base with transparency
           c.globalAlpha = 0.75;
           c.fillStyle = COLOR_WATER;
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
           c.globalAlpha = 1.0;
-
-          // Deeper water gradient overlay
           c.fillStyle = '#0a1a3a';
           c.globalAlpha = 0.25;
           c.fillRect(screenX, screenY + TILE_SIZE - 8, TILE_SIZE, 8);
           c.globalAlpha = 1.0;
-
-          // Surface tension line (top edge highlight)
           const aboveWater: number = this.getTile(tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
           if (aboveWater !== TileType.WATER) {
             c.fillStyle = COLOR_WATER_LIGHT;
@@ -2196,19 +2238,14 @@ export class GameEngine {
             c.fillRect(screenX, screenY + 2, TILE_SIZE, 1);
             c.globalAlpha = 1.0;
           }
-
-          // Caustic light patterns
           c.fillStyle = COLOR_WATER_LIGHT;
           c.globalAlpha = 0.3;
           c.fillRect(screenX + 4, screenY + 8 + waveOff, 24, 3);
           c.fillRect(screenX + 8, screenY + 20 - waveOff, 16, 2);
-          // Secondary caustics
           c.globalAlpha = 0.15;
           c.fillRect(screenX + 2 + waveOff2, screenY + 14, 10, 2);
           c.fillRect(screenX + 18 - waveOff2, screenY + 26, 8, 2);
           c.globalAlpha = 1.0;
-
-          // Bubble particles (deterministic, animated)
           const bubbleHash: number = ((tx * 61 + ty * 113) % 23);
           if (bubbleHash < 3) {
             const bubbleY: number = (this.frameCount * 0.3 + bubbleHash * 11) % TILE_SIZE;
@@ -2267,25 +2304,17 @@ export class GameEngine {
         } else if (tile === TileType.LAVA) {
           const lavaOff: number = Math.sin(this.frameCount * 0.05 + tx * 0.7) * 3;
           const lavaOff2: number = Math.sin(this.frameCount * 0.08 + tx * 1.2) * 2;
-
-          // Lava base
           c.fillStyle = COLOR_LAVA;
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-
-          // Bright molten core
           c.fillStyle = '#cd4a00';
           c.globalAlpha = 0.4;
           c.fillRect(screenX + 6, screenY + 10 + lavaOff2, 18, 6);
           c.globalAlpha = 1.0;
-
-          // Surface bright glow
           c.fillStyle = COLOR_LAVA_LIGHT;
           c.globalAlpha = 0.6;
           c.fillRect(screenX + 4, screenY + 6 + lavaOff, 20, 4);
           c.fillRect(screenX + 10, screenY + 18 - lavaOff, 14, 3);
           c.globalAlpha = 1.0;
-
-          // Dark crust patches (cooling lava)
           const crustHash: number = ((tx * 43 + ty * 89) % 11);
           if (crustHash < 3) {
             c.fillStyle = '#3a0a00';
@@ -2294,8 +2323,6 @@ export class GameEngine {
             c.fillRect(screenX + 14 - crustHash * 2, screenY + 22 - crustHash * 4, 5, 2);
             c.globalAlpha = 1.0;
           }
-
-          // Lava surface glow (top edge if open above)
           const aboveLava: number = this.getTile(tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
           if (aboveLava !== TileType.LAVA) {
             c.fillStyle = '#ff6600';
@@ -2306,8 +2333,6 @@ export class GameEngine {
             c.fillRect(screenX, screenY + 2, TILE_SIZE, 1);
             c.globalAlpha = 1.0;
           }
-
-          // Ember sparks
           const emberHash: number = ((tx * 71 + ty * 127) % 19);
           if (emberHash < 2) {
             const emberY: number = (this.frameCount * 0.5 + emberHash * 7) % TILE_SIZE;

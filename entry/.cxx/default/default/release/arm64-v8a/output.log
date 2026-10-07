@@ -1,0 +1,18 @@
+ninja: Entering directory `D:\Projects\DevEcoStudioProjects\Game\entry\.cxx\default\default\release\arm64-v8a'
+[1/9] Building CXX object CMakeFiles/game_native.dir/renderer/Camera2D.cpp.o
+clang++: warning: argument unused during compilation: '--gcc-toolchain=D:/Software/DevEco Studio/sdk/default/openharmony/native/llvm' [-Wunused-command-line-argument]
+[2/9] Building CXX object CMakeFiles/game_native.dir/renderer/SpriteBatcher.cpp.o
+clang++: warning: argument unused during compilation: '--gcc-toolchain=D:/Software/DevEco Studio/sdk/default/openharmony/native/llvm' [-Wunused-command-line-argument]
+[3/9] Building C object CMakeFiles/game_native.dir/platform/stb_image_impl.c.o
+clang: warning: argument unused during compilation: '--gcc-toolchain=D:/Software/DevEco Studio/sdk/default/openharmony/native/llvm' [-Wunused-command-line-argument]
+[4/9] Building CXX object CMakeFiles/game_native.dir/renderer/ShaderProgram.cpp.o
+clang++: warning: argument unused during compilation: '--gcc-toolchain=D:/Software/DevEco Studio/sdk/default/openharmony/native/llvm' [-Wunused-command-line-argument]
+[5/9] Building CXX object CMakeFiles/game_native.dir/renderer/TextureManager.cpp.o
+clang++: warning: argument unused during compilation: '--gcc-toolchain=D:/Software/DevEco Studio/sdk/default/openharmony/native/llvm' [-Wunused-command-line-argument]
+[6/9] Building CXX object CMakeFiles/game_native.dir/renderer/renderer.cpp.o
+clang++: warning: argument unused during compilation: '--gcc-toolchain=D:/Software/DevEco Studio/sdk/default/openharmony/native/llvm' [-Wunused-command-line-argument]
+[7/9] Building CXX object CMakeFiles/game_native.dir/platform/napi_bridge.cpp.o
+clang++: warning: argument unused during compilation: '--gcc-toolchain=D:/Software/DevEco Studio/sdk/default/openharmony/native/llvm' [-Wunused-command-line-argument]
+[8/9] Building CXX object CMakeFiles/game_native.dir/platform/napi_init.cpp.o
+clang++: warning: argument unused during compilation: '--gcc-toolchain=D:/Software/DevEco Studio/sdk/default/openharmony/native/llvm' [-Wunused-command-line-argument]
+[9/9] Linking CXX shared library D:\Projects\DevEcoStudioProjects\Game\entry\build\default\intermediates\cmake\default\obj\arm64-v8a\libgame_native.so

@@ -1,0 +1,307 @@
+{
+	"artifacts" : 
+	[
+		{
+			"path" : "D:/Projects/DevEcoStudioProjects/Game/entry/build/default/intermediates/cmake/default/obj/x86_64/libgame_native.so"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"target_link_libraries",
+			"include_directories",
+			"include",
+			"project",
+			"target_include_directories"
+		],
+		"files" : 
+		[
+			"CMakeLists.txt",
+			"D:/Software/DevEco Studio/sdk/default/hms/native/build/cmake/hmos.toolchain.cmake",
+			"D:/Software/DevEco Studio/sdk/default/openharmony/native/build-tools/cmake/share/cmake-3.28/Modules/CMakeDetermineSystem.cmake"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 13,
+				"parent" : 0
+			},
+			{
+				"command" : 1,
+				"file" : 0,
+				"line" : 33,
+				"parent" : 0
+			},
+			{
+				"command" : 4,
+				"file" : 0,
+				"line" : 2,
+				"parent" : 0
+			},
+			{
+				"file" : 2,
+				"parent" : 3
+			},
+			{
+				"command" : 3,
+				"file" : 2,
+				"line" : 170,
+				"parent" : 4
+			},
+			{
+				"file" : 1,
+				"parent" : 5
+			},
+			{
+				"command" : 2,
+				"file" : 1,
+				"line" : 25,
+				"parent" : 6
+			},
+			{
+				"command" : 5,
+				"file" : 0,
+				"line" : 19,
+				"parent" : 0
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security   -D__MUSL__ -O2 -DNDEBUG  -std=gnu++17 -fPIC"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"define" : "game_native_EXPORTS"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 7,
+					"path" : "D:/Software/DevEco Studio/sdk/default/hms/native/sysroot/usr/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "D:/Projects/DevEcoStudioProjects/Game/entry/src/main/cpp"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "D:/Projects/DevEcoStudioProjects/Game/entry/src/main/cpp/third_party/stb"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "D:/Projects/DevEcoStudioProjects/Game/entry/src/main/cpp/renderer"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "D:/Projects/DevEcoStudioProjects/Game/entry/src/main/cpp/platform"
+				}
+			],
+			"language" : "CXX",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					1
+				],
+				"standard" : "17"
+			},
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3,
+				4,
+				5,
+				6
+			],
+			"sysroot" : 
+			{
+				"path" : "D:/Software/DevEco Studio/sdk/default/openharmony/native/sysroot"
+			}
+		},
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security  -D__MUSL__ -O2 -DNDEBUG  -fPIC"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"define" : "game_native_EXPORTS"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 7,
+					"path" : "D:/Software/DevEco Studio/sdk/default/hms/native/sysroot/usr/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "D:/Projects/DevEcoStudioProjects/Game/entry/src/main/cpp"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "D:/Projects/DevEcoStudioProjects/Game/entry/src/main/cpp/third_party/stb"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "D:/Projects/DevEcoStudioProjects/Game/entry/src/main/cpp/renderer"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "D:/Projects/DevEcoStudioProjects/Game/entry/src/main/cpp/platform"
+				}
+			],
+			"language" : "C",
+			"sourceIndexes" : 
+			[
+				7
+			],
+			"sysroot" : 
+			{
+				"path" : "D:/Software/DevEco Studio/sdk/default/openharmony/native/sysroot"
+			}
+		}
+	],
+	"id" : "game_native::@6890427a1f51a3e7e1df",
+	"link" : 
+	{
+		"commandFragments" : 
+		[
+			{
+				"fragment" : "--rtlib=compiler-rt -fuse-ld=lld -Wl,--build-id=sha1 -Wl,--warn-shared-textrel -Wl,--fatal-warnings -lunwind -Wl,--no-undefined -Qunused-arguments -Wl,-z,noexecstack",
+				"role" : "flags"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "\"D:\\Software\\DevEco Studio\\sdk\\default\\openharmony\\native\\sysroot\\usr\\lib\\x86_64-linux-ohos\\libEGL.so\"",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "\"D:\\Software\\DevEco Studio\\sdk\\default\\openharmony\\native\\sysroot\\usr\\lib\\x86_64-linux-ohos\\libGLESv2.so\"",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "\"D:\\Software\\DevEco Studio\\sdk\\default\\openharmony\\native\\sysroot\\usr\\lib\\x86_64-linux-ohos\\libace_napi.z.so\"",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "\"D:\\Software\\DevEco Studio\\sdk\\default\\openharmony\\native\\sysroot\\usr\\lib\\x86_64-linux-ohos\\libhilog_ndk.z.so\"",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "\"D:\\Software\\DevEco Studio\\sdk\\default\\openharmony\\native\\sysroot\\usr\\lib\\x86_64-linux-ohos\\libnative_window.so\"",
+				"role" : "libraries"
+			},
+			{
+				"fragment" : "-lm",
+				"role" : "libraries"
+			}
+		],
+		"language" : "CXX",
+		"sysroot" : 
+		{
+			"path" : "D:/Software/DevEco Studio/sdk/default/openharmony/native/sysroot"
+		}
+	},
+	"name" : "game_native",
+	"nameOnDisk" : "libgame_native.so",
+	"paths" : 
+	{
+		"build" : ".",
+		"source" : "."
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3,
+				4,
+				5,
+				6,
+				7
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "renderer/Camera2D.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "renderer/ShaderProgram.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "renderer/SpriteBatcher.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "renderer/TextureManager.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "renderer/renderer.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "platform/napi_bridge.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "platform/napi_init.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "platform/stb_image_impl.c",
+			"sourceGroupIndex" : 0
+		}
+	],
+	"type" : "SHARED_LIBRARY"
+}

@@ -1,0 +1,145 @@
+
+10-01 14:35:44.795  1490  1490 I A01a00/SYS_UI: AppLifeCycleManager: Ability state changed, uid: 20020063, key: com.xsr.underworld_entry_EntryAbility_25895, isForeground: true, state 2
+10-01 14:35:44.795  1490  1490 I A01a00/SYS_UI: AppLifeCycleManager: Ability state change: new foregroundAbilities: 20020063: com.xsr.underworld_entry_EntryAbility_25895
+10-01 14:35:44.796 25895 25895 I A00000/UnderworldGame: onCreate
+10-01 14:35:44.880 25895 25895 I A00000/UnderworldGame: onWindowStageCreate
+10-01 14:35:44.959 25895 25895 I A00000/UnderworldGame: onForeground
+10-01 14:35:45.165 25895 25895 I C03959/AceLayout: [(-2:100000:singleton)] UVC Viewport config: size: (2760, 1256) orientation: 3 density: 3.500000 position: (0, 0) transformHint: 270 displayId: 0 forceSplitDisplayConfig: disable forceSplit, mode: 0, WSCR 0, IRN 1, , keyboardInfo is null
+10-01 14:35:45.165 25895 25895 I C03922/AceNavigation: [(100000:100000:scope)] disable forceSplit, mode:0
+10-01 14:35:45.165 25895 25895 I C04208/WMSLayout: UpdateViewportConfig: Id: 38, reason: 0, viewportRect: [0 0 2760 1256], displayOrientation: 3, config[270, 0, 270, 3.500000]
+10-01 14:35:45.165 25895 25895 I C03900/Ace: [(-2:100000:singleton)] [com.xsr.underworld][entry][100000]: window focus
+10-01 14:35:45.165 25895 25895 I C03900/Ace: [(-2:100000:singleton)] [com.xsr.underworld][entry][100000]:window active
+10-01 14:35:45.165 25895 25895 I C02d11/DfxUnwinder: UnwindLocal:: fpUnwind: 0
+10-01 14:35:45.167 25895 25895 W C01320/JsEnv: [source_map.cpp145]the stack without line info
+10-01 14:35:45.167 25895 25895 I A00000/UnderworldGame: Content loaded successfully
+10-01 14:35:45.167 25895 25895 I C04200/JsWindowStage: Window [38, underworld0] load content end, ret=0
+10-01 14:35:45.167 25895 25895 I C02d06/XCollie: Application is in starting period.
+10-01 14:35:45.167 25895 25895 I C04209/WMSImms: NotifyAvoidAreaChange: win 38 api 26 type 0 area top [0 0 2760 136] 
+10-01 14:35:45.167 25895 25895 I C04209/WMSImms: NotifyAvoidAreaChange: win 38 api 26 type 1 area left [34 591 74 74] 
+10-01 14:35:45.167 25895 25895 I C04209/WMSImms: NotifyAvoidAreaChange: win 38 api 26 type 2 area empty
+10-01 14:35:45.167 25895 25895 I C04209/WMSImms: NotifyAvoidAreaChange: win 38 api 26 type 3 area empty
+10-01 14:35:45.167 25895 25895 I C04209/WMSImms: NotifyAvoidAreaChange: win 38 api 26 type 4 area bottom [897 1158 966 98] 
+10-01 14:35:45.168 25895 25895 I C03922/AceNavigation: [(100000:100000:scope)] disable forceSplit, mode:0
+10-01 14:35:45.168 25895 25895 I C04208/WMSLayout: UpdateViewportConfig: Id: 38, reason: 23, viewportRect: [0 0 2760 1256], displayOrientation: 3, config[270, 0, 270, 3.500000]
+10-01 14:35:45.169 25895 25895 I C03900/Ace: [(100000:100000:scope)] Update application state , state: ON_ACTIVE
+10-01 14:35:45.170 25895 25895 I C0391c/AceFocus: [(100000:100000:scope)] Window: 38 get focus.
+10-01 14:35:45.170 25895 25895 W C0391c/AceFocus: [(100000:100000:scope)] Current focus view can not found!
+10-01 14:35:45.170 25895 25895 I C0391c/AceFocus: [(100000:100000:scope)] Request focus on rootFocusHub: root/0
+10-01 14:35:45.172 25895 25895 I C03922/AceNavigation: [(100000:100000:scope)] disable forceSplit, mode:0
+10-01 14:35:45.172 25895 25895 I C04208/WMSLayout: UpdateViewportConfig: Id: 38, reason: 23, viewportRect: [0 0 2760 1256], displayOrientation: 3, config[270, 0, 270, 3.500000]
+10-01 14:35:45.172 25895 25895 I C03925/AceRouter: [(100000:100000:scope)] Page router manager is creating page[1]: url: pages/LoginPage path: pages/LoginPage.js, recoverable: yes, namedRouter: no
+10-01 14:35:45.174   274 26522 I C01705/EXACT_PREREAD: [a92ab2ff412a3b3] [(HandlePushPageStart):526] ContinueAppStartupCollectWork uid: 20020063 pid: 25895 sceneName:com.xsr.underworld/com.xsr.underworld
+10-01 14:35:45.178   274 25643 I C01705/EXACT_PREREAD: [a92ab4ff412b476] [(HandlePushPageComplete):557] Startup scene, SendDelayCollectTimeoutEvent uid: 20020063 pid: 25895 sceneName:com.xsr.underworld/com.xsr.underworld
+10-01 14:35:45.181 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style text_pattern not contains linear_split_child_min_size!
+10-01 14:35:45.181 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style text_pattern not contains menu_celia_ask_is_support!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains error_text_border_color_alpha!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains disable_underline_alpha!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains default_counter_color!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains over_counter_color!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains underline_color_alpha!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains underline_color_alpha!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains cursor_width!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains over_count_border_color_alpha!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains text_field_placeholder_linespacing!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains textfield_underline_border_radius!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains underline_bg_color_focused!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains text_input_normal_color!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains text_input_password_icon_size!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains text_input_cancel_icon_padding!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains text_input_password_icon_padding!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains text_input_icon_offset_padding!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains text_input_icon_focus_padding!
+10-01 14:35:45.184 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style textfield_pattern not contains error_under_line_width!
+10-01 14:35:45.185 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style text_overlay_pattern not contains text_overlay_menu_button_radius!
+10-01 14:35:45.185 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style text_overlay_pattern not contains bg_color_disabled_alpha!
+10-01 14:35:45.185 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style text_overlay_pattern not contains more_or_back_symbol_size!
+10-01 14:35:45.185 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style text_overlay_pattern not contains text_overlay_menu_copy!
+10-01 14:35:45.185 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style text_overlay_pattern not contains text_overlay_menu_paste!
+10-01 14:35:45.185 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style text_overlay_pattern not contains text_overlay_menu_select_all!
+10-01 14:35:45.185 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style text_overlay_pattern not contains text_overlay_menu_cut!
+10-01 14:35:45.185 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style text_overlay_pattern not contains text_overlay_menu_max_width!
+10-01 14:35:45.186 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style text_overlay_pattern not contains text_overlay_menu_horizontal_gap!
+10-01 14:35:45.186 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style 125829872 not contains scrollable_pattern!
+10-01 14:35:45.186 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style scrollable_pattern not contains scroll_able_default_scrolling_distance!
+10-01 14:35:45.186 25895 25895 E C03900/Ace: [(100000:100000:scope)] Failed to open libhint2type library /system/lib64/platformsdk/libhint2type.z.so, reason: Error loading shared library /system/lib64/platformsdk/libhint2type.z.so: No such file or directoryn
+10-01 14:35:45.186 25895 25895 E C03932/AceAutoFill: [(100000:100000:scope)] Load Hint2Type Failed !
+10-01 14:35:45.187   822   933 I C01400/Vsync: PostEvent: First vsync has send to : WM_25895
+10-01 14:35:45.188 25895 25895 I C03914/AceTextField: [(100000:100000:scope)] 26 KBType -1 -> 7
+10-01 14:35:45.189 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style 125829872 not contains app_theme_pattern!
+10-01 14:35:45.190 25895 25895 W C01e00/ResourceManager: by id=125835722 limitPaths is empty
+10-01 14:35:45.190 25895 25895 E C01e00/ResourceManager: ref <private> id not found
+10-01 14:35:45.190 25895 25895 W C01e00/ResourceManager: by id=125835722 limitPaths is empty
+10-01 14:35:45.190 25895 25895 E C01e00/ResourceManager: ref <private> id not found
+10-01 14:35:45.190 25895 25895 W C03937/AceResource: [(100000:100000:scope)] Get pattern by name error, name=app_theme_pattern, bundleName: com.xsr.underworld, moduleName: entry
+10-01 14:35:45.190 25895 25895 W C01e00/ResourceManager: by id=125835722 limitPaths is empty
+10-01 14:35:45.190 25895 25895 E C01e00/ResourceManager: ref <private> id not found
+10-01 14:35:45.190 25895 25895 W C01e00/ResourceManager: by id=125835722 limitPaths is empty
+10-01 14:35:45.190 25895 25895 E C01e00/ResourceManager: ref <private> id not found
+10-01 14:35:45.190 25895 25895 W C03937/AceResource: [(100000:100000:scope)] Get pattern by name error, name=app_theme_pattern
+10-01 14:35:45.190 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style app_theme_pattern not contains app_theme_drag_distancethreshold!
+10-01 14:35:45.190 25895 25895 W C03926/AceTheme: [(100000:100000:scope)] style 125829872 not contains divider_pattern!
+10-01 14:35:45.192 25895 25895 I C0391c/AceFocus: [(100000:100000:scope)] view: page/2 show
+10-01 14:35:45.193 25895 25895 I C03922/AceNavigation: [(100000:100000:scope)] can't find inner navigation
+10-01 14:35:45.193 25895 25895 I C03933/AceKeyboard: [(100000:100000:scope)] PageChangeCloseKB
+10-01 14:35:45.194 25895 25895 I C03925/AceRouter: [(100000:100000:scope)] LoadPage Success
+10-01 14:35:45.194 25895 25895 I C0392a/AceUiExtensionComponent: [(-2:100000:singleton)] NotifyWindowMode aliveUIExtensions = 0
+10-01 14:35:45.194 25895 25895 I C0394e/AceWindow: [(100000:100000:scope)] Update displayWindowRect in UpdateViewportConfig to : Rect (0.00, 0.00) - [2760.00 x 1256.00]
+10-01 14:35:45.194 25895 25895 I C03917/AceSafeArea: [(100000:100000:scope)] SetIsFullScreen 1
+10-01 14:35:45.194 25895 25895 I C03914/AceTextField: [(100000:100000:scope)] HandleSurfaceChanged, new[2760,1256], pre[0,0]
+10-01 14:35:45.194 25895 25895 I C03914/AceTextField: [(100000:100000:scope)] HandleSurfaceChanged, new[2760,1256], pre[0,0]
+10-01 14:35:45.194 25895 25895 I C03900/Ace: [(100000:100000:scope)] Root node request first frame.
+10-01 14:35:45.194 25895 25895 I C03900/Ace: [(100000:100000:scope)] Update application state , state: ON_ACTIVE
+10-01 14:35:45.202 25895 25895 I C0391c/AceFocus: [(100000:100000:scope)] Window: 38 get focus.
+10-01 14:35:45.202 25895 25895 I C03900/Ace: [(100000:100000:scope)] Update application state , state: ON_ACTIVE
+10-01 14:35:45.204 25895 25895 I C04202/WMSMain: VsyncCallbackInner: First vsync has come back, nodeId: 111218178129921
+10-01 14:35:45.206 25895 25895 I C01408/Text: InitTextBundleConfig: Adapter text height enabled 0
+10-01 14:35:45.206 25895 25895 I C01408/Text: InitTextBundleConfig: Disable spacing for control char 0
+10-01 14:35:45.208 25895 25895 E C01402/2DGraphics: LoadFromTypeface: Drawing_Text [LoadFromTypeface] not variable font!
+10-01 14:35:45.210 25895 25895 E C02d34/HistogramClient: ArkGraphics2d.Text.OH_Drawing_TextStyleAddFontVariation is not in metadata.
+10-01 14:35:45.243 25895 25895 I C03914/AceTextField: [(100000:100000:scope)] On change previewText, len:0, index:<private>
+10-01 14:35:45.243 25895 25895 I C03914/AceTextField: [(100000:100000:scope)] addedLen=0, removedLen=0
+10-01 14:35:45.243 25895 25895 I C03914/AceTextField: [(100000:100000:scope)] On change previewText, len:0, index:<private>
+10-01 14:35:45.243 25895 25895 I C03914/AceTextField: [(100000:100000:scope)] addedLen=0, removedLen=0
+10-01 14:35:45.243 25895 25895 I C01406/OHOS::RS: RSCanvasDrawingNode::ResetSurface id:111218178129927 width:2760 height:1022
+10-01 14:35:45.245 25895 25895 E C01406/OHOS::RS: Failed to attach property, property is null.
+10-01 14:35:45.246 25895 25895 E C01406/OHOS::RS: Failed to attach property, property is null.
+10-01 14:35:45.246 25895 25895 E C01406/OHOS::RS: Failed to attach property, property is null.
+10-01 14:35:45.246 25895 25895 E C01406/OHOS::RS: Failed to attach property, property is null.
+10-01 14:35:45.248 25895 25895 E C01406/OHOS::RS: Failed to attach property, property is null.
+10-01 14:35:45.248 25895 25895 E C01406/OHOS::RS: Failed to attach property, property is null.
+10-01 14:35:45.248 25895 25895 E C01406/OHOS::RS: Failed to attach property, property is null.
+10-01 14:35:45.248 25895 25895 E C01406/OHOS::RS: Failed to attach property, property is null.
+10-01 14:35:45.250   126   126 E C02c03/PARAM_WATCHER: [watcher_manager.cpp:163]app not have permission watch param:persist.rosen.animationtrace.enabled uid:20020063 pid:25895
+10-01 14:35:45.250 25895 25895 E C02c03/PARAM_WATCHER: Read result failed, code is: 1.
+10-01 14:35:45.250 25895 25895 E C02c03/PARAM_WATCHER: Failed to add watcher for persist.rosen.animationtrace.enabled
+10-01 14:35:45.250 25895 25895 I C02c03/PARAM_WATCHER: [watcher_manager_kits.cpp:276]ParamWatcher destructor start
+10-01 14:35:45.250 25895 25895 E C02c03/PARAM_WATCHER: SystemWatchParameter is failed!keyPrefix is:persist.rosen.animationtrace.enabled,errNum is:-1
+10-01 14:35:45.250 25895 25895 E C02c0b/BEGET: [service_watcher.c:85]WatchParameter failed! the errNum is -1
+10-01 14:35:45.251 25895 25895 I C02c03/PARAM_WATCHER: Add watcher keyPrefix sys.graphic.openTestModeTrace remoteWatcherId 80 success
+10-01 14:35:45.254 25895 25895 I C03900/Ace: [(100000:100000:scope)] ArkUi flush first frame messages.
+10-01 14:35:45.256 25895 25895 I C0391c/AceFocus: [(100000:100000:scope)] Request focus on focusView: page/2.
+10-01 14:35:45.256 25895 25895 I C0391c/AceFocus: [(100000:100000:scope)] WinFocusMove end, root/secure_field onBlur, Stack/secure_field onFocus, start: 2, end: 1, update: 2
+10-01 14:35:45.256 25895 25895 I C03933/AceKeyboard: [(100000:100000:scope)] focus:Stack/5
+10-01 14:35:45.256 25895 25895 I C03933/AceKeyboard: [(100000:100000:scope)] WinFocusCB
+10-01 14:35:45.256 25895 25895 I C03933/AceKeyboard: [(100000:100000:scope)] window switch needKB=0
+10-01 14:35:45.256 25895 25895 I C0420b/WMSKeyboard: id: 38, isNeedKeyboard: 0, keepKeyboardFlag: 0
+10-01 14:35:45.257 25895 25895 I C0420b/WMSKeyboard: RequestInputMethodCloseKeyboard: Notify InputMethod framework close keyboard start. id: 38, isUIEProc: 0, hostWindowId: 38
+10-01 14:35:45.258   125   177 I C01800/SAMGR: SubscribeSA:3703,25895_5_4
+10-01 14:35:45.258   125   177 I C01800/SAMGR: NotifyAddSA:3703,25895_4
+10-01 14:35:45.259 25895 26582 E C01c10/ImsaKit: line: 181, function: operator(),handler_ is nullptr!
+10-01 14:35:45.260   725  2561 I C01c10/ImsaKit: line: 199, function: OnRemoteRequest,IMSA, code = 8, callingPid/Uid/timestamp: 25895/20020063/1790836545260
+10-01 14:35:45.263 25895 25895 I C0390d/AceOverlay: [(100000:100000:scope)] hide all menus enter
+10-01 14:35:45.263 25895 25895 I C03903/AceSubWindow: [(100000:100000:scope)] hide menu ng exit, window not exist
+10-01 14:35:45.263 25895 25895 I C04216/WMSPattern: FlushLayoutSize: NotifyFrameLayoutFinishFromApp, id: 38, rect: [0 0 2760 1256], notifyListener: 0
+10-01 14:35:45.322 25895 25895 I C04209/WMSImms: NotifyAvoidAreaChange: win 38 api 26 type 0 area empty
+10-01 14:35:45.324 25895 26582 I C04208/WMSLayout: UpdateRect: [WindowRectUpdate:ClientRecv] UpdateRect id:38 name:underworld0, preRect=[0 0 2760 1256], newRect=[0 0 2760 1256], reason:23 displayId:0
+10-01 14:35:45.325  1490  2024 I C0420c/WMSEvent: LogWinInfo: eid:130,size:9,idList:4|0|1|100|1490|1490|1;5|0|1|101|1490|1490|1;8|0|0|1|1490|1490|1;11|0|0|2|1490|1490|1;17|0|1|3|1490|1490|1;18|0|2048|2200|1490|1490|3;22|0|2048|4102|1490|1490|2;26|0|0|2125|1490|1490|1|0,0,2760,137;38|0|0|102|25895|25895|1;38|0,0|1,1|-84,-84,2928,1424
+10-01 14:35:45.337 25895 25895 I C03922/AceNavigation: [(100000:100000:scope)] disable forceSplit, mode:0
+10-01 14:35:45.337 25895 25895 I C04208/WMSLayout: UpdateViewportConfig: Id: 38, reason: 23, viewportRect: [0 0 2760 1256], displayOrientation: 3, config[270, 0, 270, 3.500000]
+10-01 14:35:45.340 25895 25895 I C03922/AceNavigation: [(100000:100000:scope)] disable forceSplit, mode:0
+10-01 14:35:45.340 25895 25895 I C04208/WMSLayout: UpdateViewportConfig: Id: 38, reason: 23, viewportRect: [0 0 2760 1256], displayOrientation: 3, config[270, 0, 270, 3.500000]
+10-01 14:35:45.344 25895 25895 W C03913/AceText: [(100000:100000:scope)] destroy TxtParagraph with placeholderCnt_ 0, textAlign_ 0, count 0
+10-01 14:35:45.360 25895 25895 I C01406/OHOS::RS: RSCanvasDrawingNode::ResetSurface id:111218178129927 width:2760 height:1158
+10-01 14:35:45.362 25895 25895 I C01356/Recovery: [app_recovery.cpp497]fileDir: /data/storage/el2/base/files
+10-01 14:35:45.434   274 26521 W C01704/TagSched: [a92ab2ff412a3b3] [operator()]The removed task is being executed, execute stop, Task = minUtilSched#10:25895:9
+

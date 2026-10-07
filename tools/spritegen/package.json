@@ -1,0 +1,13 @@
+{
+  "name": "spritegen",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Renders game sprite sheets (PNG) from the project's .ets procedural drawing code",
+  "scripts": {
+    "generate": "node generate.js"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.9",
+    "typescript": "^5.9.3"
+  }
+}

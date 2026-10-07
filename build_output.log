@@ -1,0 +1,200 @@
+> hvigor [32mUP-TO-DATE :entry:default@PreBuild...  [39m
+> hvigor WARN: Engine: HAR modules cannot be installed independently. As a result, the "applyToProducts" configuration will not take effect. See more details.
+> hvigor [32mUP-TO-DATE :Engine:default@PreBuild...  [39m
+> hvigor [32mFinished :entry:default@CreateModuleInfo... after 2 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@GenerateMetadata...  [39m
+> hvigor [32mFinished :entry:default@PreCheckSyscap... after 1 ms [39m
+> hvigor [32mFinished :entry:default@GeneratePkgContextInfo... after 28 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@GeneratePkgSdkInfo...  [39m
+> hvigor [32mFinished :entry:default@ProcessIntegratedHsp... after 2 ms [39m
+> hvigor [32mUP-TO-DATE :Engine:default@CreateHarBuildProfile...  [39m
+> hvigor [32mFinished :Engine:default@ConfigureCmake... after 1 ms [39m
+> hvigor [32mUP-TO-DATE :Engine:default@MergeProfile...  [39m
+> hvigor [32mFinished :entry:default@SyscapTransform... after 30 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@ProcessRouterMap...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@ProcessShareConfig...  [39m
+> hvigor [32mFinished :entry:default@ProcessStartupConfig... after 4 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@CreateBuildProfile...  [39m
+> hvigor [32mFinished :Engine:default@BuildNativeWithCmake... after 1 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@MergeProfile...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@GenerateLoaderJson...  [39m
+> hvigor [32mFinished :entry:default@ConfigureCmake... after 1 ms [39m
+> hvigor [32mFinished :Engine:default@BuildNativeWithNinja... after 1 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@MakePackInfo...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@ProcessProfile...  [39m
+> hvigor [32mFinished :entry:default@BuildNativeWithCmake... after 1 ms [39m
+> hvigor [32mUP-TO-DATE :Engine:default@ProcessLibs...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@ProcessResource...  [39m
+> hvigor [32mUP-TO-DATE :Engine:default@DoNativeStrip...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@CompileResource...  [39m
+> hvigor [32mFinished :entry:default@BuildNativeWithNinja... after 1 ms [39m
+> hvigor [32mFinished :entry:default@BuildJS... after 15 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@ProcessLibs...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@DoNativeStrip...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@CacheNativeLibs...  [39m
+> hvigor ERROR: Failed :entry:default@CompileArkTS... 
+> hvigor WARN: 
+1 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/LoginPage.ets:31:28
+ 'px2vp' has been deprecated.
+
+2 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/LoginPage.ets:32:28
+ 'px2vp' has been deprecated.
+
+3 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/LoginPage.ets:61:10
+ The 'fill' API is supported since SDK version 26.0.0. However, the current compatible SDK version is 5.0.0(12).
+ It is recommended to use apiAvailable to safeguard API compatibility.
+
+4 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/LoginPage.ets:370:16
+ 'replaceUrl' has been deprecated.
+
+5 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/CharacterSelectPage.ets:32:28
+ 'px2vp' has been deprecated.
+
+6 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/CharacterSelectPage.ets:33:28
+ 'px2vp' has been deprecated.
+
+7 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/CharacterSelectPage.ets:43:49
+ 'getParams' has been deprecated.
+
+8 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/CharacterSelectPage.ets:50:51
+ 'getContext' has been deprecated.
+
+9 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/CharacterSelectPage.ets:250:12
+ 'replaceUrl' has been deprecated.
+
+10 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/CharacterSelectPage.ets:250:12
+ Function may throw exceptions. Special handling is required.
+
+11 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/CharacterSelectPage.ets:264:12
+ 'replaceUrl' has been deprecated.
+
+12 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/CharacterSelectPage.ets:264:12
+ Function may throw exceptions. Special handling is required.
+
+13 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:37:53
+ The system capacity of this api 'audio' is not supported on all devices
+
+14 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:39:27
+ The system capacity of this api 'audio' is not supported on all devices
+
+15 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:40:23
+ The system capacity of this api 'audio' is not supported on all devices
+
+16 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:41:27
+ The system capacity of this api 'audio' is not supported on all devices
+
+17 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:42:27
+ The system capacity of this api 'audio' is not supported on all devices
+
+18 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:45:20
+ The system capacity of this api 'audio' is not supported on all devices
+
+19 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:134:14
+ Function may throw exceptions. Special handling is required.
+
+20 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:137:16
+ The system capacity of this api 'audio' is not supported on all devices
+
+21 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:142:16
+ The system capacity of this api 'audio' is not supported on all devices
+
+22 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:162:14
+ The system capacity of this api 'audio' is not supported on all devices
+
+23 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:167:21
+ The system capacity of this api 'audio' is not supported on all devices
+
+24 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:191:28
+ The system capacity of this api 'audio' is not supported on all devices
+
+25 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:192:26
+ The system capacity of this api 'audio' is not supported on all devices
+
+26 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:215:5
+ The system capacity of this api 'audio' is not supported on all devices
+
+27 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:217:23
+ The system capacity of this api 'audio' is not supported on all devices
+
+28 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:218:19
+ The system capacity of this api 'audio' is not supported on all devices
+
+29 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:219:23
+ The system capacity of this api 'audio' is not supported on all devices
+
+30 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:220:23
+ The system capacity of this api 'audio' is not supported on all devices
+
+31 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/AudioManager.ets:223:16
+ The system capacity of this api 'audio' is not supported on all devices
+
+32 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/game/sprites/SpriteManager.ets:189:46
+ Function may throw exceptions. Special handling is required.
+
+33 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/overlays/SettingsOverlay.ets:174:20
+ 'replaceUrl' has been deprecated.
+
+34 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/overlays/PauseMenuOverlay.ets:56:50
+ 'getContext' has been deprecated.
+
+35 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/overlays/GameOverOverlay.ets:54:50
+ 'getContext' has been deprecated.
+
+36 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/overlays/GameOverOverlay.ets:69:50
+ 'getContext' has been deprecated.
+
+37 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/Index.ets:108:27
+ 'px2vp' has been deprecated.
+
+38 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/Index.ets:109:27
+ 'px2vp' has been deprecated.
+
+39 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/Index.ets:124:44
+ 'getParams' has been deprecated.
+
+40 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/Index.ets:167:27
+ 'vp2px' has been deprecated.
+
+41 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/Index.ets:168:27
+ 'vp2px' has been deprecated.
+
+42 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/Index.ets:774:51
+ 'getContext' has been deprecated.
+
+43 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/Index.ets:1264:12
+ 'replaceUrl' has been deprecated.
+
+44 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/Index.ets:1264:12
+ Function may throw exceptions. Special handling is required.
+
+45 WARN: ArkTS:WARN File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/Index.ets:1270:49
+ 'getContext' has been deprecated.
+
+> hvigor ERROR: ArkTS Compiler Error
+1 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Property 'onChange' does not exist on type 'CanvasAttribute'. At File: D:/Projects/DevEcoStudioProjects/Game/entry/src/main/ets/pages/Index.ets:188:10
+
+
+COMPILE RESULT:FAIL {ERROR:2 WARN:45}
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --debug option to get more log output.
+
+[31m
+FAILURE: Build completed with 1 failure.[31m[39m
+[31m
+1: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task 'default@CompileArkTS'.
+  > Compilation error. See log for more details
+
+[31m* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --debug option to get more log output.
+[31m[39m
+[31m================================================================================[31m[39m
+> hvigor ERROR: BUILD FAILED in 31 s 678 ms 
+
+33 tasks in total: 13 executed, 20 up-to-date

@@ -1,0 +1,10 @@
+{
+  "module": {
+    "name": "Engine",
+    "type": "har",
+    "deviceTypes": [
+      "phone",
+      "tablet"
+    ]
+  }
+}

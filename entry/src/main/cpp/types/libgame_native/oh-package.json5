@@ -1,0 +1,4 @@
+{
+  "name": "libgame_native.so",
+  "types": "./index.d.ts"
+}
