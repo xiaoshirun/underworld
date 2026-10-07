@@ -145,17 +145,17 @@ struct Index {
   MinimapView() {
     Stack() {
       Canvas(this.minimapCtx)
-        .width(MINIMAP_SIZE)
-        .height(MINIMAP_SIZE)
+        .width(80)
+        .height(80)
         .onReady(() => {
           this.minimapCanvasReady = true;
           this.tryInitEngine();
         })
     }
-    .width(MINIMAP_SIZE + 6)
-    .height(MINIMAP_SIZE + 6)
-    .margin({ left: 10, top: 76 })
-    .borderRadius(8)
+    .width(84)
+    .height(84)
+    .margin({ left: 8, top: 8 })
+    .borderRadius(42)
     .border({ width: 1, color: '#334155' })
     .backgroundColor('#0a0a15')
     .shadow({ radius: 8, color: '#00000080', offsetX: 0, offsetY: 2 })
@@ -364,19 +364,19 @@ struct Index {
       Row() {
         Stack() {
           Circle()
-            .width(44)
-            .height(44)
+            .width(38)
+            .height(38)
             .fill(this.toolReady ? COLOR_TOOL_BTN : '#4a3520')
             .opacity(this.toolReady ? 0.85 : 0.5)
-            .shadow({ radius: 6, color: '#f59e0b40', offsetX: 0, offsetY: 2 })
+            .shadow({ radius: 4, color: '#f59e0b40', offsetX: 0, offsetY: 2 })
 
           Text('钻')
-            .fontSize(14)
+            .fontSize(12)
             .fontWeight(FontWeight.Bold)
             .fontColor('#ffffff')
         }
-        .width(44)
-        .height(44)
+        .width(38)
+        .height(38)
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down && this.toolReady) {
             this.gameEngine.setInputTool(true);
@@ -389,20 +389,20 @@ struct Index {
 
         Stack() {
           Circle()
-            .width(50)
-            .height(50)
+            .width(38)
+            .height(38)
             .fill(COLOR_BTN_JUMP)
             .opacity(0.85)
-            .shadow({ radius: 6, color: '#22c55e40', offsetX: 0, offsetY: 2 })
+            .shadow({ radius: 4, color: '#22c55e40', offsetX: 0, offsetY: 2 })
 
           Text('跳')
-            .fontSize(16)
+            .fontSize(12)
             .fontWeight(FontWeight.Bold)
             .fontColor('#ffffff')
         }
-        .width(50)
-        .height(50)
-        .margin({ left: 10 })
+        .width(38)
+        .height(38)
+        .margin({ left: 8 })
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down) {
             this.gameEngine.setInputJump(true);
@@ -411,20 +411,20 @@ struct Index {
 
         Stack() {
           Circle()
-            .width(50)
-            .height(50)
+            .width(38)
+            .height(38)
             .fill(this.dashReady ? COLOR_BTN_DASH : '#1e3a5f')
             .opacity(this.dashReady ? 0.85 : 0.5)
-            .shadow({ radius: 6, color: '#3b82f640', offsetX: 0, offsetY: 2 })
+            .shadow({ radius: 4, color: '#3b82f640', offsetX: 0, offsetY: 2 })
 
           Text('闪')
-            .fontSize(16)
+            .fontSize(12)
             .fontWeight(FontWeight.Bold)
             .fontColor('#ffffff')
         }
-        .width(50)
-        .height(50)
-        .margin({ left: 12 })
+        .width(38)
+        .height(38)
+        .margin({ left: 8 })
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down && this.dashReady) {
             this.gameEngine.setInputDash(true);
@@ -439,34 +439,34 @@ struct Index {
       Row() {
         Stack() {
           Circle()
-            .width(62)
-            .height(62)
+            .width(48)
+            .height(48)
             .fill(COLOR_BTN_ATTACK)
             .opacity(0.85)
-            .shadow({ radius: 8, color: '#ef444450', offsetX: 0, offsetY: 3 })
+            .shadow({ radius: 6, color: '#ef444450', offsetX: 0, offsetY: 3 })
 
           Circle()
-            .width(54)
-            .height(54)
+            .width(42)
+            .height(42)
             .fill('transparent')
             .border({ width: 1, color: '#ffffff20' })
 
           Text('攻击')
-            .fontSize(16)
+            .fontSize(14)
             .fontWeight(FontWeight.Bold)
             .fontColor('#ffffff')
         }
-        .width(62)
-        .height(62)
+        .width(48)
+        .height(48)
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down) {
             this.gameEngine.setInputAttack(true);
           }
         })
       }
-      .margin({ top: 10 })
+      .margin({ top: 8 })
     }
-    .position({ x: this.screenW - 160, y: this.screenH - 200 })
+    .position({ x: this.screenW - 140, y: this.screenH - 160 })
   }
 
   @Builder
