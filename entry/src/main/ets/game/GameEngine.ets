@@ -148,7 +148,10 @@ export class GameEngine {
       unlockedTransforms: [],
       savedWeaponForm: WeaponForm.BLADE,
       transformAnimTimer: 0,
-      transformFormAttackCooldown: 0
+      transformFormAttackCooldown: 0,
+      isDevouring: false,
+      devourTimer: 0,
+      devourCooldown: 0
     };
 
     this.cameraX = startX - screenW / 2;
