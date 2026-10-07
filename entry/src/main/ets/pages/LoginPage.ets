@@ -18,7 +18,7 @@ struct LoginPage {
   private bgParticles: BgParticle[] = [];
   private screenW: number = 360;
   private screenH: number = 780;
-  @State username: string = '';
+  @State username: string = 'player';
   @State password: string = '';
   @State errorMsg: string = '';
   @State isLoading: boolean = false;
@@ -199,6 +199,20 @@ struct LoginPage {
       .padding({ left: 16, right: 16, top: 6, bottom: 6 })
       .backgroundColor('#1e293b')
       .borderRadius(8)
+
+      Button('快速登录')
+        .width('100%')
+        .height(38)
+        .fontSize(13)
+        .fontColor('#94a3b8')
+        .backgroundColor('#1e293b')
+        .borderRadius(8)
+        .margin({ top: 8 })
+        .onClick(() => {
+          this.username = 'test';
+          this.password = 'test';
+          this.handleLogin();
+        })
     }
     .width(this.isLandscape ? '90%' : '85%')
     .padding({
@@ -230,7 +244,7 @@ struct LoginPage {
             this.LogoView()
             this.TitleView()
           }
-          .width('40%')
+          .width('35%')
           .alignItems(HorizontalAlign.Center)
 
           Column() {
@@ -248,8 +262,9 @@ struct LoginPage {
             .margin({ bottom: 20 })
             .alignItems(HorizontalAlign.Center)
           }
-          .width('60%')
+          .width('65%')
           .height('100%')
+          .justifyContent(FlexAlign.Center)
         }
         .width('100%')
         .height('100%')
