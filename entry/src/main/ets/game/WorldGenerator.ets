@@ -73,8 +73,8 @@ export class WorldGenerator {
   getBiome(worldX: number, worldY: number): BiomeType {
     const temp: number = valueNoise2D(worldX * BIOME_SCALE, worldY * BIOME_SCALE);
     const moist: number = valueNoise2D((worldX + 500) * BIOME_SCALE, (worldY + 500) * BIOME_SCALE);
-    const dist: number = Math.sqrt(worldX * worldX + worldY * worldY) * 0.001;
-    if (dist > 0.5 && temp < 0.3 && moist > 0.5) return BiomeType.SHADOW;
+    const distSq: number = worldX * worldX + worldY * worldY;
+    if (distSq > 250000 && temp < 0.3 && moist > 0.5) return BiomeType.SHADOW;
     if (temp < 0.25) return BiomeType.WATER;
     if (temp > 0.75 && moist < 0.4) return BiomeType.LAVA;
     if (moist > 0.65) return BiomeType.MUSHROOM;
@@ -104,7 +104,7 @@ export class WorldGenerator {
       for (let lx: number = 0; lx < size; lx++) {
         const wx: number = cx * size + lx;
         const wy: number = cy * size + ly;
-        const noiseVal: number = fbm(wx * NOISE_SCALE, wy * NOISE_SCALE, 4);
+        const noiseVal: number = fbm(wx * NOISE_SCALE, wy * NOISE_SCALE, 3);
         const biome: BiomeType = this.getBiome(wx, wy);
         let threshold: number = CAVE_THRESHOLD;
         if (biome === BiomeType.WATER) threshold += 0.08;

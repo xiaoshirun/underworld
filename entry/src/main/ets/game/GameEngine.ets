@@ -8,9 +8,9 @@ import {
   ENGULF_DAMAGE_INTERVAL, ENGULF_ESCAPE_ATTACKS, DRILL_BREAK_HITS,
   XP_ORB_SIZE, XP_COLLECT_RANGE, XP_MAGNET_RANGE, LEVEL_UP_XP,
   CHUNK_LOAD_RADIUS,
-  MINIMAP_SIZE, FRAME_INTERVAL, MINIMAP_UPDATE_INTERVAL,
+  MINIMAP_SIZE, FRAME_INTERVAL, MINIMAP_UPDATE_INTERVAL, MAX_PARTICLES, MAX_DYN_TILE_CACHE,
   TileType, EnemyType, BiomeType, PlayerState, SlimeState, XpOrb, Particle,
-  ChunkData, InputState, GameSettings, AmbientParticle,
+  ChunkData, InputState, GameSettings, AmbientParticle, DynTileCacheEntry,
   GenderType, WeaponForm, EvolutionBranch, EvolutionLevel,
   BossState, ChestState, ChestType, BossRoom, MaterialDrop, TrapInstance, MechanismInstance,
   Inventory, TrapType, TrapState,
@@ -112,11 +112,16 @@ export class GameEngine {
   private vignetteGradCache: CanvasGradient | null = null;
   private vignetteW: number = 0;
   private vignetteH: number = 0;
-  private bgParallaxCache: OffscreenCanvas | null = null;
+  private bgParallaxCache: ImageBitmap | null = null;
   private bgParallaxW: number = 0;
   private bgParallaxH: number = 0;
   private bgParallaxCamCX: number = -999;
   private bgParallaxCamCY: number = -999;
+  private dynTileCache: Map<string, DynTileCacheEntry> = new Map();
+  private dynTileOffscreen: OffscreenCanvas | null = null;
+  private dynTileOffCtx: OffscreenCanvasRenderingContext2D | null = null;
+  private chunkRenderOffscreen: OffscreenCanvas | null = null;
+  private chunkRenderOffCtx: OffscreenCanvasRenderingContext2D | null = null;
   private input: InputState = {
     joyActive: false, joyDx: 0, joyDy: 0,
     jumpPressed: false, attackPressed: false, dashPressed: false, attackHeld: false,
@@ -329,7 +334,7 @@ export class GameEngine {
   }
 
   private processChunkGenQueue(): void {
-    const maxPerFrame: number = 2;
+    const maxPerFrame: number = 1;
     let processed: number = 0;
     while (this.chunkGenQueue.length > 0 && processed < maxPerFrame) {
       const key: string = this.chunkGenQueue.shift() as string;
@@ -423,6 +428,9 @@ export class GameEngine {
     this.loadChunksAround(ptx, pty);
     this.processChunkGenQueue();
     this.processChunkRenderQueue();
+    if (this.frameCount % 60 === 0) {
+      this.evictFarChunks(ptx, pty);
+    }
 
     this.updatePlayer(p, dt);
     // === Transform System Update ===
@@ -904,8 +912,9 @@ export class GameEngine {
       if (!s.active) continue;
       const dx: number = s.x - attackX;
       const dy: number = s.y - attackY;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
-      if (dist < formWidth + s.size) {
+      const distSq: number = dx * dx + dy * dy;
+      const hitRange: number = formWidth + s.size;
+      if (distSq < hitRange * hitRange) {
         s.hp--;
         s.hitFlash = 150;
         const knockAngle: number = Math.atan2(dy, dx);
@@ -933,8 +942,9 @@ export class GameEngine {
       if (!boss.active || boss.defeated) continue;
       const dx: number = boss.x - attackX;
       const dy: number = boss.y - attackY;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
-      if (dist < formWidth + boss.size * 0.6) {
+      const hitRange: number = formWidth + boss.size * 0.6;
+      const distSq: number = dx * dx + dy * dy;
+      if (distSq < hitRange * hitRange) {
         boss.hp--;
         boss.hitFlash = 200;
         this.shakeTimer = 120;
@@ -1007,6 +1017,10 @@ export class GameEngine {
     if (this.player === null) return;
     const p: PlayerState = this.player;
     const cullDist: number = Math.max(this.screenW, this.screenH) * 1.5;
+    const cullDistSq: number = cullDist * cullDist;
+    const purpleDetectSq: number = PURPLE_SLIME_DETECT * PURPLE_SLIME_DETECT;
+    const redDetectSq: number = RED_SLIME_DETECT * RED_SLIME_DETECT;
+    const ghostDetectSq: number = (PURPLE_SLIME_DETECT * 1.5) * (PURPLE_SLIME_DETECT * 1.5);
 
     for (let i: number = 0; i < this.enemies.length; i++) {
       const s: SlimeState = this.enemies[i];
@@ -1021,9 +1035,9 @@ export class GameEngine {
 
       const dx: number = p.x - s.x;
       const dy: number = p.y - s.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
+      const distSq: number = dx * dx + dy * dy;
 
-      if (dist > cullDist) continue;
+      if (distSq > cullDistSq) continue;
 
       switch (s.enemyType) {
         case EnemyType.GRAY_SLIME: {
@@ -1039,10 +1053,12 @@ export class GameEngine {
           break;
         }
         case EnemyType.PURPLE_SLIME: {
-          if (dist < PURPLE_SLIME_DETECT && dist > 1) {
+          if (distSq < purpleDetectSq && distSq > 1) {
+            const dist: number = Math.sqrt(distSq);
             s.vx += (dx / dist) * PURPLE_SLIME_SPEED * 0.1;
             s.vy += (dy / dist) * PURPLE_SLIME_SPEED * 0.1;
-            if (dist < s.size + PLAYER_SIZE && p.invincibleTimer <= 0 && !p.isEngulfed) {
+            const engulfDist: number = s.size + PLAYER_SIZE;
+            if (dist < engulfDist && p.invincibleTimer <= 0 && !p.isEngulfed) {
               if (Math.random() < 0.01) {
                 s.isEngulfing = true;
                 s.engulfedPlayer = true;
@@ -1057,7 +1073,8 @@ export class GameEngine {
           break;
         }
         case EnemyType.RED_SLIME: {
-          if (dist < RED_SLIME_DETECT && dist > 1) {
+          if (distSq < redDetectSq && distSq > 1) {
+            const dist: number = Math.sqrt(distSq);
             if (!s.isCharging) {
               s.chargeTimer -= dt;
               if (s.chargeTimer <= 0) {
@@ -1080,7 +1097,8 @@ export class GameEngine {
           break;
         }
         case EnemyType.BLUE_SLIME: {
-          if (dist < PURPLE_SLIME_DETECT && dist > 1) {
+          if (distSq < purpleDetectSq && distSq > 1) {
+            const dist: number = Math.sqrt(distSq);
             s.vx += (dx / dist) * BLUE_SLIME_SPEED * 0.05;
             s.vy += (dy / dist) * BLUE_SLIME_SPEED * 0.05;
           }
@@ -1108,7 +1126,8 @@ export class GameEngine {
           break;
         }
         case EnemyType.GHOST_SLIME: {
-          if (dist < PURPLE_SLIME_DETECT * 1.5 && dist > 1) {
+          if (distSq < ghostDetectSq && distSq > 1) {
+            const dist: number = Math.sqrt(distSq);
             const speed: number = PURPLE_SLIME_SPEED * 0.8;
             s.vx += (dx / dist) * speed * 0.08;
             s.vy += (dy / dist) * speed * 0.08;
@@ -1125,8 +1144,10 @@ export class GameEngine {
         case EnemyType.GHOST_SLIME: maxSpeed = PURPLE_SLIME_SPEED * 0.8; break;
         default: maxSpeed = SLIME_SPEED; break;
       }
-      const speed: number = Math.sqrt(s.vx * s.vx + s.vy * s.vy);
-      if (speed > maxSpeed) {
+      const speedSq: number = s.vx * s.vx + s.vy * s.vy;
+      const maxSpeedSq: number = maxSpeed * maxSpeed;
+      if (speedSq > maxSpeedSq) {
+        const speed: number = Math.sqrt(speedSq);
         s.vx = (s.vx / speed) * maxSpeed;
         s.vy = (s.vy / speed) * maxSpeed;
       }
@@ -1144,8 +1165,9 @@ export class GameEngine {
       if (p.invincibleTimer <= 0 && !p.isEngulfed && !s.isEngulfing) {
         const cdx: number = p.x - s.x;
         const cdy: number = p.y - s.y;
-        const cdist: number = Math.sqrt(cdx * cdx + cdy * cdy);
-        if (cdist < PLAYER_SIZE / 2 + s.size / 2) {
+        const contactDistSq: number = cdx * cdx + cdy * cdy;
+        const contactRange: number = PLAYER_SIZE / 2 + s.size / 2;
+        if (contactDistSq < contactRange * contactRange) {
           let incomingDamage: number = SLIME_DAMAGE;
           if (p.isTransformed) {
             const reduction: number = TRANSFORM_DAMAGE_REDUCTION[p.transformForm as number];
@@ -1198,15 +1220,17 @@ export class GameEngine {
 
       const dx: number = p.x - orb.x;
       const dy: number = p.y - orb.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
+      const distSq: number = dx * dx + dy * dy;
+      const magnetRangeSq: number = XP_MAGNET_RANGE * XP_MAGNET_RANGE;
 
-      if (dist < XP_MAGNET_RANGE && dist > 1) {
+      if (distSq < magnetRangeSq && distSq > 1) {
+        const dist: number = Math.sqrt(distSq);
         const pullSpeed: number = 3.0 * (1.0 - dist / XP_MAGNET_RANGE);
         orb.x += (dx / dist) * pullSpeed;
         orb.y += (dy / dist) * pullSpeed;
       }
 
-      if (dist < XP_COLLECT_RANGE) {
+      if (distSq < XP_COLLECT_RANGE * XP_COLLECT_RANGE) {
         orb.active = false;
         p.xp += orb.value;
         // Transform energy recovery from XP orb
@@ -1251,15 +1275,17 @@ export class GameEngine {
       const trap: TrapInstance = this.traps[i];
       const dx: number = p.x - trap.x;
       const dy: number = p.y - trap.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
+      const distSq: number = dx * dx + dy * dy;
 
       switch (trap.state) {
-        case TrapState.IDLE:
-          if (dist < trap.triggerRadius) {
+        case TrapState.IDLE: {
+          const triggerSq: number = trap.triggerRadius * trap.triggerRadius;
+          if (distSq < triggerSq) {
             trap.state = TrapState.TELEGRAPH;
             trap.timer = TRAP_TELEGRAPH_TIME;
           }
           break;
+        }
 
         case TrapState.TELEGRAPH:
           trap.timer -= dt;
@@ -1270,14 +1296,20 @@ export class GameEngine {
           }
           break;
 
-        case TrapState.ACTIVE:
+        case TrapState.ACTIVE: {
           trap.timer -= dt;
-          if (trap.trapType === TrapType.VOID_CRACK && dist < trap.triggerRadius * 1.5) {
-            const pullStrength: number = 0.8 * (1.0 - dist / (trap.triggerRadius * 1.5));
-            p.vx -= (dx / dist) * pullStrength;
-            p.vy -= (dy / dist) * pullStrength;
+          if (trap.trapType === TrapType.VOID_CRACK) {
+            const pullRange: number = trap.triggerRadius * 1.5;
+            const pullRangeSq: number = pullRange * pullRange;
+            if (distSq < pullRangeSq) {
+              const dist: number = Math.sqrt(distSq);
+              const pullStrength: number = 0.8 * (1.0 - dist / pullRange);
+              p.vx -= (dx / dist) * pullStrength;
+              p.vy -= (dy / dist) * pullStrength;
+            }
           }
-          if (dist < trap.size) {
+          const sizeSq: number = trap.size * trap.size;
+          if (distSq < sizeSq) {
             if (p.invincibleTimer <= 0) {
               // Iron Man hovers — immune to ground traps and terrain
               if (p.isTransformed && p.transformForm === TransformForm.IRON_MAN) {
@@ -1306,6 +1338,7 @@ export class GameEngine {
             trap.timer = TRAP_COOLDOWN_TIME;
           }
           break;
+        }
 
         case TrapState.COOLDOWN:
           trap.timer -= dt;
@@ -1327,19 +1360,22 @@ export class GameEngine {
       const mech: MechanismInstance = this.mechanisms[i];
       const dx: number = p.x - mech.x;
       const dy: number = p.y - mech.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
+      const distSq: number = dx * dx + dy * dy;
 
       switch (mech.mechanismType) {
-        case MechanismType.PRESSURE_PLATE:
+        case MechanismType.PRESSURE_PLATE: {
           const wasActive: boolean = mech.active;
-          mech.active = dist < PRESSURE_PLATE_RANGE;
+          const plateRangeSq: number = PRESSURE_PLATE_RANGE * PRESSURE_PLATE_RANGE;
+          mech.active = distSq < plateRangeSq;
           if (mech.active !== wasActive) {
             this.checkMechanismLinks(mech);
           }
           break;
+        }
 
-        case MechanismType.PUSH_BLOCK:
-          if (mech.pushable && dist < PLAYER_SIZE + 12) {
+        case MechanismType.PUSH_BLOCK: {
+          const pushRangeSq: number = (PLAYER_SIZE + 12) * (PLAYER_SIZE + 12);
+          if (mech.pushable && distSq < pushRangeSq) {
             const pushDirX: number = p.vx;
             const pushDirY: number = p.vy;
             const pushLen: number = Math.sqrt(pushDirX * pushDirX + pushDirY * pushDirY);
@@ -1359,9 +1395,11 @@ export class GameEngine {
             }
           }
           break;
+        }
 
-        case MechanismType.TELEPORT_RUNE:
-          if (dist < MECH_INTERACT_RANGE && this.teleportCooldown <= 0) {
+        case MechanismType.TELEPORT_RUNE: {
+          const interactSq: number = MECH_INTERACT_RANGE * MECH_INTERACT_RANGE;
+          if (distSq < interactSq && this.teleportCooldown <= 0) {
             const pairIndex: number = mech.linkedIndex;
             if (pairIndex >= 0 && pairIndex < this.mechanisms.length) {
               const paired: MechanismInstance = this.mechanisms[pairIndex];
@@ -1382,9 +1420,11 @@ export class GameEngine {
             }
           }
           break;
+        }
 
-        case MechanismType.LEVER:
-          if (dist < MECH_INTERACT_RANGE && this.input.toolPressed) {
+        case MechanismType.LEVER: {
+          const leverInteractSq: number = MECH_INTERACT_RANGE * MECH_INTERACT_RANGE;
+          if (distSq < leverInteractSq && this.input.toolPressed) {
             this.input.toolPressed = false;
             mech.active = !mech.active;
             mech.rotation = mech.active ? 45 : -45;
@@ -1392,14 +1432,17 @@ export class GameEngine {
             this.checkMechanismLinks(mech);
           }
           break;
+        }
 
-        case MechanismType.CRYSTAL_REFLECTOR:
-          if (dist < MECH_INTERACT_RANGE && this.input.toolPressed) {
+        case MechanismType.CRYSTAL_REFLECTOR: {
+          const reflectSq: number = MECH_INTERACT_RANGE * MECH_INTERACT_RANGE;
+          if (distSq < reflectSq && this.input.toolPressed) {
             this.input.toolPressed = false;
             mech.rotation = (mech.rotation + 60) % 360;
             this.audio.playDrillHit();
           }
           break;
+        }
       }
     }
 
@@ -1536,20 +1579,23 @@ export class GameEngine {
 
       const dx: number = p.x - boss.x;
       const dy: number = p.y - boss.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
+      const distSq: number = dx * dx + dy * dy;
 
       // Movement AI
       if (boss.bossRole === BossRole.PASSAGE_GUARDIAN) {
         // Always chase player in sealed room
-        if (dist > 1) {
+        if (distSq > 1) {
+          const dist: number = Math.sqrt(distSq);
           const speed: number = 1.5;
           boss.vx = (dx / dist) * speed;
           boss.vy = (dy / dist) * speed;
         }
       } else {
         // Optional Challenge - only chase within aggro radius
-        if (dist < boss.aggroRadius) {
-          if (dist > 1) {
+        const aggroSq: number = boss.aggroRadius * boss.aggroRadius;
+        if (distSq < aggroSq) {
+          if (distSq > 1) {
+            const dist: number = Math.sqrt(distSq);
             const speed: number = 1.8;
             boss.vx = (dx / dist) * speed;
             boss.vy = (dy / dist) * speed;
@@ -1571,7 +1617,8 @@ export class GameEngine {
 
       // Attack timer
       boss.attackTimer -= dt;
-      if (boss.attackTimer <= 0 && dist < boss.size + PLAYER_SIZE + 20) {
+      const bossMeleeRange: number = boss.size + PLAYER_SIZE + 20;
+      if (boss.attackTimer <= 0 && distSq < bossMeleeRange * bossMeleeRange) {
         // Melee attack
         boss.attackTimer = BOSS_ATTACK_INTERVAL;
         if (p.invincibleTimer <= 0) {
@@ -1580,7 +1627,8 @@ export class GameEngine {
           this.audio.playPlayerDamage();
           this.shakeTimer = 200;
           // Knockback
-          if (dist > 1) {
+          if (distSq > 1) {
+            const dist: number = Math.sqrt(distSq);
             p.vx = -(dx / dist) * 6;
             p.vy = -(dy / dist) * 6;
           }
@@ -1761,9 +1809,9 @@ export class GameEngine {
 
       const dx: number = p.x - drop.x;
       const dy: number = p.y - drop.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
+      const distSq: number = dx * dx + dy * dy;
 
-      if (dist < collectRange) {
+      if (distSq < collectRange * collectRange) {
         drop.active = false;
         // Add to inventory
         if (drop.type === MaterialType.CRYSTAL_ORE) p.inventory.crystalOre += drop.count;
@@ -1812,6 +1860,7 @@ export class GameEngine {
   }
 
   private spawnParticle(x: number, y: number, vx: number, vy: number, life: number, color: string, size: number): void {
+    if (this.particles.length >= MAX_PARTICLES) return;
     this.particles.push({ x: x, y: y, vx: vx, vy: vy, life: life, maxLife: life, color: color, size: size });
   }
 
@@ -1863,7 +1912,6 @@ export class GameEngine {
 
     this.renderBackground(c, offX, offY);
     this.renderWorld(c, offX, offY);
-    this.renderPlayerLight(c, offX, offY, p);
     this.renderXpOrbs(c, offX, offY);
     this.renderTraps(c, offX, offY);
     this.renderMechanisms(c, offX, offY);
@@ -1877,7 +1925,7 @@ export class GameEngine {
     this.renderVignette(c);
     this.renderBossHPBar(c);
 
-    if (this.frameCount % MINIMAP_UPDATE_INTERVAL === 0) {
+    if (this.frameCount % 30 === 0) {
       this.renderMinimap();
     }
   }
@@ -1914,7 +1962,7 @@ export class GameEngine {
     c.fillRect(0, 0, w, h);
 
     // Layers 2+3: Parallax cave formations (cached to offscreen canvas)
-    const parallaxChunkSize: number = 200;
+    const parallaxChunkSize: number = 800;
     const camCX: number = Math.floor(this.cameraX / parallaxChunkSize);
     const camCY: number = Math.floor(this.cameraY / parallaxChunkSize);
     if (this.bgParallaxCache === null || this.bgParallaxW !== w || this.bgParallaxH !== h ||
@@ -1983,7 +2031,11 @@ export class GameEngine {
         }
       }
       pc.globalAlpha = 1.0;
-      this.bgParallaxCache = offscreen;
+      const bmp: ImageBitmap = offscreen.transferToImageBitmap();
+      if (this.bgParallaxCache !== null) {
+        this.bgParallaxCache.close();
+      }
+      this.bgParallaxCache = bmp;
       this.bgParallaxW = w;
       this.bgParallaxH = h;
       this.bgParallaxCamCX = camCX;
@@ -1992,13 +2044,19 @@ export class GameEngine {
 
     const drawOffX: number = -(this.cameraX - camCX * parallaxChunkSize) * 0.1 + parallaxChunkSize - this.cameraX * 0.1 + camCX * parallaxChunkSize * 0.1;
     const drawOffY: number = -(this.cameraY - camCY * parallaxChunkSize) * 0.1 + parallaxChunkSize - this.cameraY * 0.1 + camCY * parallaxChunkSize * 0.1;
-    c.drawImage(this.bgParallaxCache, drawOffX, drawOffY);
+    if (this.bgParallaxCache !== null) {
+      c.drawImage(this.bgParallaxCache, drawOffX, drawOffY);
+    }
   }
 
   private renderChunkStaticLayer(cx: number, cy: number, isShadow: boolean): ImageBitmap {
     const chunkPixelSize: number = CHUNK_SIZE * TILE_SIZE;
-    const offscreen: OffscreenCanvas = new OffscreenCanvas(chunkPixelSize, chunkPixelSize);
-    const oc: OffscreenCanvasRenderingContext2D = offscreen.getContext('2d') as OffscreenCanvasRenderingContext2D;
+    if (this.chunkRenderOffscreen === null) {
+      this.chunkRenderOffscreen = new OffscreenCanvas(chunkPixelSize, chunkPixelSize);
+      this.chunkRenderOffCtx = this.chunkRenderOffscreen.getContext('2d') as OffscreenCanvasRenderingContext2D;
+    }
+    const oc: OffscreenCanvasRenderingContext2D = this.chunkRenderOffCtx!;
+    oc.clearRect(0, 0, chunkPixelSize, chunkPixelSize);
 
     const floorColor: string = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
     const floorVarColor: string = isShadow ? '#0a0a16' : COLOR_FLOOR_VAR;
@@ -2180,7 +2238,7 @@ export class GameEngine {
         }
       }
     }
-    return offscreen.transferToImageBitmap();
+    return this.chunkRenderOffscreen!.transferToImageBitmap();
   }
 
   private processChunkRenderQueue(): void {
@@ -2202,6 +2260,35 @@ export class GameEngine {
     this.chunkCanvasCache.set(key, bitmap);
     this.chunkCacheShadow.set(key, isShadow);
     this.chunkCacheDirty.delete(key);
+  }
+
+  private evictFarChunks(playerTX: number, playerTY: number): void {
+    const pcx: number = Math.floor(playerTX / CHUNK_SIZE);
+    const pcy: number = Math.floor(playerTY / CHUNK_SIZE);
+    const evictDist: number = CHUNK_LOAD_RADIUS + 3;
+    const keysToRemove: string[] = [];
+    const iter = this.chunkCanvasCache.keys();
+    let result = iter.next();
+    while (!result.done) {
+      const key: string = result.value;
+      const idx: number = key.indexOf(',');
+      const cx: number = parseInt(key.substring(0, idx));
+      const cy: number = parseInt(key.substring(idx + 1));
+      if (Math.abs(cx - pcx) > evictDist || Math.abs(cy - pcy) > evictDist) {
+        keysToRemove.push(key);
+      }
+      result = iter.next();
+    }
+    for (let i: number = 0; i < keysToRemove.length; i++) {
+      const key: string = keysToRemove[i];
+      const bmp: ImageBitmap | undefined = this.chunkCanvasCache.get(key);
+      if (bmp !== undefined) {
+        bmp.close();
+      }
+      this.chunkCanvasCache.delete(key);
+      this.chunkCacheShadow.delete(key);
+      this.chunkCacheDirty.delete(key);
+    }
   }
 
   private renderWorld(c: CanvasRenderingContext2D, offX: number, offY: number): void {
@@ -2258,161 +2345,204 @@ export class GameEngine {
           continue;
         }
 
-        if (tile === TileType.GLOW_STONE) {
-          c.fillStyle = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
-          c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          const glowR: number = 20 + Math.sin(this.frameCount * 0.05 + tx) * 4;
-          c.globalAlpha = 0.15;
-          c.fillStyle = isShadow ? '#7c3aed' : COLOR_GLOW;
-          c.beginPath();
-          c.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, glowR, 0, Math.PI * 2);
-          c.fill();
-          c.globalAlpha = 1.0;
-          c.fillStyle = isShadow ? '#8b5cf6' : COLOR_GLOW_STONE;
-          c.beginPath();
-          c.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, 5, 0, Math.PI * 2);
-          c.fill();
-          c.fillStyle = isShadow ? '#c4b5fd' : '#fff8dc';
-          c.beginPath();
-          c.arc(screenX + TILE_SIZE / 2 - 1, screenY + TILE_SIZE / 2 - 1, 2, 0, Math.PI * 2);
-          c.fill();
-        } else if (tile === TileType.PLANT) {
-          c.fillStyle = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
-          c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          c.fillStyle = COLOR_PLANT;
-          c.fillRect(screenX + 14, screenY + 16, 4, 12);
-          c.fillStyle = COLOR_PLANT_LIGHT;
-          c.beginPath();
-          c.arc(screenX + 16, screenY + 14, 6, 0, Math.PI * 2);
-          c.fill();
-          c.fillStyle = COLOR_PLANT;
-          c.beginPath();
-          c.arc(screenX + 12, screenY + 18, 4, 0, Math.PI * 2);
-          c.fill();
-        } else if (tile === TileType.WATER) {
-          const waveOff: number = Math.sin(this.frameCount * 0.03 + tx * 0.5) * 2;
-          const waveOff2: number = Math.sin(this.frameCount * 0.05 + tx * 0.8) * 1.5;
-          c.globalAlpha = 0.75;
-          c.fillStyle = COLOR_WATER;
-          c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          c.globalAlpha = 1.0;
-          c.fillStyle = '#0a1a3a';
-          c.globalAlpha = 0.25;
-          c.fillRect(screenX, screenY + TILE_SIZE - 8, TILE_SIZE, 8);
-          c.globalAlpha = 1.0;
-          const aboveWater: number = this.getTile(tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
-          if (aboveWater !== TileType.WATER) {
-            c.fillStyle = COLOR_WATER_LIGHT;
-            c.globalAlpha = 0.6;
-            c.fillRect(screenX, screenY, TILE_SIZE, 2);
-            c.globalAlpha = 0.3;
-            c.fillRect(screenX, screenY + 2, TILE_SIZE, 1);
-            c.globalAlpha = 1.0;
-          }
-          c.fillStyle = COLOR_WATER_LIGHT;
-          c.globalAlpha = 0.3;
-          c.fillRect(screenX + 4, screenY + 8 + waveOff, 24, 3);
-          c.fillRect(screenX + 8, screenY + 20 - waveOff, 16, 2);
-          c.globalAlpha = 0.15;
-          c.fillRect(screenX + 2 + waveOff2, screenY + 14, 10, 2);
-          c.fillRect(screenX + 18 - waveOff2, screenY + 26, 8, 2);
-          c.globalAlpha = 1.0;
-          const bubbleHash: number = ((tx * 61 + ty * 113) % 23);
-          if (bubbleHash < 3) {
-            const bubbleY: number = (this.frameCount * 0.3 + bubbleHash * 11) % TILE_SIZE;
-            const bubbleX: number = 6 + bubbleHash * 9;
-            c.fillStyle = '#ffffff';
-            c.globalAlpha = 0.25;
-            c.fillRect(screenX + bubbleX, screenY + TILE_SIZE - bubbleY, 2, 2);
-            c.globalAlpha = 0.12;
-            c.fillRect(screenX + bubbleX + 5, screenY + TILE_SIZE - bubbleY + 4, 1, 1);
-            c.globalAlpha = 1.0;
-          }
-        } else if (tile === TileType.CRYSTAL) {
-          c.fillStyle = COLOR_FLOOR;
-          c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          const glow: number = 12 + Math.sin(this.frameCount * 0.04 + tx + ty) * 4;
-          c.globalAlpha = 0.2;
-          c.fillStyle = COLOR_CRYSTAL_GLOW;
-          c.beginPath();
-          c.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, glow, 0, Math.PI * 2);
-          c.fill();
-          c.globalAlpha = 1.0;
-          c.fillStyle = COLOR_CRYSTAL;
-          c.beginPath();
-          c.moveTo(screenX + TILE_SIZE / 2, screenY + 6);
-          c.lineTo(screenX + TILE_SIZE / 2 + 6, screenY + TILE_SIZE / 2);
-          c.lineTo(screenX + TILE_SIZE / 2, screenY + TILE_SIZE - 6);
-          c.lineTo(screenX + TILE_SIZE / 2 - 6, screenY + TILE_SIZE / 2);
-          c.closePath();
-          c.fill();
-          c.fillStyle = '#e0ffff';
-          c.beginPath();
-          c.arc(screenX + TILE_SIZE / 2 - 1, screenY + TILE_SIZE / 2 - 2, 2, 0, Math.PI * 2);
-          c.fill();
-        } else if (tile === TileType.MUSHROOM) {
-          c.fillStyle = COLOR_FLOOR;
-          c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          c.globalAlpha = 0.15;
-          c.fillStyle = COLOR_MUSHROOM_GLOW;
-          c.beginPath();
-          c.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, 14, 0, Math.PI * 2);
-          c.fill();
-          c.globalAlpha = 1.0;
-          c.fillStyle = COLOR_MUSHROOM_STEM;
-          c.fillRect(screenX + 13, screenY + 16, 6, 12);
-          c.fillStyle = COLOR_MUSHROOM_CAP;
-          c.beginPath();
-          c.arc(screenX + TILE_SIZE / 2, screenY + 14, 9, Math.PI, 0);
-          c.fill();
-          c.fillStyle = '#ffffff';
-          c.beginPath();
-          c.arc(screenX + 13, screenY + 11, 2, 0, Math.PI * 2);
-          c.fill();
-          c.beginPath();
-          c.arc(screenX + 19, screenY + 9, 1.5, 0, Math.PI * 2);
-          c.fill();
-        } else if (tile === TileType.LAVA) {
-          const lavaOff: number = Math.sin(this.frameCount * 0.05 + tx * 0.7) * 3;
-          const lavaOff2: number = Math.sin(this.frameCount * 0.08 + tx * 1.2) * 2;
-          c.fillStyle = COLOR_LAVA;
-          c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          c.fillStyle = '#cd4a00';
-          c.globalAlpha = 0.4;
-          c.fillRect(screenX + 6, screenY + 10 + lavaOff2, 18, 6);
-          c.globalAlpha = 1.0;
-          c.fillStyle = COLOR_LAVA_LIGHT;
-          c.globalAlpha = 0.6;
-          c.fillRect(screenX + 4, screenY + 6 + lavaOff, 20, 4);
-          c.fillRect(screenX + 10, screenY + 18 - lavaOff, 14, 3);
-          c.globalAlpha = 1.0;
-          const crustHash: number = ((tx * 43 + ty * 89) % 11);
-          if (crustHash < 3) {
-            c.fillStyle = '#3a0a00';
-            c.globalAlpha = 0.5;
-            c.fillRect(screenX + 2 + crustHash * 8, screenY + 4 + crustHash * 3, 6, 3);
-            c.fillRect(screenX + 14 - crustHash * 2, screenY + 22 - crustHash * 4, 5, 2);
-            c.globalAlpha = 1.0;
-          }
-          const aboveLava: number = this.getTile(tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
-          if (aboveLava !== TileType.LAVA) {
-            c.fillStyle = '#ff6600';
-            c.globalAlpha = 0.5 + Math.sin(this.frameCount * 0.06 + tx) * 0.15;
-            c.fillRect(screenX, screenY, TILE_SIZE, 2);
-            c.fillStyle = '#ffaa00';
-            c.globalAlpha = 0.25;
-            c.fillRect(screenX, screenY + 2, TILE_SIZE, 1);
-            c.globalAlpha = 1.0;
-          }
-          const emberHash: number = ((tx * 71 + ty * 127) % 19);
-          if (emberHash < 2) {
-            const emberY: number = (this.frameCount * 0.5 + emberHash * 7) % TILE_SIZE;
-            c.fillStyle = '#ffcc00';
-            c.globalAlpha = 0.4;
-            c.fillRect(screenX + 8 + emberHash * 10, screenY + TILE_SIZE - emberY, 1, 1);
-            c.globalAlpha = 1.0;
-          }
+        this.renderDynamicTileCached(c, tx, ty, tile, screenX, screenY, isShadow);
+      }
+    }
+  }
+
+  private renderDynamicTileCached(c: CanvasRenderingContext2D, tx: number, ty: number,
+    tile: number, screenX: number, screenY: number, isShadow: boolean): void {
+    const key: string = tx + ',' + ty;
+    const cached: DynTileCacheEntry | undefined = this.dynTileCache.get(key);
+    const regenInterval: number = 8;
+    const shouldRegen: boolean = cached === undefined ||
+      (this.frameCount - cached.gen) >= regenInterval;
+
+    if (shouldRegen) {
+      if (this.dynTileOffscreen === null) {
+        this.dynTileOffscreen = new OffscreenCanvas(TILE_SIZE, TILE_SIZE);
+        this.dynTileOffCtx = this.dynTileOffscreen.getContext('2d') as OffscreenCanvasRenderingContext2D;
+      }
+      const oc: OffscreenCanvasRenderingContext2D = this.dynTileOffCtx!;
+      oc.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
+      this.renderDynamicTile(oc, tx, ty, tile, 0, 0, isShadow);
+      const bmp: ImageBitmap = this.dynTileOffscreen!.transferToImageBitmap();
+      if (cached !== undefined) {
+        cached.bmp.close();
+      }
+      const entry: DynTileCacheEntry = { bmp: bmp, gen: this.frameCount };
+      this.dynTileCache.set(key, entry);
+
+      if (this.dynTileCache.size > MAX_DYN_TILE_CACHE) {
+        const firstKey: string = this.dynTileCache.keys().next().value as string;
+        const oldEntry: DynTileCacheEntry | undefined = this.dynTileCache.get(firstKey);
+        if (oldEntry !== undefined) {
+          oldEntry.bmp.close();
         }
+        this.dynTileCache.delete(firstKey);
+      }
+
+      c.drawImage(bmp, screenX, screenY);
+    } else {
+      c.drawImage(cached!.bmp, screenX, screenY);
+    }
+  }
+
+  private renderDynamicTile(c: OffscreenCanvasRenderingContext2D, tx: number, ty: number,
+    tile: number, screenX: number, screenY: number, isShadow: boolean): void {
+    if (tile === TileType.GLOW_STONE) {
+      c.fillStyle = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
+      c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+      const glowR: number = 20 + Math.sin(this.frameCount * 0.05 + tx) * 4;
+      c.globalAlpha = 0.15;
+      c.fillStyle = isShadow ? '#7c3aed' : COLOR_GLOW;
+      c.beginPath();
+      c.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, glowR, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 1.0;
+      c.fillStyle = isShadow ? '#8b5cf6' : COLOR_GLOW_STONE;
+      c.beginPath();
+      c.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, 5, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = isShadow ? '#c4b5fd' : '#fff8dc';
+      c.beginPath();
+      c.arc(screenX + TILE_SIZE / 2 - 1, screenY + TILE_SIZE / 2 - 1, 2, 0, Math.PI * 2);
+      c.fill();
+    } else if (tile === TileType.PLANT) {
+      c.fillStyle = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
+      c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+      c.fillStyle = COLOR_PLANT;
+      c.fillRect(screenX + 14, screenY + 16, 4, 12);
+      c.fillStyle = COLOR_PLANT_LIGHT;
+      c.beginPath();
+      c.arc(screenX + 16, screenY + 14, 6, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = COLOR_PLANT;
+      c.beginPath();
+      c.arc(screenX + 12, screenY + 18, 4, 0, Math.PI * 2);
+      c.fill();
+    } else if (tile === TileType.WATER) {
+      const waveOff: number = Math.sin(this.frameCount * 0.03 + tx * 0.5) * 2;
+      const waveOff2: number = Math.sin(this.frameCount * 0.05 + tx * 0.8) * 1.5;
+      c.globalAlpha = 0.75;
+      c.fillStyle = COLOR_WATER;
+      c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+      c.globalAlpha = 1.0;
+      c.fillStyle = '#0a1a3a';
+      c.globalAlpha = 0.25;
+      c.fillRect(screenX, screenY + TILE_SIZE - 8, TILE_SIZE, 8);
+      c.globalAlpha = 1.0;
+      const aboveWater: number = this.getTile(tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
+      if (aboveWater !== TileType.WATER) {
+        c.fillStyle = COLOR_WATER_LIGHT;
+        c.globalAlpha = 0.6;
+        c.fillRect(screenX, screenY, TILE_SIZE, 2);
+        c.globalAlpha = 0.3;
+        c.fillRect(screenX, screenY + 2, TILE_SIZE, 1);
+        c.globalAlpha = 1.0;
+      }
+      c.fillStyle = COLOR_WATER_LIGHT;
+      c.globalAlpha = 0.3;
+      c.fillRect(screenX + 4, screenY + 8 + waveOff, 24, 3);
+      c.fillRect(screenX + 8, screenY + 20 - waveOff, 16, 2);
+      c.globalAlpha = 0.15;
+      c.fillRect(screenX + 2 + waveOff2, screenY + 14, 10, 2);
+      c.fillRect(screenX + 18 - waveOff2, screenY + 26, 8, 2);
+      c.globalAlpha = 1.0;
+      const bubbleHash: number = ((tx * 61 + ty * 113) % 23);
+      if (bubbleHash < 3) {
+        const bubbleY: number = (this.frameCount * 0.3 + bubbleHash * 11) % TILE_SIZE;
+        const bubbleX: number = 6 + bubbleHash * 9;
+        c.fillStyle = '#ffffff';
+        c.globalAlpha = 0.25;
+        c.fillRect(screenX + bubbleX, screenY + TILE_SIZE - bubbleY, 2, 2);
+        c.globalAlpha = 0.12;
+        c.fillRect(screenX + bubbleX + 5, screenY + TILE_SIZE - bubbleY + 4, 1, 1);
+        c.globalAlpha = 1.0;
+      }
+    } else if (tile === TileType.CRYSTAL) {
+      c.fillStyle = COLOR_FLOOR;
+      c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+      const glow: number = 12 + Math.sin(this.frameCount * 0.04 + tx + ty) * 4;
+      c.globalAlpha = 0.2;
+      c.fillStyle = COLOR_CRYSTAL_GLOW;
+      c.beginPath();
+      c.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, glow, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 1.0;
+      c.fillStyle = COLOR_CRYSTAL;
+      c.beginPath();
+      c.moveTo(screenX + TILE_SIZE / 2, screenY + 6);
+      c.lineTo(screenX + TILE_SIZE / 2 + 6, screenY + TILE_SIZE / 2);
+      c.lineTo(screenX + TILE_SIZE / 2, screenY + TILE_SIZE - 6);
+      c.lineTo(screenX + TILE_SIZE / 2 - 6, screenY + TILE_SIZE / 2);
+      c.closePath();
+      c.fill();
+      c.fillStyle = '#e0ffff';
+      c.beginPath();
+      c.arc(screenX + TILE_SIZE / 2 - 1, screenY + TILE_SIZE / 2 - 2, 2, 0, Math.PI * 2);
+      c.fill();
+    } else if (tile === TileType.MUSHROOM) {
+      c.fillStyle = COLOR_FLOOR;
+      c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+      c.globalAlpha = 0.15;
+      c.fillStyle = COLOR_MUSHROOM_GLOW;
+      c.beginPath();
+      c.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, 14, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 1.0;
+      c.fillStyle = COLOR_MUSHROOM_STEM;
+      c.fillRect(screenX + 13, screenY + 16, 6, 12);
+      c.fillStyle = COLOR_MUSHROOM_CAP;
+      c.beginPath();
+      c.arc(screenX + TILE_SIZE / 2, screenY + 14, 9, Math.PI, 0);
+      c.fill();
+      c.fillStyle = '#ffffff';
+      c.beginPath();
+      c.arc(screenX + 13, screenY + 11, 2, 0, Math.PI * 2);
+      c.fill();
+      c.beginPath();
+      c.arc(screenX + 19, screenY + 9, 1.5, 0, Math.PI * 2);
+      c.fill();
+    } else if (tile === TileType.LAVA) {
+      const lavaOff: number = Math.sin(this.frameCount * 0.05 + tx * 0.7) * 3;
+      const lavaOff2: number = Math.sin(this.frameCount * 0.08 + tx * 1.2) * 2;
+      c.fillStyle = COLOR_LAVA;
+      c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+      c.fillStyle = '#cd4a00';
+      c.globalAlpha = 0.4;
+      c.fillRect(screenX + 6, screenY + 10 + lavaOff2, 18, 6);
+      c.globalAlpha = 1.0;
+      c.fillStyle = COLOR_LAVA_LIGHT;
+      c.globalAlpha = 0.6;
+      c.fillRect(screenX + 4, screenY + 6 + lavaOff, 20, 4);
+      c.fillRect(screenX + 10, screenY + 18 - lavaOff, 14, 3);
+      c.globalAlpha = 1.0;
+      const crustHash: number = ((tx * 43 + ty * 89) % 11);
+      if (crustHash < 3) {
+        c.fillStyle = '#3a0a00';
+        c.globalAlpha = 0.5;
+        c.fillRect(screenX + 2 + crustHash * 8, screenY + 4 + crustHash * 3, 6, 3);
+        c.fillRect(screenX + 14 - crustHash * 2, screenY + 22 - crustHash * 4, 5, 2);
+        c.globalAlpha = 1.0;
+      }
+      const aboveLava: number = this.getTile(tx * TILE_SIZE, (ty - 1) * TILE_SIZE);
+      if (aboveLava !== TileType.LAVA) {
+        c.fillStyle = '#ff6600';
+        c.globalAlpha = 0.5 + Math.sin(this.frameCount * 0.06 + tx) * 0.15;
+        c.fillRect(screenX, screenY, TILE_SIZE, 2);
+        c.fillStyle = '#ffaa00';
+        c.globalAlpha = 0.25;
+        c.fillRect(screenX, screenY + 2, TILE_SIZE, 1);
+        c.globalAlpha = 1.0;
+      }
+      const emberHash: number = ((tx * 71 + ty * 127) % 19);
+      if (emberHash < 2) {
+        const emberY: number = (this.frameCount * 0.5 + emberHash * 7) % TILE_SIZE;
+        c.fillStyle = '#ffcc00';
+        c.globalAlpha = 0.4;
+        c.fillRect(screenX + 8 + emberHash * 10, screenY + TILE_SIZE - emberY, 1, 1);
+        c.globalAlpha = 1.0;
       }
     }
   }
@@ -3686,9 +3816,11 @@ export class GameEngine {
     for (let i: number = 0; i < this.particles.length; i++) {
       const pt: Particle = this.particles[i];
       const alpha: number = pt.life / pt.maxLife;
+      if (alpha < 0.05) continue;
+      const sz: number = pt.size * alpha;
+      if (sz < 0.5) continue;
       c.globalAlpha = alpha;
       c.fillStyle = pt.color;
-      const sz: number = pt.size * alpha;
       c.fillRect(pt.x + offX - sz / 2, pt.y + offY - sz / 2, sz, sz);
     }
     c.globalAlpha = 1.0;
@@ -3746,9 +3878,8 @@ export class GameEngine {
       const alpha: number = ap.alpha * (fadeRatio < 0.2 ? fadeRatio / 0.2 : 1.0);
       c.globalAlpha = alpha;
       c.fillStyle = ap.color;
-      c.beginPath();
-      c.arc(ap.x, ap.y, ap.size, 0, Math.PI * 2);
-      c.fill();
+      const s: number = ap.size;
+      c.fillRect(ap.x - s, ap.y - s, s * 2, s * 2);
     }
     c.globalAlpha = 1.0;
   }
@@ -3771,18 +3902,6 @@ export class GameEngine {
     c.fillRect(0, 0, w, h);
   }
 
-  private renderPlayerLight(c: CanvasRenderingContext2D, offX: number, offY: number, p: PlayerState): void {
-    const screenX: number = p.x + offX;
-    const screenY: number = p.y + offY;
-    const radius: number = 120 + Math.sin(this.frameCount * 0.02) * 8;
-    const gradient: CanvasGradient = c.createRadialGradient(screenX, screenY, 0, screenX, screenY, radius);
-    gradient.addColorStop(0, 'rgba(255,200,100,0.06)');
-    gradient.addColorStop(0.5, 'rgba(255,180,80,0.02)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0)');
-    c.fillStyle = gradient;
-    c.fillRect(screenX - radius, screenY - radius, radius * 2, radius * 2);
-  }
-
   private renderMinimap(): void {
     if (this.minimapCtx === null || this.player === null) return;
     const mc: CanvasRenderingContext2D = this.minimapCtx;
@@ -3792,7 +3911,7 @@ export class GameEngine {
     mc.fillStyle = COLOR_MINIMAP_BG;
     mc.fillRect(0, 0, size, size);
 
-    const viewRange: number = 40;
+    const viewRange: number = 24;
     const playerTX: number = Math.floor(p.x / TILE_SIZE);
     const playerTY: number = Math.floor(p.y / TILE_SIZE);
     const scale: number = size / (viewRange * 2);
@@ -4237,9 +4356,9 @@ export class GameEngine {
 
       const dx: number = chest.x - p.x;
       const dy: number = chest.y - p.y;
-      const dist: number = Math.sqrt(dx * dx + dy * dy);
+      const distSq: number = dx * dx + dy * dy;
 
-      if (dist < CHEST_INTERACT_RANGE) {
+      if (distSq < CHEST_INTERACT_RANGE * CHEST_INTERACT_RANGE) {
         // Boss chest: auto-open on spawn (already handled by boss death)
         // Elite chest: only if guardian defeated
         if (chest.chestType === ChestType.ELITE && !chest.guardianDefeated) continue;

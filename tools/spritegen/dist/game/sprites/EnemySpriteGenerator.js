@@ -9,8 +9,6 @@ exports.drawGhostSlime = drawGhostSlime;
 exports.generateEnemyAtlas = generateEnemyAtlas;
 const GameConstants_1 = require("../GameConstants");
 const SpriteAtlas_1 = require("./SpriteAtlas");
-const ColorUtils_1 = require("./ColorUtils");
-const HumanoidBeastSprite_1 = require("./HumanoidBeastSprite");
 function drawGraySlime(c, bouncePhase, size, flash, frameCount) {
     const sc = size / 48;
     const bounce = Math.sin(bouncePhase) * 3 * sc;
@@ -26,103 +24,61 @@ function drawGraySlime(c, bouncePhase, size, flash, frameCount) {
     c.translate(0, bounce);
     c.scale(squash, 1 / squash);
     if (flash) {
-        // White damage-flash silhouette with soft volume
-        c.strokeStyle = '#1a1a2e';
-        c.lineWidth = 2 * sc;
-        c.globalAlpha = 0.5;
+        c.globalAlpha = 0.9;
+        c.fillStyle = '#ffffff';
         c.beginPath();
         c.ellipse(0, 0, 15 * sc, 13 * sc, 0, 0, Math.PI * 2);
-        c.stroke();
-        const flashGrad = c.createRadialGradient(-4 * sc, -5 * sc, 2 * sc, 0, 0, 15 * sc);
-        flashGrad.addColorStop(0, '#ffffff');
-        flashGrad.addColorStop(0.6, '#f1f5f9');
-        flashGrad.addColorStop(1, '#cbd5e1');
-        c.globalAlpha = 0.95;
-        c.fillStyle = flashGrad;
-        c.beginPath();
-        c.ellipse(0, 0, 14 * sc, 12 * sc, 0, 0, Math.PI * 2);
         c.fill();
     }
     else {
-        const base = GameConstants_1.COLOR_SLIME_GRAY;
-        // Outline (drawn under the fill so ~1px ring stays visible)
+        // Outline
         c.strokeStyle = '#1a1a2e';
         c.lineWidth = 2 * sc;
-        c.globalAlpha = 0.85;
+        c.globalAlpha = 0.8;
         c.beginPath();
         c.ellipse(0, 0, 15 * sc, 13 * sc, 0, 0, Math.PI * 2);
         c.stroke();
-        // Body: radial volume gradient, light from upper-left
-        const body = c.createRadialGradient(-4.5 * sc, -5.5 * sc, 1.5 * sc, 0, 0, 16 * sc);
-        body.addColorStop(0, (0, ColorUtils_1.lighten)(base, 0.45));
-        body.addColorStop(0.55, base);
-        body.addColorStop(1, (0, ColorUtils_1.darken)(base, 0.5));
-        c.globalAlpha = 0.95;
-        c.fillStyle = body;
+        // Body fill
+        c.globalAlpha = 0.9;
+        c.fillStyle = GameConstants_1.COLOR_SLIME_GRAY;
         c.beginPath();
         c.ellipse(0, 0, 14 * sc, 12 * sc, 0, 0, Math.PI * 2);
         c.fill();
-        // Ground occlusion: smooth dark fade toward the bottom
-        const ao = c.createLinearGradient(0, -1 * sc, 0, 12 * sc);
-        ao.addColorStop(0, (0, ColorUtils_1.rgba)((0, ColorUtils_1.darken)(base, 0.65), 0));
-        ao.addColorStop(1, (0, ColorUtils_1.rgba)((0, ColorUtils_1.darken)(base, 0.65), 0.5));
-        c.globalAlpha = 1;
-        c.fillStyle = ao;
+        // Highlight
+        c.fillStyle = GameConstants_1.COLOR_SLIME_GRAY_LIGHT;
         c.beginPath();
-        c.ellipse(0, 0, 14 * sc, 12 * sc, 0, 0, Math.PI * 2);
+        c.ellipse(-3 * sc, -4 * sc, 6 * sc, 5 * sc, -0.3, 0, Math.PI * 2);
         c.fill();
-        // Rim light along the upper-left edge
-        c.strokeStyle = GameConstants_1.COLOR_SLIME_GRAY_LIGHT;
-        c.lineWidth = 1.3 * sc;
-        c.globalAlpha = 0.55;
-        c.beginPath();
-        c.ellipse(0, 0, 13.2 * sc, 11.2 * sc, 0, Math.PI * 1.03, Math.PI * 1.5);
-        c.stroke();
-        // Soft top sheen
-        c.fillStyle = (0, ColorUtils_1.lighten)(base, 0.55);
-        c.globalAlpha = 0.2;
-        c.beginPath();
-        c.ellipse(-3.5 * sc, -4.5 * sc, 6.5 * sc, 5 * sc, -0.3, 0, Math.PI * 2);
-        c.fill();
-        // Crisp specular + bounce glint
+        // Specular highlight
         c.fillStyle = '#ffffff';
-        c.globalAlpha = 0.6;
+        c.globalAlpha = 0.45;
         c.beginPath();
-        c.ellipse(-5.5 * sc, -6 * sc, 2.6 * sc, 1.9 * sc, -0.2, 0, Math.PI * 2);
+        c.ellipse(-5 * sc, -6 * sc, 2.5 * sc, 1.8 * sc, -0.2, 0, Math.PI * 2);
         c.fill();
-        c.globalAlpha = 0.22;
+        c.globalAlpha = 0.2;
+        c.fillStyle = '#ffffff';
         c.beginPath();
-        c.ellipse(4 * sc, 3.5 * sc, 2.2 * sc, 1.5 * sc, 0.3, 0, Math.PI * 2);
+        c.ellipse(4 * sc, 3 * sc, 2 * sc, 1.5 * sc, 0.3, 0, Math.PI * 2);
         c.fill();
     }
     c.globalAlpha = 1.0;
-    // Eyes. During the hit flash the body is white, so the sclera gets a dark
-    // rim — otherwise the eyes melt into the flash and frame reads as a blank
-    // white blob.
-    for (let e = 0; e < 2; e++) {
-        const ex = (e === 0 ? -4 : 4) * sc;
-        c.fillStyle = '#ffffff';
-        c.beginPath();
-        c.ellipse(ex, -1 * sc, 3 * sc, 3.2 * sc, 0, 0, Math.PI * 2);
-        c.fill();
-        if (flash) {
-            c.strokeStyle = GameConstants_1.COLOR_SLIME_PUPIL;
-            c.lineWidth = 0.8 * sc;
-            c.globalAlpha = 0.9;
-            c.stroke();
-            c.globalAlpha = 1.0;
-        }
-    }
-    // Pupils stay drawn during the flash so the hit frame keeps a face
-    // (white-on-white eye shine would be invisible anyway — flash only).
-    c.fillStyle = GameConstants_1.COLOR_SLIME_PUPIL;
+    // Eyes (always visible)
+    c.fillStyle = '#ffffff';
     c.beginPath();
-    c.arc(-3.5 * sc, -0.5 * sc, 1.5 * sc, 0, Math.PI * 2);
+    c.ellipse(-4 * sc, -1 * sc, 3 * sc, 3.2 * sc, 0, 0, Math.PI * 2);
     c.fill();
     c.beginPath();
-    c.arc(4.5 * sc, -0.5 * sc, 1.5 * sc, 0, Math.PI * 2);
+    c.ellipse(4 * sc, -1 * sc, 3 * sc, 3.2 * sc, 0, 0, Math.PI * 2);
     c.fill();
     if (!flash) {
+        // Pupils
+        c.fillStyle = GameConstants_1.COLOR_SLIME_PUPIL;
+        c.beginPath();
+        c.arc(-3.5 * sc, -0.5 * sc, 1.5 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(4.5 * sc, -0.5 * sc, 1.5 * sc, 0, Math.PI * 2);
+        c.fill();
         // Eye shine
         c.fillStyle = '#ffffff';
         c.beginPath();
@@ -131,13 +87,13 @@ function drawGraySlime(c, bouncePhase, size, flash, frameCount) {
         c.beginPath();
         c.arc(4 * sc, -1.2 * sc, 0.6 * sc, 0, Math.PI * 2);
         c.fill();
+        // Mouth
+        c.strokeStyle = GameConstants_1.COLOR_SLIME_PUPIL;
+        c.lineWidth = 1 * sc;
+        c.beginPath();
+        c.arc(0, 3.5 * sc, 2.5 * sc, 0.2, Math.PI - 0.2);
+        c.stroke();
     }
-    // Mouth (kept in flash frames too)
-    c.strokeStyle = GameConstants_1.COLOR_SLIME_PUPIL;
-    c.lineWidth = 1 * sc;
-    c.beginPath();
-    c.arc(0, 3.5 * sc, 2.5 * sc, 0.2, Math.PI - 0.2);
-    c.stroke();
     c.restore();
 }
 function drawPurpleSlime(c, bouncePhase, size, flash, frameCount, isEngulfing) {
@@ -174,66 +130,24 @@ function drawPurpleSlime(c, bouncePhase, size, flash, frameCount, isEngulfing) {
         c.fill();
     }
     if (flash) {
-        c.strokeStyle = '#1a0533';
-        c.lineWidth = 2 * sc;
-        c.globalAlpha = 0.5;
-        c.beginPath();
-        c.ellipse(0, 0, 16 * sc, 14 * sc, 0, 0, Math.PI * 2);
-        c.stroke();
-        const flashGrad = c.createRadialGradient(-5 * sc, -6 * sc, 2 * sc, 0, 0, 17 * sc);
-        flashGrad.addColorStop(0, '#ffffff');
-        flashGrad.addColorStop(0.6, '#f5f3ff');
-        flashGrad.addColorStop(1, '#ddd6fe');
-        c.globalAlpha = 0.95;
-        c.fillStyle = flashGrad;
-        c.beginPath();
-        c.ellipse(0, 0, 15 * sc, 13 * sc, 0, 0, Math.PI * 2);
-        c.fill();
+        c.globalAlpha = 0.9;
+        c.fillStyle = '#ffffff';
     }
     else {
-        const base = GameConstants_1.COLOR_SLIME_PURPLE;
         c.strokeStyle = '#1a0533';
         c.lineWidth = 2 * sc;
-        c.globalAlpha = 0.85;
+        c.globalAlpha = 0.8;
         c.beginPath();
         c.ellipse(0, 0, 16 * sc, 14 * sc, 0, 0, Math.PI * 2);
         c.stroke();
-        // Body: deep violet volume gradient
-        const body = c.createRadialGradient(-4.5 * sc, -5.5 * sc, 1.5 * sc, 0, 0, 17 * sc);
-        body.addColorStop(0, (0, ColorUtils_1.lighten)(base, 0.4));
-        body.addColorStop(0.55, base);
-        body.addColorStop(1, (0, ColorUtils_1.darken)(base, 0.55));
-        c.globalAlpha = 0.92;
-        c.fillStyle = body;
+        c.globalAlpha = 0.9;
+        c.fillStyle = GameConstants_1.COLOR_SLIME_PURPLE;
         c.beginPath();
         c.ellipse(0, 0, 15 * sc, 13 * sc, 0, 0, Math.PI * 2);
         c.fill();
-        // Ground occlusion fade
-        const ao = c.createLinearGradient(0, -1 * sc, 0, 13 * sc);
-        ao.addColorStop(0, (0, ColorUtils_1.rgba)((0, ColorUtils_1.darken)(base, 0.6), 0));
-        ao.addColorStop(1, (0, ColorUtils_1.rgba)((0, ColorUtils_1.darken)(base, 0.6), 0.5));
-        c.globalAlpha = 1;
-        c.fillStyle = ao;
+        c.fillStyle = GameConstants_1.COLOR_SLIME_PURPLE_LIGHT;
         c.beginPath();
-        c.ellipse(0, 0, 15 * sc, 13 * sc, 0, 0, Math.PI * 2);
-        c.fill();
-        // Rim light
-        c.strokeStyle = GameConstants_1.COLOR_SLIME_PURPLE_LIGHT;
-        c.lineWidth = 1.3 * sc;
-        c.globalAlpha = 0.6;
-        c.beginPath();
-        c.ellipse(0, 0, 14.2 * sc, 12.2 * sc, 0, Math.PI * 1.03, Math.PI * 1.5);
-        c.stroke();
-        // Glossy top + crisp specular
-        c.fillStyle = (0, ColorUtils_1.lighten)(base, 0.5);
-        c.globalAlpha = 0.22;
-        c.beginPath();
-        c.ellipse(-3.5 * sc, -4.5 * sc, 6.5 * sc, 4.5 * sc, -0.3, 0, Math.PI * 2);
-        c.fill();
-        c.fillStyle = '#ffffff';
-        c.globalAlpha = 0.5;
-        c.beginPath();
-        c.ellipse(-5.5 * sc, -6 * sc, 2.4 * sc, 1.7 * sc, -0.2, 0, Math.PI * 2);
+        c.ellipse(-3 * sc, -4 * sc, 7 * sc, 5 * sc, -0.3, 0, Math.PI * 2);
         c.fill();
         const dripPhase = (frameCount * 0.03) % 1;
         for (let d = 0; d < 3; d++) {
@@ -248,38 +162,28 @@ function drawPurpleSlime(c, bouncePhase, size, flash, frameCount, isEngulfing) {
         }
     }
     c.globalAlpha = 1.0;
-    // Eyes — rimmed during flash so the sclera doesn't melt into the white body
-    for (let e = 0; e < 2; e++) {
-        const ex = (e === 0 ? -4 : 4) * sc;
-        c.fillStyle = '#ffffff';
-        c.beginPath();
-        c.ellipse(ex, -2 * sc, 3.2 * sc, 3.5 * sc, 0, 0, Math.PI * 2);
-        c.fill();
-        if (flash) {
-            c.strokeStyle = '#1a0533';
-            c.lineWidth = 0.8 * sc;
-            c.globalAlpha = 0.9;
-            c.stroke();
-            c.globalAlpha = 1.0;
-        }
-    }
-    // Iris + pupils — kept during the flash (dark colors stay readable on white)
-    c.fillStyle = '#ff0040';
+    c.fillStyle = '#ffffff';
     c.beginPath();
-    c.arc(-3.5 * sc, -1.5 * sc, 1.8 * sc, 0, Math.PI * 2);
+    c.ellipse(-4 * sc, -2 * sc, 3.2 * sc, 3.5 * sc, 0, 0, Math.PI * 2);
     c.fill();
     c.beginPath();
-    c.arc(4.5 * sc, -1.5 * sc, 1.8 * sc, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = '#1a1a2e';
-    c.beginPath();
-    c.arc(-3.5 * sc, -1.5 * sc, 0.9 * sc, 0, Math.PI * 2);
-    c.fill();
-    c.beginPath();
-    c.arc(4.5 * sc, -1.5 * sc, 0.9 * sc, 0, Math.PI * 2);
+    c.ellipse(4 * sc, -2 * sc, 3.2 * sc, 3.5 * sc, 0, 0, Math.PI * 2);
     c.fill();
     if (!flash) {
-        // Eye shine (white-on-white would be invisible in flash frames)
+        c.fillStyle = '#ff0040';
+        c.beginPath();
+        c.arc(-3.5 * sc, -1.5 * sc, 1.8 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(4.5 * sc, -1.5 * sc, 1.8 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#1a1a2e';
+        c.beginPath();
+        c.arc(-3.5 * sc, -1.5 * sc, 0.9 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(4.5 * sc, -1.5 * sc, 0.9 * sc, 0, Math.PI * 2);
+        c.fill();
         c.fillStyle = '#ffffff';
         c.beginPath();
         c.arc(-4.2 * sc, -2.2 * sc, 0.5 * sc, 0, Math.PI * 2);
@@ -287,33 +191,32 @@ function drawPurpleSlime(c, bouncePhase, size, flash, frameCount, isEngulfing) {
         c.beginPath();
         c.arc(3.8 * sc, -2.2 * sc, 0.5 * sc, 0, Math.PI * 2);
         c.fill();
-    }
-    // Angry brows + mouth — also kept so the flash frame keeps its expression
-    c.strokeStyle = '#4c1d95';
-    c.lineWidth = 1.5 * sc;
-    c.beginPath();
-    c.moveTo(-8 * sc, -6 * sc);
-    c.lineTo(-2 * sc, -4.5 * sc);
-    c.stroke();
-    c.beginPath();
-    c.moveTo(8 * sc, -6 * sc);
-    c.lineTo(2 * sc, -4.5 * sc);
-    c.stroke();
-    if (isEngulfing) {
-        c.fillStyle = '#2d1060';
+        c.strokeStyle = '#4c1d95';
+        c.lineWidth = 1.5 * sc;
         c.beginPath();
-        c.ellipse(0, 5 * sc, 6 * sc, 5 * sc, 0, 0, Math.PI * 2);
-        c.fill();
-        c.fillStyle = '#1a0533';
+        c.moveTo(-8 * sc, -6 * sc);
+        c.lineTo(-2 * sc, -4.5 * sc);
+        c.stroke();
         c.beginPath();
-        c.ellipse(0, 6 * sc, 3 * sc, 2.5 * sc, 0, 0, Math.PI * 2);
-        c.fill();
-    }
-    else {
-        c.fillStyle = '#2d1060';
-        c.beginPath();
-        c.ellipse(0, 5 * sc, 5 * sc, 3 * sc, 0, 0, Math.PI * 2);
-        c.fill();
+        c.moveTo(8 * sc, -6 * sc);
+        c.lineTo(2 * sc, -4.5 * sc);
+        c.stroke();
+        if (isEngulfing) {
+            c.fillStyle = '#2d1060';
+            c.beginPath();
+            c.ellipse(0, 5 * sc, 6 * sc, 5 * sc, 0, 0, Math.PI * 2);
+            c.fill();
+            c.fillStyle = '#1a0533';
+            c.beginPath();
+            c.ellipse(0, 6 * sc, 3 * sc, 2.5 * sc, 0, 0, Math.PI * 2);
+            c.fill();
+        }
+        else {
+            c.fillStyle = '#2d1060';
+            c.beginPath();
+            c.ellipse(0, 5 * sc, 5 * sc, 3 * sc, 0, 0, Math.PI * 2);
+            c.fill();
+        }
     }
     c.restore();
 }
@@ -360,93 +263,44 @@ function drawRedSlime(c, bouncePhase, size, flash, frameCount, isCharging) {
         c.stroke();
     }
     c.globalAlpha = 1.0;
-    const base = GameConstants_1.COLOR_SLIME_RED;
     if (flash) {
-        const flashGrad = c.createRadialGradient(-3 * sc, -4 * sc, 2 * sc, 1 * sc, 0, 16 * sc);
-        flashGrad.addColorStop(0, '#ffffff');
-        flashGrad.addColorStop(0.6, '#fee2e2');
-        flashGrad.addColorStop(1, '#fecaca');
-        c.fillStyle = flashGrad;
+        c.fillStyle = '#ffffff';
     }
     else {
-        const body = c.createRadialGradient(-3 * sc, -4 * sc, 1.5 * sc, 1 * sc, 0, 16 * sc);
-        body.addColorStop(0, (0, ColorUtils_1.lighten)(base, 0.4));
-        body.addColorStop(0.55, base);
-        body.addColorStop(1, (0, ColorUtils_1.darken)(base, 0.55));
-        c.fillStyle = body;
+        c.fillStyle = GameConstants_1.COLOR_SLIME_RED;
     }
-    c.globalAlpha = 1;
     c.beginPath();
     c.ellipse(1 * sc, 0, 14 * sc, 11 * sc, 0.1, 0, Math.PI * 2);
     c.fill();
     if (!flash) {
-        // Inner heat glow near the bottom (ember light)
-        c.fillStyle = '#ff6600';
-        c.globalAlpha = 0.14 + charge * 0.12;
-        c.beginPath();
-        c.ellipse(1 * sc, 4 * sc, 9 * sc, 5 * sc, 0.1, 0, Math.PI * 2);
-        c.fill();
-        // Ground occlusion fade
-        const ao = c.createLinearGradient(0, -3 * sc, 0, 11 * sc);
-        ao.addColorStop(0, (0, ColorUtils_1.rgba)((0, ColorUtils_1.darken)(base, 0.6), 0));
-        ao.addColorStop(1, (0, ColorUtils_1.rgba)((0, ColorUtils_1.darken)(base, 0.6), 0.45));
-        c.globalAlpha = 1;
-        c.fillStyle = ao;
-        c.beginPath();
-        c.ellipse(1 * sc, 0, 14 * sc, 11 * sc, 0.1, 0, Math.PI * 2);
-        c.fill();
-        // Rim light (matches the tilted body)
-        c.strokeStyle = GameConstants_1.COLOR_SLIME_RED_LIGHT;
-        c.lineWidth = 1.3 * sc;
-        c.globalAlpha = 0.6;
-        c.beginPath();
-        c.ellipse(1 * sc, 0, 13.2 * sc, 10.2 * sc, 0.1, Math.PI * 1.03, Math.PI * 1.5);
-        c.stroke();
         c.fillStyle = GameConstants_1.COLOR_SLIME_RED_LIGHT;
-        c.globalAlpha = 0.3;
         c.beginPath();
         c.ellipse(-2 * sc, -3.5 * sc, 6 * sc, 4 * sc, -0.2, 0, Math.PI * 2);
         c.fill();
-        // Crisp specular
-        c.fillStyle = '#ffffff';
-        c.globalAlpha = 0.5;
-        c.beginPath();
-        c.ellipse(-4.5 * sc, -5 * sc, 2.4 * sc, 1.7 * sc, -0.2, 0, Math.PI * 2);
-        c.fill();
     }
     c.globalAlpha = 1.0;
-    // Eyes — rimmed during flash so the sclera doesn't melt into the white body
-    for (let e = 0; e < 2; e++) {
-        const ex = (e === 0 ? -3.5 : 4) * sc;
-        c.fillStyle = '#ffffff';
-        c.beginPath();
-        c.ellipse(ex, -1.5 * sc, 2.8 * sc, 3 * sc, 0, 0, Math.PI * 2);
-        c.fill();
-        if (flash) {
-            c.strokeStyle = '#7f1d1d';
-            c.lineWidth = 0.8 * sc;
-            c.globalAlpha = 0.9;
-            c.stroke();
-            c.globalAlpha = 1.0;
-        }
-    }
-    // Amber iris + pupils — kept during the flash (high contrast on white)
-    c.fillStyle = '#ffcc00';
+    c.fillStyle = '#ffffff';
     c.beginPath();
-    c.arc(-3 * sc, -1 * sc, 1.5 * sc, 0, Math.PI * 2);
+    c.ellipse(-3.5 * sc, -1.5 * sc, 2.8 * sc, 3 * sc, 0, 0, Math.PI * 2);
     c.fill();
     c.beginPath();
-    c.arc(4.5 * sc, -1 * sc, 1.5 * sc, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = '#1a1a2e';
-    c.beginPath();
-    c.arc(-3 * sc, -1 * sc, 0.7 * sc, 0, Math.PI * 2);
-    c.fill();
-    c.beginPath();
-    c.arc(4.5 * sc, -1 * sc, 0.7 * sc, 0, Math.PI * 2);
+    c.ellipse(4 * sc, -1.5 * sc, 2.8 * sc, 3 * sc, 0, 0, Math.PI * 2);
     c.fill();
     if (!flash) {
-        // Eye shine (white-on-white would be invisible in flash frames)
+        c.fillStyle = '#ffcc00';
+        c.beginPath();
+        c.arc(-3 * sc, -1 * sc, 1.5 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(4.5 * sc, -1 * sc, 1.5 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#1a1a2e';
+        c.beginPath();
+        c.arc(-3 * sc, -1 * sc, 0.7 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(4.5 * sc, -1 * sc, 0.7 * sc, 0, Math.PI * 2);
+        c.fill();
         c.fillStyle = '#ffffff';
         c.beginPath();
         c.arc(-3.5 * sc, -1.8 * sc, 0.5 * sc, 0, Math.PI * 2);
@@ -454,27 +308,26 @@ function drawRedSlime(c, bouncePhase, size, flash, frameCount, isCharging) {
         c.beginPath();
         c.arc(4 * sc, -1.8 * sc, 0.5 * sc, 0, Math.PI * 2);
         c.fill();
+        c.strokeStyle = '#7f1d1d';
+        c.lineWidth = 1.5 * sc;
+        c.beginPath();
+        c.moveTo(-7 * sc, -5 * sc);
+        c.lineTo(-2 * sc, -3.5 * sc);
+        c.stroke();
+        c.beginPath();
+        c.moveTo(7 * sc, -5 * sc);
+        c.lineTo(2 * sc, -3.5 * sc);
+        c.stroke();
+        c.strokeStyle = '#7f1d1d';
+        c.lineWidth = 1.2 * sc;
+        c.beginPath();
+        c.moveTo(-4 * sc, 4 * sc);
+        c.lineTo(-2 * sc, 2.5 * sc);
+        c.lineTo(0, 4 * sc);
+        c.lineTo(2 * sc, 2.5 * sc);
+        c.lineTo(4 * sc, 4 * sc);
+        c.stroke();
     }
-    // Furious brows + fanged grin — also kept so the flash frame keeps its face
-    c.strokeStyle = '#7f1d1d';
-    c.lineWidth = 1.5 * sc;
-    c.beginPath();
-    c.moveTo(-7 * sc, -5 * sc);
-    c.lineTo(-2 * sc, -3.5 * sc);
-    c.stroke();
-    c.beginPath();
-    c.moveTo(7 * sc, -5 * sc);
-    c.lineTo(2 * sc, -3.5 * sc);
-    c.stroke();
-    c.strokeStyle = '#7f1d1d';
-    c.lineWidth = 1.2 * sc;
-    c.beginPath();
-    c.moveTo(-4 * sc, 4 * sc);
-    c.lineTo(-2 * sc, 2.5 * sc);
-    c.lineTo(0, 4 * sc);
-    c.lineTo(2 * sc, 2.5 * sc);
-    c.lineTo(4 * sc, 4 * sc);
-    c.stroke();
     c.restore();
 }
 function drawBlueSlime(c, bouncePhase, size, flash, frameCount) {
@@ -509,77 +362,38 @@ function drawBlueSlime(c, bouncePhase, size, flash, frameCount) {
     c.ellipse(0, 13 * sc, 12 * sc, 3 * sc, 0, 0, Math.PI * 2);
     c.fill();
     if (flash) {
-        c.strokeStyle = '#0c2d5e';
-        c.lineWidth = 2 * sc;
-        c.globalAlpha = 0.5;
+        c.globalAlpha = 0.9;
+        c.fillStyle = '#ffffff';
         c.beginPath();
         c.ellipse(0, 0, 15 * sc, 13 * sc, 0, 0, Math.PI * 2);
-        c.stroke();
-        const flashGrad = c.createRadialGradient(-4 * sc, -5 * sc, 2 * sc, 0, 0, 15 * sc);
-        flashGrad.addColorStop(0, '#ffffff');
-        flashGrad.addColorStop(0.6, '#eff6ff');
-        flashGrad.addColorStop(1, '#bfdbfe');
-        c.globalAlpha = 0.95;
-        c.fillStyle = flashGrad;
-        c.beginPath();
-        c.ellipse(0, 0, 14 * sc, 12 * sc, 0, 0, Math.PI * 2);
         c.fill();
     }
     else {
-        const base = GameConstants_1.COLOR_SLIME_BLUE;
         c.strokeStyle = '#0c2d5e';
         c.lineWidth = 2 * sc;
-        c.globalAlpha = 0.85;
+        c.globalAlpha = 0.8;
         c.beginPath();
         c.ellipse(0, 0, 15 * sc, 13 * sc, 0, 0, Math.PI * 2);
         c.stroke();
-        // Watery body: deep blue volume gradient
-        const body = c.createRadialGradient(-4.5 * sc, -5.5 * sc, 1.5 * sc, 0, 0, 16 * sc);
-        body.addColorStop(0, (0, ColorUtils_1.lighten)(base, 0.5));
-        body.addColorStop(0.55, base);
-        body.addColorStop(1, (0, ColorUtils_1.darken)(base, 0.55));
-        c.globalAlpha = 0.92;
-        c.fillStyle = body;
+        c.globalAlpha = 0.7;
+        c.fillStyle = GameConstants_1.COLOR_SLIME_BLUE;
         c.beginPath();
         c.ellipse(0, 0, 14 * sc, 12 * sc, 0, 0, Math.PI * 2);
         c.fill();
-        // Ground occlusion fade
-        const ao = c.createLinearGradient(0, -1 * sc, 0, 12 * sc);
-        ao.addColorStop(0, (0, ColorUtils_1.rgba)((0, ColorUtils_1.darken)(base, 0.6), 0));
-        ao.addColorStop(1, (0, ColorUtils_1.rgba)((0, ColorUtils_1.darken)(base, 0.65), 0.5));
-        c.globalAlpha = 1;
-        c.fillStyle = ao;
-        c.beginPath();
-        c.ellipse(0, 0, 14 * sc, 12 * sc, 0, 0, Math.PI * 2);
-        c.fill();
-        // Icy rim light
-        c.strokeStyle = '#93c5fd';
-        c.lineWidth = 1.3 * sc;
-        c.globalAlpha = 0.6;
-        c.beginPath();
-        c.ellipse(0, 0, 13.2 * sc, 11.2 * sc, 0, Math.PI * 1.03, Math.PI * 1.5);
-        c.stroke();
-        // Inner ripple
         c.globalAlpha = 0.3;
         c.fillStyle = GameConstants_1.COLOR_SLIME_BLUE_LIGHT;
         const rippleOff = Math.sin(frameCount * 0.04) * 1.5 * sc;
         c.beginPath();
         c.ellipse(0, rippleOff, 10 * sc, 7 * sc, 0, 0, Math.PI * 2);
         c.fill();
-        // Sheen + crisp specular
         c.fillStyle = '#ffffff';
         c.globalAlpha = 0.15;
         c.beginPath();
         c.ellipse(-4 * sc, -5 * sc, 4 * sc, 3 * sc, -0.3, 0, Math.PI * 2);
         c.fill();
-        c.globalAlpha = 0.5;
-        c.beginPath();
-        c.ellipse(-5.5 * sc, -6 * sc, 2.4 * sc, 1.7 * sc, -0.2, 0, Math.PI * 2);
-        c.fill();
-        // Flowing wave lines
         c.strokeStyle = '#93c5fd';
         c.lineWidth = 0.8 * sc;
-        c.globalAlpha = 0.45;
+        c.globalAlpha = 0.4;
         for (let w = 0; w < 3; w++) {
             const wy = (-3 + w * 4) * sc;
             const woff = Math.sin(frameCount * 0.05 + w) * 2 * sc;
@@ -590,31 +404,21 @@ function drawBlueSlime(c, bouncePhase, size, flash, frameCount) {
         }
     }
     c.globalAlpha = 1.0;
-    // Eyes — rimmed during flash so the sclera doesn't melt into the white body
-    for (let e = 0; e < 2; e++) {
-        const ex = (e === 0 ? -3.5 : 3.5) * sc;
-        c.fillStyle = '#ffffff';
-        c.beginPath();
-        c.ellipse(ex, -1 * sc, 3 * sc, 3.2 * sc, 0, 0, Math.PI * 2);
-        c.fill();
-        if (flash) {
-            c.strokeStyle = '#1e3a5f';
-            c.lineWidth = 0.8 * sc;
-            c.globalAlpha = 0.9;
-            c.stroke();
-            c.globalAlpha = 1.0;
-        }
-    }
-    // Deep-blue pupils — kept during the flash so the frame keeps a gaze
-    c.fillStyle = '#1e40af';
+    c.fillStyle = '#ffffff';
     c.beginPath();
-    c.arc(-3 * sc, -0.5 * sc, 1.5 * sc, 0, Math.PI * 2);
+    c.ellipse(-3.5 * sc, -1 * sc, 3 * sc, 3.2 * sc, 0, 0, Math.PI * 2);
     c.fill();
     c.beginPath();
-    c.arc(4 * sc, -0.5 * sc, 1.5 * sc, 0, Math.PI * 2);
+    c.ellipse(3.5 * sc, -1 * sc, 3 * sc, 3.2 * sc, 0, 0, Math.PI * 2);
     c.fill();
     if (!flash) {
-        // Eye shine (white-on-white would be invisible in flash frames)
+        c.fillStyle = '#1e40af';
+        c.beginPath();
+        c.arc(-3 * sc, -0.5 * sc, 1.5 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(4 * sc, -0.5 * sc, 1.5 * sc, 0, Math.PI * 2);
+        c.fill();
         c.fillStyle = '#ffffff';
         c.beginPath();
         c.arc(-3.5 * sc, -1.2 * sc, 0.5 * sc, 0, Math.PI * 2);
@@ -622,13 +426,12 @@ function drawBlueSlime(c, bouncePhase, size, flash, frameCount) {
         c.beginPath();
         c.arc(3.5 * sc, -1.2 * sc, 0.5 * sc, 0, Math.PI * 2);
         c.fill();
+        c.strokeStyle = '#1e3a5f';
+        c.lineWidth = 1 * sc;
+        c.beginPath();
+        c.arc(0, 3 * sc, 2.5 * sc, 0.2, Math.PI - 0.2);
+        c.stroke();
     }
-    // Mouth — also kept so the flash frame keeps its expression
-    c.strokeStyle = '#1e3a5f';
-    c.lineWidth = 1 * sc;
-    c.beginPath();
-    c.arc(0, 3 * sc, 2.5 * sc, 0.2, Math.PI - 0.2);
-    c.stroke();
     c.restore();
 }
 function drawYellowSlime(c, bouncePhase, size, flash, frameCount) {
@@ -684,95 +487,50 @@ function drawYellowSlime(c, bouncePhase, size, flash, frameCount) {
     c.ellipse(0, (13 + bounce / sc) * sc, 11 * sc, 2.5 * sc, 0, 0, Math.PI * 2);
     c.fill();
     if (flash) {
-        c.strokeStyle = '#78350f';
-        c.lineWidth = 2 * sc;
-        c.globalAlpha = 0.5;
+        c.globalAlpha = 0.9;
+        c.fillStyle = '#ffffff';
         c.beginPath();
         c.ellipse(0, 0, 13 * sc, 11 * sc, 0, 0, Math.PI * 2);
-        c.stroke();
-        const flashGrad = c.createRadialGradient(-3.5 * sc, -4.5 * sc, 2 * sc, 0, 0, 14 * sc);
-        flashGrad.addColorStop(0, '#ffffff');
-        flashGrad.addColorStop(0.6, '#fefce8');
-        flashGrad.addColorStop(1, '#fef08a');
-        c.globalAlpha = 0.95;
-        c.fillStyle = flashGrad;
-        c.beginPath();
-        c.ellipse(0, 0, 12 * sc, 10 * sc, 0, 0, Math.PI * 2);
         c.fill();
     }
     else {
-        const base = GameConstants_1.COLOR_SLIME_YELLOW;
         c.strokeStyle = '#78350f';
         c.lineWidth = 2 * sc;
-        c.globalAlpha = 0.85;
+        c.globalAlpha = 0.8;
         c.beginPath();
         c.ellipse(0, 0, 13 * sc, 11 * sc, 0, 0, Math.PI * 2);
         c.stroke();
-        // Body: golden volume gradient
-        const body = c.createRadialGradient(-4 * sc, -5 * sc, 1.5 * sc, 0, 0, 14 * sc);
-        body.addColorStop(0, (0, ColorUtils_1.lighten)(base, 0.5));
-        body.addColorStop(0.55, base);
-        body.addColorStop(1, (0, ColorUtils_1.darken)(base, 0.5));
-        c.globalAlpha = 0.95;
-        c.fillStyle = body;
+        c.globalAlpha = 0.9;
+        c.fillStyle = GameConstants_1.COLOR_SLIME_YELLOW;
         c.beginPath();
         c.ellipse(0, 0, 12 * sc, 10 * sc, 0, 0, Math.PI * 2);
         c.fill();
-        // Ground occlusion fade
-        const ao = c.createLinearGradient(0, -1 * sc, 0, 10 * sc);
-        ao.addColorStop(0, (0, ColorUtils_1.rgba)((0, ColorUtils_1.darken)(base, 0.55), 0));
-        ao.addColorStop(1, (0, ColorUtils_1.rgba)((0, ColorUtils_1.darken)(base, 0.55), 0.5));
-        c.globalAlpha = 1;
-        c.fillStyle = ao;
-        c.beginPath();
-        c.ellipse(0, 0, 12 * sc, 10 * sc, 0, 0, Math.PI * 2);
-        c.fill();
-        // Warm rim light
-        c.strokeStyle = (0, ColorUtils_1.lighten)(base, 0.7);
-        c.lineWidth = 1.3 * sc;
-        c.globalAlpha = 0.6;
-        c.beginPath();
-        c.ellipse(0, 0, 11.2 * sc, 9.2 * sc, 0, Math.PI * 1.03, Math.PI * 1.5);
-        c.stroke();
-        // Glossy highlight
         c.fillStyle = GameConstants_1.COLOR_SLIME_YELLOW_LIGHT;
-        c.globalAlpha = 0.35;
         c.beginPath();
         c.ellipse(-2.5 * sc, -3.5 * sc, 5.5 * sc, 4 * sc, -0.2, 0, Math.PI * 2);
         c.fill();
-        // Crisp specular
         c.fillStyle = '#ffffff';
-        c.globalAlpha = 0.55;
+        c.globalAlpha = 0.5;
         c.beginPath();
         c.ellipse(-4 * sc, -5.5 * sc, 2.5 * sc, 1.8 * sc, -0.2, 0, Math.PI * 2);
         c.fill();
     }
     c.globalAlpha = 1.0;
-    // Eyes — rimmed during flash so the sclera doesn't melt into the white body
-    for (let e = 0; e < 2; e++) {
-        const ex = (e === 0 ? -3 : 3) * sc;
-        c.fillStyle = '#ffffff';
-        c.beginPath();
-        c.ellipse(ex, -0.5 * sc, 2.8 * sc, 3 * sc, 0, 0, Math.PI * 2);
-        c.fill();
-        if (flash) {
-            c.strokeStyle = '#92400e';
-            c.lineWidth = 0.8 * sc;
-            c.globalAlpha = 0.9;
-            c.stroke();
-            c.globalAlpha = 1.0;
-        }
-    }
-    // Amber pupils — kept during the flash so the frame keeps a gaze
-    c.fillStyle = '#92400e';
+    c.fillStyle = '#ffffff';
     c.beginPath();
-    c.arc(-2.5 * sc, 0, 1.3 * sc, 0, Math.PI * 2);
+    c.ellipse(-3 * sc, -0.5 * sc, 2.8 * sc, 3 * sc, 0, 0, Math.PI * 2);
     c.fill();
     c.beginPath();
-    c.arc(3.5 * sc, 0, 1.3 * sc, 0, Math.PI * 2);
+    c.ellipse(3 * sc, -0.5 * sc, 2.8 * sc, 3 * sc, 0, 0, Math.PI * 2);
     c.fill();
     if (!flash) {
-        // Eye shine + cheek blush (washed out on the white flash body)
+        c.fillStyle = '#92400e';
+        c.beginPath();
+        c.arc(-2.5 * sc, 0, 1.3 * sc, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.arc(3.5 * sc, 0, 1.3 * sc, 0, Math.PI * 2);
+        c.fill();
         c.fillStyle = '#ffffff';
         c.beginPath();
         c.arc(-3 * sc, -0.8 * sc, 0.5 * sc, 0, Math.PI * 2);
@@ -780,6 +538,11 @@ function drawYellowSlime(c, bouncePhase, size, flash, frameCount) {
         c.beginPath();
         c.arc(3 * sc, -0.8 * sc, 0.5 * sc, 0, Math.PI * 2);
         c.fill();
+        c.strokeStyle = '#92400e';
+        c.lineWidth = 1 * sc;
+        c.beginPath();
+        c.arc(0, 3 * sc, 3.5 * sc, 0.1, Math.PI - 0.1);
+        c.stroke();
         c.fillStyle = '#f59e0b';
         c.globalAlpha = 0.3;
         c.beginPath();
@@ -788,14 +551,7 @@ function drawYellowSlime(c, bouncePhase, size, flash, frameCount) {
         c.beginPath();
         c.ellipse(6 * sc, 2 * sc, 2 * sc, 1.2 * sc, 0, 0, Math.PI * 2);
         c.fill();
-        c.globalAlpha = 1.0;
     }
-    // Mouth — also kept so the flash frame keeps its expression
-    c.strokeStyle = '#92400e';
-    c.lineWidth = 1 * sc;
-    c.beginPath();
-    c.arc(0, 3 * sc, 3.5 * sc, 0.1, Math.PI - 0.1);
-    c.stroke();
     c.restore();
 }
 function drawGhostSlime(c, bouncePhase, size, flash, frameCount) {
@@ -832,24 +588,9 @@ function drawGhostSlime(c, bouncePhase, size, flash, frameCount) {
         }
     }
     const bodyAlpha = flash ? 0.9 : (0.45 + phase);
-    const wv1 = Math.sin(frameCount * 0.06) * 1.5 * sc;
-    const wv2 = Math.sin(frameCount * 0.06 + 1) * 1.5 * sc;
-    const wv3 = Math.sin(frameCount * 0.06 + 2) * 1.5 * sc;
     c.globalAlpha = bodyAlpha;
     if (flash) {
-        // White damage flash: keep the wavy ghost silhouette visible
-        c.globalAlpha = 0.9;
         c.fillStyle = '#ffffff';
-        c.beginPath();
-        c.moveTo(-12 * sc, 4 * sc);
-        c.quadraticCurveTo(-13 * sc, -10 * sc, 0, -12 * sc);
-        c.quadraticCurveTo(13 * sc, -10 * sc, 12 * sc, 4 * sc);
-        c.quadraticCurveTo(10 * sc, 10 * sc + wv1, 6 * sc, 8 * sc);
-        c.quadraticCurveTo(3 * sc, 12 * sc + wv2, 0, 9 * sc);
-        c.quadraticCurveTo(-3 * sc, 12 * sc + wv3, -6 * sc, 8 * sc);
-        c.quadraticCurveTo(-10 * sc, 10 * sc + wv1, -12 * sc, 4 * sc);
-        c.closePath();
-        c.fill();
     }
     else {
         c.strokeStyle = '#334155';
@@ -859,6 +600,9 @@ function drawGhostSlime(c, bouncePhase, size, flash, frameCount) {
         c.moveTo(-12 * sc, 4 * sc);
         c.quadraticCurveTo(-13 * sc, -10 * sc, 0, -12 * sc);
         c.quadraticCurveTo(13 * sc, -10 * sc, 12 * sc, 4 * sc);
+        const wv1 = Math.sin(frameCount * 0.06) * 1.5 * sc;
+        const wv2 = Math.sin(frameCount * 0.06 + 1) * 1.5 * sc;
+        const wv3 = Math.sin(frameCount * 0.06 + 2) * 1.5 * sc;
         c.quadraticCurveTo(10 * sc, 10 * sc + wv1, 6 * sc, 8 * sc);
         c.quadraticCurveTo(3 * sc, 12 * sc + wv2, 0, 9 * sc);
         c.quadraticCurveTo(-3 * sc, 12 * sc + wv3, -6 * sc, 8 * sc);
@@ -866,11 +610,7 @@ function drawGhostSlime(c, bouncePhase, size, flash, frameCount) {
         c.closePath();
         c.stroke();
         c.globalAlpha = bodyAlpha;
-        const ghostGrad = c.createRadialGradient(-4 * sc, -5 * sc, 2 * sc, 0, 0, 15 * sc);
-        ghostGrad.addColorStop(0, (0, ColorUtils_1.lighten)(GameConstants_1.COLOR_SLIME_GHOST, 0.5));
-        ghostGrad.addColorStop(0.55, GameConstants_1.COLOR_SLIME_GHOST);
-        ghostGrad.addColorStop(1, (0, ColorUtils_1.darken)(GameConstants_1.COLOR_SLIME_GHOST, 0.35));
-        c.fillStyle = ghostGrad;
+        c.fillStyle = GameConstants_1.COLOR_SLIME_GHOST;
         c.beginPath();
         c.moveTo(-12 * sc, 4 * sc);
         c.quadraticCurveTo(-13 * sc, -10 * sc, 0, -12 * sc);
@@ -881,54 +621,34 @@ function drawGhostSlime(c, bouncePhase, size, flash, frameCount) {
         c.quadraticCurveTo(-10 * sc, 10 * sc + wv1, -12 * sc, 4 * sc);
         c.closePath();
         c.fill();
-        // Silvery rim along the top edge
-        c.strokeStyle = GameConstants_1.COLOR_SLIME_GHOST_LIGHT;
-        c.lineWidth = 1.1 * sc;
-        c.globalAlpha = bodyAlpha * 0.7;
+        c.fillStyle = GameConstants_1.COLOR_SLIME_GHOST_LIGHT;
+        c.globalAlpha = 0.25;
         c.beginPath();
-        c.ellipse(0, 0, 11.6 * sc, 11.4 * sc, 0, Math.PI * 1.05, Math.PI * 1.5);
-        c.stroke();
-        // Soft inner glow
-        const glow = c.createRadialGradient(0, -2 * sc, 1 * sc, 0, -2 * sc, 8 * sc);
-        glow.addColorStop(0, (0, ColorUtils_1.rgba)(GameConstants_1.COLOR_SLIME_GHOST_LIGHT, 0.45));
-        glow.addColorStop(1, (0, ColorUtils_1.rgba)(GameConstants_1.COLOR_SLIME_GHOST_LIGHT, 0));
-        c.globalAlpha = bodyAlpha;
-        c.fillStyle = glow;
-        c.beginPath();
-        c.ellipse(0, -2 * sc, 8 * sc, 7 * sc, 0, 0, Math.PI * 2);
+        c.ellipse(0, -2 * sc, 7 * sc, 6 * sc, 0, 0, Math.PI * 2);
         c.fill();
         c.fillStyle = '#ffffff';
-        c.globalAlpha = 0.18;
+        c.globalAlpha = 0.1;
         c.beginPath();
         c.ellipse(-3 * sc, -6 * sc, 4 * sc, 2.5 * sc, -0.2, 0, Math.PI * 2);
         c.fill();
     }
     c.globalAlpha = flash ? 0.9 : 0.85;
     c.fillStyle = flash ? '#ffffff' : '#e2e8f0';
-    for (let e = 0; e < 2; e++) {
-        const ex = (e === 0 ? -4 : 4) * sc;
-        c.beginPath();
-        c.ellipse(ex, -3 * sc, 2.8 * sc, 3.5 * sc, 0, 0, Math.PI * 2);
-        c.fill();
-        if (flash) {
-            // Rim the white eyes on the white flash body
-            c.strokeStyle = '#1e293b';
-            c.lineWidth = 0.8 * sc;
-            c.stroke();
-        }
-    }
-    c.globalAlpha = 1.0;
-    // Dark hollow eyes + mouth — kept during the flash so it keeps a face
-    c.fillStyle = '#1e293b';
-    c.globalAlpha = 0.9;
     c.beginPath();
-    c.ellipse(-4 * sc, -2.5 * sc, 1.5 * sc, 2 * sc, 0, 0, Math.PI * 2);
+    c.ellipse(-4 * sc, -3 * sc, 2.8 * sc, 3.5 * sc, 0, 0, Math.PI * 2);
     c.fill();
     c.beginPath();
-    c.ellipse(4 * sc, -2.5 * sc, 1.5 * sc, 2 * sc, 0, 0, Math.PI * 2);
+    c.ellipse(4 * sc, -3 * sc, 2.8 * sc, 3.5 * sc, 0, 0, Math.PI * 2);
     c.fill();
     if (!flash) {
-        // Eye shine (white-on-white would be invisible in flash frames)
+        c.fillStyle = '#1e293b';
+        c.globalAlpha = 0.9;
+        c.beginPath();
+        c.ellipse(-4 * sc, -2.5 * sc, 1.5 * sc, 2 * sc, 0, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.ellipse(4 * sc, -2.5 * sc, 1.5 * sc, 2 * sc, 0, 0, Math.PI * 2);
+        c.fill();
         c.fillStyle = '#94a3b8';
         c.globalAlpha = 0.6;
         c.beginPath();
@@ -937,12 +657,12 @@ function drawGhostSlime(c, bouncePhase, size, flash, frameCount) {
         c.beginPath();
         c.arc(3.5 * sc, -3.5 * sc, 0.6 * sc, 0, Math.PI * 2);
         c.fill();
+        c.fillStyle = '#1e293b';
+        c.globalAlpha = 0.6;
+        c.beginPath();
+        c.ellipse(0, 3 * sc, 3 * sc, (2.5 + Math.sin(frameCount * 0.04)) * sc, 0, 0, Math.PI * 2);
+        c.fill();
     }
-    c.fillStyle = '#1e293b';
-    c.globalAlpha = 0.6;
-    c.beginPath();
-    c.ellipse(0, 3 * sc, 3 * sc, (2.5 + Math.sin(frameCount * 0.04)) * sc, 0, 0, Math.PI * 2);
-    c.fill();
     c.restore();
 }
 const ENEMY_CELL_W = 64;
@@ -1001,11 +721,6 @@ function drawEnemyFrame(c, type, cx, cy, bouncePhase, flash, animFrame, isChargi
             break;
         case GameConstants_1.EnemyType.GHOST_SLIME:
             drawGhostSlime(c, bouncePhase, ENEMY_CANONICAL_SIZE, flash, animFrame);
-            break;
-        case GameConstants_1.EnemyType.HUMANOID_BEAST:
-            // Bake the bounce as a translate so atlas frames match runtime motion
-            c.translate(0, Math.sin(bouncePhase) * 2);
-            (0, HumanoidBeastSprite_1.drawHumanoidBeast)(c, flash, animFrame, 1);
             break;
     }
     c.restore();

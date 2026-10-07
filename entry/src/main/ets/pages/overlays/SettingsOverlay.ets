@@ -1,4 +1,3 @@
-import { router } from '@kit.ArkUI';
 import { Engine } from '@qiuyu/engine';
 import { AudioManager } from '../../game/AudioManager';
 import { GameSettings } from '../../game/GameConstants';
@@ -146,34 +145,6 @@ export struct SettingsOverlay {
         .borderRadius(4)
         .border({ width: 2, color: '#334155' })
         .margin({ top: 8 })
-
-        Stack() {
-          Column()
-            .width('100%')
-            .height(36)
-            .backgroundColor('#7f1d1d')
-            .borderRadius(4)
-            .border({ width: 2, color: '#dc2626' })
-
-          Text('退出登录')
-            .fontSize(13)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#fca5a5')
-        }
-        .width('100%')
-        .height(36)
-        .margin({ top: 14 })
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            if (this.engine !== null) {
-              this.engine.stop();
-            }
-            if (this.audio !== null) {
-              this.audio.destroy();
-            }
-            router.replaceUrl({ url: 'pages/LoginPage' });
-          }
-        })
 
         Blank()
 

@@ -16,23 +16,16 @@ const ts = require('typescript');
 const path = require('path');
 
 const FILES = [
-  '../../entry/src/main/ets/game/sprites/ColorUtils.ets',
-  '../../entry/src/main/ets/game/sprites/PlayerSlimeSprite.ets',
-  '../../entry/src/main/ets/game/sprites/HumanoidBeastSprite.ets',
-  '../../entry/src/main/ets/game/sprites/WeaponSprite.ets',
-  '../../entry/src/main/ets/game/sprites/AttackFxSprite.ets',
+  '../../entry/src/main/ets/game/GameConstants.ets',
+  '../../entry/src/main/ets/game/sprites/TileSprite.ets',
+  '../../entry/src/main/ets/game/sprites/SpriteAtlas.ets',
+  '../../entry/src/main/ets/game/sprites/SpriteCache.ets',
   '../../entry/src/main/ets/game/sprites/EnemySpriteGenerator.ets',
+  '../../entry/src/main/ets/game/sprites/BossSpriteGenerator.ets',
   '../../entry/src/main/ets/game/sprites/PlayerSpriteGenerator.ets',
   '../../entry/src/main/ets/game/sprites/SpriteManager.ets',
-  '../../entry/src/main/ets/game/renderers/PlayerRenderer.ets',
-  '../../entry/src/main/ets/game/renderers/EnemyRenderer.ets',
-  '../../entry/src/main/ets/game/renderers/WeaponRenderer.ets',
-  '../../entry/src/main/ets/game/GameScene.ets',
-  '../../entry/src/main/ets/game/systems/PlayerMovementSystem.ets',
-  '../../entry/src/main/ets/game/systems/ChunkLoadSystem.ets',
-  '../../entry/src/main/ets/pages/Index.ets',
-  '../../Engine/src/main/ets/Engine.ets',
-  '../../Engine/src/main/ets/World.ets'
+  '../../entry/src/main/ets/game/GameEngine.ets',
+  '../../entry/src/main/ets/pages/Index.ets'
 ].map((f) => path.resolve(__dirname, f));
 
 const filterExternal = !process.argv.includes('--all');

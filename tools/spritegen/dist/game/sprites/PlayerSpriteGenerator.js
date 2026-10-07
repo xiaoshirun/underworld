@@ -35,16 +35,6 @@ function drawPlayerBody(c, centerX, centerY, walkPhase, facingRight, isMoving) {
     c.fillRect(centerX - 5, centerY - 3 + bobY, 10, 9);
     c.fillStyle = bodyDarkColor;
     c.fillRect(centerX - 5, centerY + 3 + bobY, 10, 3);
-    // Right-side shading (light from upper-left)
-    c.fillStyle = bodyDarkColor;
-    c.globalAlpha = 0.55;
-    c.fillRect(centerX + 4, centerY - 3 + bobY, 1, 6);
-    c.globalAlpha = 1.0;
-    // Collar highlight
-    c.fillStyle = '#ffffff';
-    c.globalAlpha = 0.16;
-    c.fillRect(centerX - 5, centerY - 3 + bobY, 10, 1);
-    c.globalAlpha = 1.0;
     c.fillStyle = bodyDarkColor;
     c.globalAlpha = 0.4;
     c.fillRect(centerX - 3, centerY - 1 + bobY, 1, 5);
@@ -80,11 +70,6 @@ function drawPlayerBody(c, centerX, centerY, walkPhase, facingRight, isMoving) {
     // Head
     c.fillStyle = GameConstants_1.COLOR_PLAYER_SKIN;
     c.fillRect(centerX - 4, centerY - 10 + bobY, 8, 7);
-    // Right-side face shade + jaw shadow
-    c.fillStyle = '#c99878';
-    c.fillRect(centerX + 3, centerY - 10 + bobY, 1, 6);
-    c.fillStyle = '#d4a882';
-    c.fillRect(centerX - 3, centerY - 4 + bobY, 6, 1);
     c.fillStyle = '#e8c0a0';
     c.globalAlpha = 0.5;
     c.fillRect(centerX - 3, centerY - 5 + bobY, 2, 1);
@@ -131,12 +116,6 @@ function drawPlayerBody(c, centerX, centerY, walkPhase, facingRight, isMoving) {
     c.fillStyle = hairColor;
     c.fillRect(centerX - 2 + eyeOffX, centerY - 9 + bobY, 3, 1);
     c.fillRect(centerX + 1 + eyeOffX, centerY - 9 + bobY, 3, 1);
-    // Cheek blush
-    c.fillStyle = '#e8927c';
-    c.globalAlpha = 0.7;
-    c.fillRect(centerX - 3 + eyeOffX, centerY - 5 + bobY, 1, 1);
-    c.fillRect(centerX + 3 + eyeOffX, centerY - 5 + bobY, 1, 1);
-    c.globalAlpha = 1.0;
     // Mouth
     c.fillStyle = '#c0846a';
     c.fillRect(centerX, centerY - 4 + bobY, 2, 1);
@@ -156,7 +135,7 @@ function generatePlayerCache() {
         const ctx = canvas.getContext('2d');
         drawPlayerBody(ctx, centerX, centerY, 0, facingRight, false);
         const key = facingRight ? 'body_idle_R' : 'body_idle_L';
-        cache.set(key, canvas.transferToImageBitmap());
+        cache.set(key, canvas);
     }
     // Walk frames (4 phases x 2 directions)
     for (let phase = 0; phase < 4; phase++) {
@@ -167,7 +146,7 @@ function generatePlayerCache() {
             drawPlayerBody(ctx, centerX, centerY, phase, facingRight, true);
             const dir = facingRight ? 'R' : 'L';
             const key = `body_walk_${dir}_${phase}`;
-            cache.set(key, canvas.transferToImageBitmap());
+            cache.set(key, canvas);
         }
     }
     return cache;

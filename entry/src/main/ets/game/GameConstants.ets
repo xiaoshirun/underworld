@@ -33,11 +33,13 @@ export const XP_ORB_SIZE: number = 6;
 export const XP_COLLECT_RANGE: number = 40;
 export const XP_MAGNET_RANGE: number = 80;
 export const LEVEL_UP_XP: number = 10;
-export const CHUNK_LOAD_RADIUS: number = 3;
+export const CHUNK_LOAD_RADIUS: number = 2;
 export const JOYSTICK_RADIUS: number = 55;
 export const MINIMAP_SIZE: number = 130;
 export const FRAME_INTERVAL: number = 16;
 export const MINIMAP_UPDATE_INTERVAL: number = 15;
+export const MAX_PARTICLES: number = 200;
+export const MAX_DYN_TILE_CACHE: number = 100;
 export const NOISE_SCALE: number = 0.08;
 export const CAVE_THRESHOLD: number = 0.45;
 export const BIOME_SCALE: number = 0.015;
@@ -371,6 +373,11 @@ export interface AmbientParticle {
   color: string;
   life: number;
   maxLife: number;
+}
+
+export interface DynTileCacheEntry {
+  bmp: ImageBitmap;
+  gen: number;
 }
 
 export interface GameSettings {

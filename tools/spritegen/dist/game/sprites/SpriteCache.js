@@ -8,8 +8,8 @@ class SpriteCache {
     get(key) {
         return this.frames.get(key);
     }
-    set(key, bitmap) {
-        this.frames.set(key, bitmap);
+    set(key, canvas) {
+        this.frames.set(key, canvas);
     }
     has(key) {
         return this.frames.has(key);

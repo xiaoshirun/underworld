@@ -29,13 +29,9 @@ const OUT = path.join(ROOT, 'entry', 'src', 'main', 'resources', 'rawfile', 'spr
 
 const SOURCES = [
   'GameConstants.ets',
-  'sprites/ColorUtils.ets',
   'sprites/SpriteAtlas.ets',
   'sprites/SpriteCache.ets',
-  'sprites/PlayerSlimeSprite.ets',
-  'sprites/HumanoidBeastSprite.ets',
-  'sprites/WeaponSprite.ets',
-  'sprites/AttackFxSprite.ets',
+  'sprites/TileSprite.ets',
   'sprites/EnemySpriteGenerator.ets',
   'sprites/BossSpriteGenerator.ets',
   'sprites/PlayerSpriteGenerator.ets'
@@ -91,13 +87,16 @@ globalThis.OffscreenCanvas = class OffscreenCanvas {
 const { generateEnemyAtlas } = require(path.join(DIST, 'game', 'sprites', 'EnemySpriteGenerator.js'));
 const { generateBossAtlas } = require(path.join(DIST, 'game', 'sprites', 'BossSpriteGenerator.js'));
 const { generatePlayerCache } = require(path.join(DIST, 'game', 'sprites', 'PlayerSpriteGenerator.js'));
-const { drawPlayerSlimeBody } = require(path.join(DIST, 'game', 'sprites', 'PlayerSlimeSprite.js'));
-const { drawWeaponIcon } = require(path.join(DIST, 'game', 'sprites', 'WeaponSprite.js'));
-const { drawAttackSlash } = require(path.join(DIST, 'game', 'sprites', 'AttackFxSprite.js'));
+const {
+  drawWallBase, drawWallOre, drawWallGrassEdge, drawWallVines,
+  drawFloorBase, drawFloorDirtEdge, drawFloorStalactites, drawFloorStalagmites,
+  drawBrokenWallTile, drawGlowStoneTile, drawPlantTile, drawCrystalTile,
+  drawMushroomTile, drawWaterTile, drawLavaTile
+} = require(path.join(DIST, 'game', 'sprites', 'TileSprite.js'));
 
 // ---------- 3. 渲染并写 PNG ----------
 
-const ENEMY_NAMES = ['gray_slime', 'purple_slime', 'red_slime', 'blue_slime', 'yellow_slime', 'ghost_slime', 'humanoid_beast'];
+const ENEMY_NAMES = ['gray_slime', 'purple_slime', 'red_slime', 'blue_slime', 'yellow_slime', 'ghost_slime'];
 const BOSS_NAMES = ['crystal_guardian', 'mushroom_king', 'lava_beast', 'abyss_siren', 'void_rift'];
 
 function pngSize(buf) {
@@ -163,67 +162,151 @@ console.log(
   `${(playerBuf.length / 1024).toFixed(1)} KB`
 );
 
-// Player blue-slime sheet: 16 frames, 4 cols x 4 rows, 64px cells.
-// Frames 0-7 face right, 8-15 face left (native mirrored face, no flip needed).
-const S_CELL = 64;
-const slimeSheet = createCanvas(4 * S_CELL, 4 * S_CELL);
-const sctx = slimeSheet.getContext('2d');
-for (let i = 0; i < 16; i++) {
-  const facingRight = i < 8;
-  const phase = (i % 8) * (Math.PI * 2 / 8);
-  const cx = (i % 4) * S_CELL + S_CELL / 2;
-  const cy = Math.floor(i / 4) * S_CELL + S_CELL / 2;
-  const squish = Math.sin(phase) * 0.8;
-  const bodyW = 12 + squish;
-  const bodyH = 10 - squish * 0.5;
-  const bob = Math.cos(phase) * 1.5;
-  // Shadow — mirrors PlayerRenderer.renderSlimeBody
-  sctx.globalAlpha = 0.25;
-  sctx.fillStyle = '#000000';
-  sctx.beginPath();
-  sctx.ellipse(cx, cy + bodyH * 0.5 + bob, bodyW * 0.6, 3, 0, 0, Math.PI * 2);
-  sctx.fill();
-  sctx.globalAlpha = 1.0;
-  drawPlayerSlimeBody(sctx, cx, cy + bob, bodyW, bodyH, facingRight);
-}
-const slimeBuf = slimeSheet.toBuffer('image/png');
-fs.writeFileSync(path.join(OUT, 'player_slime.png'), slimeBuf);
-console.log('[png]', path.relative(ROOT, path.join(OUT, 'player_slime.png')),
-  '256x256', `16 frames (${S_CELL}x${S_CELL} cell)`, `${(slimeBuf.length / 1024).toFixed(1)} KB`);
+// Tile sheet: 8x8 grid, 32px cells (1 cell = 1 in-game tile), mirrors GameEngine's
+// static-layer + dynamic-tile recipes via TileSprite.ets:
+//   row 0: wall plain brick — normal hash0-3 (c0-3) / shadow hash0-3 (c4-7)
+//   row 1: wall ore veins — copper/iron/silver/gold normal (c0-3) / shadow (c4-7)
+//   row 2: hanging vines — v0-v4 normal (c0-4) / v0-v2 shadow (c5-7)
+//   row 3: vines v3-v4 shadow (c0-1), grass edge N/S (c2-3), plain floor N/S (c4-5), dirt-edge floor N/S (c6-7)
+//   row 4: floor stalactites st0-4 (c0-4), stalagmites sm0-2 (c5-7)
+//   row 5: stalagmites sm3-4 (c0-1), broken wall, glow stone x2 phases, plant, crystal, mushroom (c2-7)
+//   row 6: water — deep p0-2 (c0-2), surface p0-2 (c3-5)
+//   row 7: lava — deep p0-2 (c0-2), surface p0-2 (c3-5)
+const T_CELL = 32;
+const tileSheet = createCanvas(8 * T_CELL, 8 * T_CELL);
+const tctx = tileSheet.getContext('2d');
 
-// Weapon icons: 6 frames, 3 cols x 2 rows (SpriteAtlas grid formula), row-major by WeaponForm
-const W_CELL = 64;
-const weaponSheet = createCanvas(3 * W_CELL, 2 * W_CELL);
-const wctx = weaponSheet.getContext('2d');
-for (let form = 0; form < 6; form++) {
-  const col = form % 3;
-  const row = Math.floor(form / 3);
-  drawWeaponIcon(wctx, form, col * W_CELL + W_CELL / 2, row * W_CELL + W_CELL / 2, 1.15);
+function tileAt(col, row) {
+  tctx.save();
+  tctx.translate(col * T_CELL, row * T_CELL);
+  return () => tctx.restore();
 }
-const weaponBuf = weaponSheet.toBuffer('image/png');
-fs.writeFileSync(path.join(OUT, 'weapons.png'), weaponBuf);
-console.log('[png]', path.relative(ROOT, path.join(OUT, 'weapons.png')),
-  '192x128', '6 frames (64x64 cell)', `${(weaponBuf.length / 1024).toFixed(1)} KB`);
 
-// Attack slash fx: 36 frames = 6 forms x 6 progress steps, 6x6 grid
-const F_CELL = 64;
-const fxSheet = createCanvas(6 * F_CELL, 6 * F_CELL);
-const fctx = fxSheet.getContext('2d');
-for (let form = 0; form < 6; form++) {
-  for (let step = 0; step < 6; step++) {
-    const idx = form * 6 + step;
-    const col = idx % 6;
-    const row = Math.floor(idx / 6);
-    drawAttackSlash(fctx, form, (step + 0.5) / 6,
-      col * F_CELL + F_CELL / 2, row * F_CELL + F_CELL / 2, 1);
-  }
+// -- row 0: wall plain brick, 4 hash variants per theme --
+for (let h = 0; h < 4; h++) {
+  const tx = 3 + h * 17, ty = 11 + h * 7;
+  let done = tileAt(h, 0);
+  drawWallBase(tctx, tx, ty, false);
+  done();
+  done = tileAt(4 + h, 0);
+  drawWallBase(tctx, tx, ty, true);
+  done();
 }
-const fxBuf = fxSheet.toBuffer('image/png');
-fs.writeFileSync(path.join(OUT, 'attack_fx.png'), fxBuf);
-console.log('[png]', path.relative(ROOT, path.join(OUT, 'attack_fx.png')),
-  '384x384', '36 frames (64x64 cell)', `${(fxBuf.length / 1024).toFixed(1)} KB`);
+// -- row 1: wall ore veins (tx/ty = hash 0 so vein placement is deterministic) --
+for (let ore = 0; ore < 4; ore++) {
+  let done = tileAt(ore, 1);
+  drawWallBase(tctx, 7, 13, false);
+  drawWallOre(tctx, ore);
+  done();
+  done = tileAt(4 + ore, 1);
+  drawWallBase(tctx, 7, 13, true);
+  drawWallOre(tctx, ore);
+  done();
+}
+// -- row 2 + row 3 c0-1: hanging vines (tx/ty = hash 1: no noise overlap) --
+for (let v = 0; v < 5; v++) {
+  const done = tileAt(v, 2);
+  drawWallBase(tctx, 10, 3, false);
+  drawWallVines(tctx, v, false);
+  done();
+}
+for (let v = 0; v < 5; v++) {
+  const cell = v < 3 ? [5 + v, 2] : [v - 3, 3];
+  const done = tileAt(cell[0], cell[1]);
+  drawWallBase(tctx, 10, 3, true);
+  drawWallVines(tctx, v, true);
+  done();
+}
+// -- row 3 c2-3: wall grass edge (floor below) --
+{
+  let done = tileAt(2, 3);
+  drawWallBase(tctx, 13, 7, false);
+  drawWallGrassEdge(tctx, false);
+  done();
+  done = tileAt(3, 3);
+  drawWallBase(tctx, 13, 7, true);
+  drawWallGrassEdge(tctx, true);
+  done();
+}
+// -- row 3 c4-5: plain floor; c6-7: floor with dirt edge (wall above) --
+{
+  let done = tileAt(4, 3);
+  drawFloorBase(tctx, 5, 3, false);
+  done();
+  done = tileAt(5, 3);
+  drawFloorBase(tctx, 5, 3, true);
+  done();
+  done = tileAt(6, 3);
+  drawFloorBase(tctx, 5, 3, false);
+  drawFloorDirtEdge(tctx, false);
+  done();
+  done = tileAt(7, 3);
+  drawFloorBase(tctx, 5, 3, true);
+  drawFloorDirtEdge(tctx, true);
+  done();
+}
+// -- row 4: stalactites st0-4 (c0-4), stalagmites sm0-2 (c5-7) --
+for (let st = 0; st < 5; st++) {
+  const done = tileAt(st, 4);
+  drawFloorBase(tctx, 9 + st * 13, 11, false);  // hash 2: no pebbles overlap
+  drawFloorStalactites(tctx, st, false);
+  done();
+}
+for (let sm = 0; sm < 3; sm++) {
+  const done = tileAt(5 + sm, 4);
+  drawFloorBase(tctx, 3 + sm * 7, 5, false);
+  drawFloorStalagmites(tctx, sm, false);
+  done();
+}
+// -- row 5: stalagmites sm3-4 (c0-1) + specials (c2-7) --
+for (let sm = 3; sm < 5; sm++) {
+  const done = tileAt(sm - 3, 5);
+  drawFloorBase(tctx, 3 + sm * 7, 5, false);
+  drawFloorStalagmites(tctx, sm, false);
+  done();
+}
+{
+  const done = tileAt(2, 5);
+  drawBrokenWallTile(tctx);
+  done();
+}
+for (let ph = 0; ph < 2; ph++) {
+  const done = tileAt(3 + ph, 5);
+  drawGlowStoneTile(tctx, false, ph * Math.PI * 2 / 12 + 1);
+  done();
+}
+{
+  const done = tileAt(5, 5);
+  drawPlantTile(tctx, false);
+  done();
+}
+{
+  const done = tileAt(6, 5);
+  drawCrystalTile(tctx, 0.8);
+  done();
+}
+{
+  const done = tileAt(7, 5);
+  drawMushroomTile(tctx);
+  done();
+}
+// -- row 6: water (deep c0-2 / surface c3-5); row 7: lava (same split) --
+for (let p = 0; p < 6; p++) {
+  const done = tileAt(p % 8, 6);
+  drawWaterTile(tctx, 5, (p % 3) * 20, p >= 3);
+  done();
+}
+for (let p = 0; p < 6; p++) {
+  const done = tileAt(p % 8, 7);
+  drawLavaTile(tctx, 3, (p % 3) * 20, p >= 3);
+  done();
+}
+const tileBuf = tileSheet.toBuffer('image/png');
+fs.writeFileSync(path.join(OUT, 'tiles.png'), tileBuf);
+console.log('[png]', path.relative(ROOT, path.join(OUT, 'tiles.png')),
+  '256x256', '60 tiles (32x32 cell = 1 in-game tile)', `${(tileBuf.length / 1024).toFixed(1)} KB`);
 
-console.log(`[done] ${ENEMY_NAMES.length + BOSS_NAMES.length + 4} sheets in ${Date.now() - t0}ms -> ${path.relative(ROOT, OUT)}`);
+console.log(`[done] ${ENEMY_NAMES.length + BOSS_NAMES.length + 2} sheets in ${Date.now() - t0}ms -> ${path.relative(ROOT, OUT)}`);
 
 // ---------- 4. 生成可视化预览（base64 内嵌，Preview 静态服务仅放行单文件） ----------
 
@@ -237,9 +320,7 @@ const enemyCards = ENEMY_NAMES.map((n, i) =>
 const bossCards = BOSS_NAMES.map((n, i) =>
   card('b', path.join(OUT, `boss_${i}_${n}.png`), `${i} ${n}`)).join('\n');
 const playerCard = card('p', path.join(OUT, 'player_human.png'), 'player_human · 10 帧（idle R/L + walk 4相位×2方向）');
-const playerSlimeCard = card('s', path.join(OUT, 'player_slime.png'), 'player_slime · 16 帧（0-7 朝右 / 8-15 朝左弹跳）');
-const weaponCard = card('w', path.join(OUT, 'weapons.png'), 'weapons · 6 帧（WeaponForm 行主序）');
-const attackFxCard = card('f', path.join(OUT, 'attack_fx.png'), 'attack_fx · 36 帧（6 武器 × 6 进度，每行一种武器）');
+const tileCard = card('t', path.join(OUT, 'tiles.png'), 'tiles · 60 格（32px = 1 游戏瓦片：砖墙/矿石/藤蔓/草边/地板/钟乳石/碎石/荧光石/水晶/蘑菇/水/熔岩）');
 
 const html = `<!DOCTYPE html>
 <html lang="zh"><head><meta charset="utf-8"><title>Sprite Sheet Preview</title>
@@ -253,20 +334,14 @@ const html = `<!DOCTYPE html>
   .e img { width:256px; height:256px; }
   .b img { width:512px; height:384px; }
   .p img { width:512px; height:384px; }
-  .s img { width:256px; height:256px; }
-  .w img { width:384px; height:256px; }
-  .f img { width:384px; height:384px; }
+  .t img { width:512px; height:512px; image-rendering:auto; }
 </style></head><body>
 <h1>rawfile/sprites 生成结果</h1>
 <h2>玩家（1 张 · 256×192 · 4×3 · 64px/帧 · 10 帧）</h2>
 <div class="row">${playerCard}</div>
-<h2>玩家史莱姆（1 张 · 256×256 · 4×4 · 64px/帧 · 16 帧）</h2>
-<div class="row">${playerSlimeCard}</div>
-<h2>武器（1 张 · 192×128 · 3×2 · 64px/帧 · 6 帧）</h2>
-<div class="row">${weaponCard}</div>
-<h2>攻击特效（1 张 · 384×384 · 6×6 · 64px/帧 · 36 帧 = 6 武器 × 6 进度）</h2>
-<div class="row">${attackFxCard}</div>
-<h2>敌人（7 张 · 256×256 · 4×4 · 64px/帧 · 16 帧：0-7 弹跳 / 8-15 状态变体）</h2>
+<h2>瓦片（1 张 · 256×256 · 8×8 · 32px/格 = 1 游戏瓦片 · 60 格）</h2>
+<div class="row">${tileCard}</div>
+<h2>敌人（6 张 · 256×256 · 4×4 · 64px/帧 · 16 帧：0-7 弹跳 / 8-15 状态变体）</h2>
 <div class="row">${enemyCards}</div>
 <h2>Boss（5 张 · 512×384 · 4×3 · 128px/帧 · 12 帧动画）</h2>
 <div class="row">${bossCards}</div>
