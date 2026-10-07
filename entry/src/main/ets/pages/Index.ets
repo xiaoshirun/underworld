@@ -31,6 +31,8 @@ struct Index {
   @State showSettings: boolean = false;
   @State soundEnabled: boolean = true;
   @State effectsEnabled: boolean = true;
+  @State vibrationEnabled: boolean = true;
+  @State highQuality: boolean = false;
   @State username: string = 'test';
   @State engulfWarning: boolean = false;
   @State dashReady: boolean = true;
@@ -62,6 +64,8 @@ struct Index {
   @State showFormSelect: boolean = false;
   @State transformUnlockForm: TransformForm = TransformForm.NONE;
   @State transformUnlockActive: boolean = false;
+  @State isLoading: boolean = true;
+  @State loadingText: string = '初始化世界...';
   private branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
 
   aboutToAppear(): void {
@@ -135,6 +139,10 @@ struct Index {
       this.TransformEnergyBarView()
       this.FormSelectPanel()
       this.TransformUnlockNotification()
+
+      if (this.isLoading) {
+        this.LoadingOverlay()
+      }
     }
     .width('100%')
     .height('100%')
@@ -493,6 +501,26 @@ struct Index {
   }
 
   @Builder
+  LoadingOverlay() {
+    Stack() {
+      Column() {
+        Text('⚔')
+          .fontSize(40)
+          .fontColor('#7c3aed')
+          .margin({ bottom: 16 })
+
+        Text(this.loadingText)
+          .fontSize(14)
+          .fontColor('#94a3b8')
+      }
+      .alignItems(HorizontalAlign.Center)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#0a0a15')
+  }
+
+  @Builder
   SettingsOverlay() {
     Stack() {
       Column() {
@@ -563,6 +591,42 @@ struct Index {
                   soundEnabled: this.soundEnabled,
                   effectsEnabled: this.effectsEnabled
                 });
+              })
+          }
+          .width('100%')
+          .padding({ top: 10, bottom: 10 })
+
+          Divider().color('#1e293b')
+
+          Row() {
+            Text('震动')
+              .fontSize(14)
+              .fontColor('#e2e8f0')
+
+            Blank()
+
+            Toggle({ type: ToggleType.Switch, isOn: this.vibrationEnabled })
+              .selectedColor('#3b82f6')
+              .onChange((isOn: boolean) => {
+                this.vibrationEnabled = isOn;
+              })
+          }
+          .width('100%')
+          .padding({ top: 10, bottom: 10 })
+
+          Divider().color('#1e293b')
+
+          Row() {
+            Text('高画质')
+              .fontSize(14)
+              .fontColor('#e2e8f0')
+
+            Blank()
+
+            Toggle({ type: ToggleType.Switch, isOn: this.highQuality })
+              .selectedColor('#3b82f6')
+              .onChange((isOn: boolean) => {
+                this.highQuality = isOn;
               })
           }
           .width('100%')
@@ -710,44 +774,95 @@ struct Index {
         // Material costs
         if (!this.evoMaxLevel) {
           Column() {
-            Row() {
-              Text('矿石')
-                .fontSize(12)
-                .fontColor('#94a3b8')
-              Blank()
-              Text(this.evoOreHave + ' / ' + this.evoOreNeed)
-                .fontSize(12)
-                .fontColor(this.evoOreHave >= this.evoOreNeed ? '#22c55e' : '#ef4444')
+            Column() {
+              Row() {
+                Text('矿石')
+                  .fontSize(12)
+                  .fontColor('#94a3b8')
+                Blank()
+                Text(this.evoOreHave + ' / ' + this.evoOreNeed)
+                  .fontSize(12)
+                  .fontColor(this.evoOreHave >= this.evoOreNeed ? '#22c55e' : '#ef4444')
+              }
+              .width('100%')
+
+              Stack({ alignContent: Alignment.Start }) {
+                Row()
+                  .width('100%')
+                  .height(6)
+                  .backgroundColor('#0f172a')
+                  .borderRadius(3)
+                Row()
+                  .width(Math.min(100, this.evoOreNeed > 0 ? (this.evoOreHave / this.evoOreNeed) * 100 : 0) + '%')
+                  .height(6)
+                  .backgroundColor(this.evoOreHave >= this.evoOreNeed ? '#22c55e' : '#ef4444')
+                  .borderRadius(3)
+              }
+              .width('100%')
+              .margin({ top: 4 })
             }
-            .width('100%')
             .padding({ top: 6, bottom: 6 })
 
             Divider().color('#1e293b')
 
-            Row() {
-              Text('普通核心')
-                .fontSize(12)
-                .fontColor('#94a3b8')
-              Blank()
-              Text(this.evoNormalHave + ' / ' + this.evoNormalNeed)
-                .fontSize(12)
-                .fontColor(this.evoNormalHave >= this.evoNormalNeed ? '#22c55e' : '#ef4444')
+            Column() {
+              Row() {
+                Text('普通核心')
+                  .fontSize(12)
+                  .fontColor('#94a3b8')
+                Blank()
+                Text(this.evoNormalHave + ' / ' + this.evoNormalNeed)
+                  .fontSize(12)
+                  .fontColor(this.evoNormalHave >= this.evoNormalNeed ? '#22c55e' : '#ef4444')
+              }
+              .width('100%')
+
+              Stack({ alignContent: Alignment.Start }) {
+                Row()
+                  .width('100%')
+                  .height(6)
+                  .backgroundColor('#0f172a')
+                  .borderRadius(3)
+                Row()
+                  .width(Math.min(100, this.evoNormalNeed > 0 ? (this.evoNormalHave / this.evoNormalNeed) * 100 : 0) + '%')
+                  .height(6)
+                  .backgroundColor(this.evoNormalHave >= this.evoNormalNeed ? '#22c55e' : '#ef4444')
+                  .borderRadius(3)
+              }
+              .width('100%')
+              .margin({ top: 4 })
             }
-            .width('100%')
             .padding({ top: 6, bottom: 6 })
 
             Divider().color('#1e293b')
 
-            Row() {
-              Text('稀有核心')
-                .fontSize(12)
-                .fontColor('#94a3b8')
-              Blank()
-              Text(this.evoRareHave + ' / ' + this.evoRareNeed)
-                .fontSize(12)
-                .fontColor(this.evoRareHave >= this.evoRareNeed ? '#22c55e' : '#ef4444')
+            Column() {
+              Row() {
+                Text('稀有核心')
+                  .fontSize(12)
+                  .fontColor('#94a3b8')
+                Blank()
+                Text(this.evoRareHave + ' / ' + this.evoRareNeed)
+                  .fontSize(12)
+                  .fontColor(this.evoRareHave >= this.evoRareNeed ? '#22c55e' : '#ef4444')
+              }
+              .width('100%')
+
+              Stack({ alignContent: Alignment.Start }) {
+                Row()
+                  .width('100%')
+                  .height(6)
+                  .backgroundColor('#0f172a')
+                  .borderRadius(3)
+                Row()
+                  .width(Math.min(100, this.evoRareNeed > 0 ? (this.evoRareHave / this.evoRareNeed) * 100 : 0) + '%')
+                  .height(6)
+                  .backgroundColor(this.evoRareHave >= this.evoRareNeed ? '#22c55e' : '#ef4444')
+                  .borderRadius(3)
+              }
+              .width('100%')
+              .margin({ top: 4 })
             }
-            .width('100%')
             .padding({ top: 6, bottom: 6 })
           }
           .padding({ left: 14, right: 14, top: 4, bottom: 4 })
@@ -881,12 +996,17 @@ struct Index {
 
   private tryInitEngine(): void {
     if (this.gameCanvasReady && this.minimapCanvasReady) {
+      this.loadingText = '加载地图...';
       this.gameEngine.init(this.gameCtx, this.minimapCtx, this.screenW, this.screenH);
       this.gameEngine.setGender(this.playerGender);
       this.gameEngine.setSettings({
         soundEnabled: this.soundEnabled,
         effectsEnabled: this.effectsEnabled
       });
+      this.loadingText = '准备就绪';
+      setTimeout(() => {
+        this.isLoading = false;
+      }, 300);
       this.startStatusMonitor();
     }
   }
