@@ -3,7 +3,7 @@ import { GameEngine } from '../game/GameEngine';
 import {
   PLAYER_MAX_HP, JOYSTICK_RADIUS, MINIMAP_SIZE,
   COLOR_HP_FULL, COLOR_HP_EMPTY,
-  COLOR_JOY_BASE, COLOR_JOY_KNOB,
+  COLOR_JOY_BASE,
   COLOR_BTN_JUMP, COLOR_BTN_ATTACK, COLOR_BTN_DASH, COLOR_TOOL_BTN,
   COLOR_XP_ORB, DASH_COOLDOWN, GenderType, WeaponForm,
   EvolutionBranch, FORM_UNLOCK_COST, Inventory,
@@ -25,11 +25,9 @@ struct Index {
   @State playerHp: number = PLAYER_MAX_HP;
   @State playerXp: number = 0;
   @State playerLevel: number = 1;
-  @State joyActive: boolean = false;
-  @State joyKnobX: number = 0;
-  @State joyKnobY: number = 0;
-  @State joyCenterX: number = 0;
-  @State joyCenterY: number = 0;
+  private joyActive: boolean = false;
+  private joyCenterX: number = 0;
+  private joyCenterY: number = 0;
   @State showSettings: boolean = false;
   @State soundEnabled: boolean = true;
   @State effectsEnabled: boolean = true;
@@ -351,14 +349,6 @@ struct Index {
         .height(JOYSTICK_RADIUS * 2 - 8)
         .fill('transparent')
         .border({ width: 1, color: '#47556940' })
-
-      Circle()
-        .width(42)
-        .height(42)
-        .fill(COLOR_JOY_KNOB)
-        .opacity(0.85)
-        .shadow({ radius: 6, color: '#00000060', offsetX: 0, offsetY: 2 })
-        .translate({ x: this.joyKnobX, y: this.joyKnobY })
     }
     .width(JOYSTICK_RADIUS * 2)
     .height(JOYSTICK_RADIUS * 2)
@@ -370,137 +360,113 @@ struct Index {
 
   @Builder
   ActionButtonsView() {
-    Stack() {
-      // Attack button — primary, largest, bottom-right thumb anchor
-      Stack() {
-        Circle()
-          .width(70)
-          .height(70)
-          .fill('transparent')
-          .border({ width: 1, color: '#ffffff10' })
+    Column() {
+      Row() {
+        Stack() {
+          Circle()
+            .width(44)
+            .height(44)
+            .fill(this.toolReady ? COLOR_TOOL_BTN : '#4a3520')
+            .opacity(this.toolReady ? 0.85 : 0.5)
+            .shadow({ radius: 6, color: '#f59e0b40', offsetX: 0, offsetY: 2 })
 
-        Circle()
-          .width(62)
-          .height(62)
-          .fill(COLOR_BTN_ATTACK)
-          .opacity(0.9)
-          .shadow({ radius: 10, color: '#ef444460', offsetX: 0, offsetY: 3 })
-
-        Circle()
-          .width(52)
-          .height(52)
-          .fill('transparent')
-          .border({ width: 1.5, color: '#ffffff25' })
-
-        Text('攻击')
-          .fontSize(15)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
-      }
-      .width(62)
-      .height(62)
-      .position({ x: this.screenW - 62 - 14, y: this.screenH - 62 - 14 })
-      .onTouch((event: TouchEvent) => {
-        if (event.type === TouchType.Down) {
-          this.gameEngine.setInputAttack(true);
+          Text('钻')
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#ffffff')
         }
-      })
+        .width(44)
+        .height(44)
+        .onTouch((event: TouchEvent) => {
+          if (event.type === TouchType.Down && this.toolReady) {
+            this.gameEngine.setInputTool(true);
+            this.toolReady = false;
+            setTimeout(() => {
+              this.toolReady = true;
+            }, 200);
+          }
+        })
 
-      // Jump button — upper-left of attack, natural thumb reach
-      Stack() {
-        Circle()
-          .width(50)
-          .height(50)
-          .fill(COLOR_BTN_JUMP)
-          .opacity(0.88)
-          .shadow({ radius: 8, color: '#22c55e50', offsetX: 0, offsetY: 2 })
+        Stack() {
+          Circle()
+            .width(50)
+            .height(50)
+            .fill(COLOR_BTN_JUMP)
+            .opacity(0.85)
+            .shadow({ radius: 6, color: '#22c55e40', offsetX: 0, offsetY: 2 })
 
-        Circle()
-          .width(42)
-          .height(42)
-          .fill('transparent')
-          .border({ width: 1, color: '#ffffff20' })
-
-        Text('跳')
-          .fontSize(15)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
-      }
-      .width(50)
-      .height(50)
-      .position({ x: this.screenW - 62 - 14 - 50 - 14, y: this.screenH - 62 - 14 - 50 - 10 })
-      .onTouch((event: TouchEvent) => {
-        if (event.type === TouchType.Down) {
-          this.gameEngine.setInputJump(true);
+          Text('跳')
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#ffffff')
         }
-      })
+        .width(50)
+        .height(50)
+        .margin({ left: 10 })
+        .onTouch((event: TouchEvent) => {
+          if (event.type === TouchType.Down) {
+            this.gameEngine.setInputJump(true);
+          }
+        })
 
-      // Dash button — above attack, right column
-      Stack() {
-        Circle()
-          .width(44)
-          .height(44)
-          .fill(this.dashReady ? COLOR_BTN_DASH : '#1e3a5f')
-          .opacity(this.dashReady ? 0.88 : 0.45)
-          .shadow({ radius: 8, color: '#3b82f650', offsetX: 0, offsetY: 2 })
+        Stack() {
+          Circle()
+            .width(50)
+            .height(50)
+            .fill(this.dashReady ? COLOR_BTN_DASH : '#1e3a5f')
+            .opacity(this.dashReady ? 0.85 : 0.5)
+            .shadow({ radius: 6, color: '#3b82f640', offsetX: 0, offsetY: 2 })
 
-        Circle()
-          .width(36)
-          .height(36)
-          .fill('transparent')
-          .border({ width: 1, color: this.dashReady ? '#ffffff20' : '#ffffff08' })
-
-        Text('闪')
-          .fontSize(14)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
-      }
-      .width(44)
-      .height(44)
-      .position({ x: this.screenW - 44 - 18, y: this.screenH - 62 - 14 - 44 - 50 - 14 })
-      .onTouch((event: TouchEvent) => {
-        if (event.type === TouchType.Down && this.dashReady) {
-          this.gameEngine.setInputDash(true);
-          this.dashReady = false;
-          setTimeout(() => {
-            this.dashReady = true;
-          }, DASH_COOLDOWN);
+          Text('闪')
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#ffffff')
         }
-      })
-
-      // Drill button — left of jump, utility position
-      Stack() {
-        Circle()
-          .width(42)
-          .height(42)
-          .fill(this.toolReady ? COLOR_TOOL_BTN : '#4a3520')
-          .opacity(this.toolReady ? 0.88 : 0.45)
-          .shadow({ radius: 8, color: '#f59e0b50', offsetX: 0, offsetY: 2 })
-
-        Circle()
-          .width(34)
-          .height(34)
-          .fill('transparent')
-          .border({ width: 1, color: this.toolReady ? '#ffffff20' : '#ffffff08' })
-
-        Text('钻')
-          .fontSize(13)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
+        .width(50)
+        .height(50)
+        .margin({ left: 12 })
+        .onTouch((event: TouchEvent) => {
+          if (event.type === TouchType.Down && this.dashReady) {
+            this.gameEngine.setInputDash(true);
+            this.dashReady = false;
+            setTimeout(() => {
+              this.dashReady = true;
+            }, DASH_COOLDOWN);
+          }
+        })
       }
-      .width(42)
-      .height(42)
-      .position({ x: this.screenW - 62 - 14 - 50 - 14 - 42 - 14, y: this.screenH - 62 - 14 - 50 - 10 - 42 - 8 })
-      .onTouch((event: TouchEvent) => {
-        if (event.type === TouchType.Down && this.toolReady) {
-          this.gameEngine.setInputTool(true);
-          this.toolReady = false;
-          setTimeout(() => {
-            this.toolReady = true;
-          }, 200);
+
+      Row() {
+        Stack() {
+          Circle()
+            .width(62)
+            .height(62)
+            .fill(COLOR_BTN_ATTACK)
+            .opacity(0.85)
+            .shadow({ radius: 8, color: '#ef444450', offsetX: 0, offsetY: 3 })
+
+          Circle()
+            .width(54)
+            .height(54)
+            .fill('transparent')
+            .border({ width: 1, color: '#ffffff20' })
+
+          Text('攻击')
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#ffffff')
         }
-      })
+        .width(62)
+        .height(62)
+        .onTouch((event: TouchEvent) => {
+          if (event.type === TouchType.Down) {
+            this.gameEngine.setInputAttack(true);
+          }
+        })
+      }
+      .margin({ top: 10 })
     }
+    .position({ x: this.screenW - 160, y: this.screenH - 200 })
   }
 
   @Builder
@@ -626,21 +592,6 @@ struct Index {
         .backgroundColor('#1e293b40')
         .borderRadius(10)
         .margin({ top: 10 })
-
-        Button('退出登录')
-          .width('100%')
-          .height(42)
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#ffffff')
-          .backgroundColor('#dc2626')
-          .borderRadius(10)
-          .margin({ top: 18 })
-          .shadow({ radius: 8, color: '#dc262640', offsetX: 0, offsetY: 2 })
-          .onClick(() => {
-            this.gameEngine.destroy();
-            router.replaceUrl({ url: 'pages/LoginPage' });
-          })
 
         Blank()
 
@@ -946,8 +897,6 @@ struct Index {
       this.joyCenterX = touch.x;
       this.joyCenterY = touch.y;
       this.joyActive = true;
-      this.joyKnobX = 0;
-      this.joyKnobY = 0;
       this.gameEngine.setInputJoy(true, 0, 0);
     } else if (event.type === TouchType.Move && this.joyActive) {
       const touch = event.touches[0];
@@ -958,13 +907,9 @@ struct Index {
         dx = (dx / dist) * JOYSTICK_RADIUS;
         dy = (dy / dist) * JOYSTICK_RADIUS;
       }
-      this.joyKnobX = dx;
-      this.joyKnobY = dy;
       this.gameEngine.setInputJoy(true, dx / JOYSTICK_RADIUS, dy / JOYSTICK_RADIUS);
     } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
       this.joyActive = false;
-      this.joyKnobX = 0;
-      this.joyKnobY = 0;
       this.gameEngine.setInputJoy(false, 0, 0);
     }
   }

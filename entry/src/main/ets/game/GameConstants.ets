@@ -23,6 +23,11 @@ export const SLIME_DAMAGE: number = 1;
 export const SLIME_KNOCKBACK: number = 8;
 export const ENGULF_DAMAGE_INTERVAL: number = 500;
 export const ENGULF_ESCAPE_ATTACKS: number = 3;
+export const DEVOUR_RANGE: number = 35;
+export const DEVOUR_ANIM_DURATION: number = 500;
+export const DEVOUR_COOLDOWN: number = 800;
+export const DEVOUR_HP_THRESHOLD: number = 0.3;
+export const DEVOUR_XP_BASE: number = 5;
 export const DRILL_BREAK_HITS: number = 3;
 export const XP_ORB_SIZE: number = 6;
 export const XP_COLLECT_RANGE: number = 40;
@@ -281,6 +286,9 @@ export interface PlayerState {
   savedWeaponForm: WeaponForm;
   transformAnimTimer: number;
   transformFormAttackCooldown: number;
+  isDevouring: boolean;
+  devourTimer: number;
+  devourCooldown: number;
 }
 
 export interface SlimeState {
@@ -560,6 +568,15 @@ export const COLOR_BOSS_MUSHROOM: string = '#cd3278';
 export const COLOR_BOSS_LAVA: string = '#ff4500';
 export const COLOR_BOSS_ABYSS: string = '#4169e1';
 export const COLOR_BOSS_VOID: string = '#6b21a8';
+
+/** Boss 类型 → 主题色映射（BossSpriteGenerator 与 GameEngine 共用） */
+export function getBossColor(bossType: BossType): string {
+  if (bossType === BossType.CRYSTAL_GUARDIAN) return COLOR_BOSS_CRYSTAL;
+  if (bossType === BossType.MUSHROOM_KING) return COLOR_BOSS_MUSHROOM;
+  if (bossType === BossType.LAVA_BEAST) return COLOR_BOSS_LAVA;
+  if (bossType === BossType.ABYSS_SIREN) return COLOR_BOSS_ABYSS;
+  return COLOR_BOSS_VOID;
+}
 
 // Chest colors
 export const COLOR_CHEST_NORMAL: string = '#8b6914';

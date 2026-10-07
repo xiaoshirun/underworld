@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:/Users/QiuQiu/.ohos/config/default_Game_EnU8LAeYckYUEw0D0EvEUPQtTF_i83J33Zc7AbZ3Jik=.cer",
+          "certpath": "C:\\Users\\QiuQiu\\.ohos\\config\\default_Game_EnU8LAeYckYUEw0D0EvEUPQtTF_i83J33Zc7AbZ3Jik=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B67C3F79793DF2F7FCBEAF6EBCEFD1F68E388CF142B58217DA437C4C86921472D37ADB1B82B359A",
-          "profile": "C:/Users/QiuQiu/.ohos/config/default_Game_EnU8LAeYckYUEw0D0EvEUPQtTF_i83J33Zc7AbZ3Jik=.p7b",
+          "keyPassword": "0000001B42C37D1A69743D274B86519FBCDB4BAE575A2E34C9B2ED1677F8CD454BB5464838CAF4E59A0D45",
+          "profile": "C:\\Users\\QiuQiu\\.ohos\\config\\default_Game_EnU8LAeYckYUEw0D0EvEUPQtTF_i83J33Zc7AbZ3Jik=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:/Users/QiuQiu/.ohos/config/default_Game_EnU8LAeYckYUEw0D0EvEUPQtTF_i83J33Zc7AbZ3Jik=.p12",
-          "storePassword": "0000001BCE88207DC67DB9BDA20386AD49E292C6BCC48A036440682B0ED09B17834FEEC525C3DC75910086"
+          "storeFile": "C:\\Users\\QiuQiu\\.ohos\\config\\default_Game_EnU8LAeYckYUEw0D0EvEUPQtTF_i83J33Zc7AbZ3Jik=.p12",
+          "storePassword": "0000001B6CE27BE0E12960D1D71AB563CA9846AEAB65CCC081DDAB4F561FCDCCDF72F18A51FAC98CE4B8EB"
         }
       }
     ],
