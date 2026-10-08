@@ -599,6 +599,26 @@ export const WEAPON_FORM_DAMAGE: number[] = [
 // Damage bonus per evolution level
 export const EVOLUTION_DAMAGE_BONUS: number = 1;
 
+// Weapon shake params: [intensity, duration_ms]
+export const WEAPON_SHAKE: number[][] = [
+  [4, 100],   // BLADE
+  [2, 80],    // WHIP
+  [8, 200],   // HAMMER
+  [1.5, 60],  // STAFF
+  [3, 70],    // DUAL_BLADES
+  [7, 180],   // GREAT_AXE
+];
+
+// Weapon hitstop duration (ms) — heavier weapons pause longer
+export const WEAPON_HITSTOP: number[] = [
+  50,   // BLADE
+  30,   // WHIP
+  80,   // HAMMER
+  20,   // STAFF
+  30,   // DUAL_BLADES
+  70,   // GREAT_AXE
+];
+
 // ==================== Expansion Color Constants ====================
 
 // Boss colors

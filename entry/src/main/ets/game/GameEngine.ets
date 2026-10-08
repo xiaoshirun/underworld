@@ -22,6 +22,7 @@ import {
   BOSS_RESPAWN_TIME, BOSS_ROOM_SIZE,
   PASSAGE_GUARDIAN_AGGRO, OPTIONAL_CHALLENGE_AGGRO,
   WEAPON_FORM_STATS, WEAPON_FORM_DAMAGE, EVOLUTION_DAMAGE_BONUS,
+  WEAPON_SHAKE, WEAPON_HITSTOP,
   TRAP_TELEGRAPH_TIME, TRAP_ACTIVE_TIME, TRAP_COOLDOWN_TIME, TRAP_TRIGGER_RADIUS, TRAP_DAMAGE, TRAP_SIZE,
   MECH_INTERACT_RANGE, PUSH_BLOCK_SPEED, TELEPORT_COOLDOWN, PRESSURE_PLATE_RANGE,
   CHEST_SIZE, CHEST_INTERACT_RANGE,
@@ -83,6 +84,10 @@ export class GameEngine {
   private shakeX: number = 0;
   private shakeY: number = 0;
   private shakeTimer: number = 0;
+  private shakeIntensity: number = 3;
+  private hitstopTimer: number = 0;
+  private screenFlashTimer: number = 0;
+  private screenFlashAlpha: number = 0;
   private audio: AudioManager = new AudioManager();
   private settings: GameSettings = { soundEnabled: true, effectsEnabled: true };
   private ambientParticles: AmbientParticle[] = [];
@@ -623,6 +628,16 @@ export class GameEngine {
     if (this.player === null) return;
     const p: PlayerState = this.player;
 
+    if (this.hitstopTimer > 0) {
+      this.hitstopTimer -= dt;
+      this.updateShake(dt);
+      return;
+    }
+    if (this.screenFlashTimer > 0) {
+      this.screenFlashTimer -= dt;
+      this.screenFlashAlpha = Math.max(0, this.screenFlashTimer / 150);
+    }
+
     const ptx: number = Math.floor(p.x / TILE_SIZE);
     const pty: number = Math.floor(p.y / TILE_SIZE);
     this.loadChunksAround(ptx, pty);
@@ -1134,15 +1149,20 @@ export class GameEngine {
       return;
     }
 
-    const formStats: number[] = WEAPON_FORM_STATS[p.currentWeaponForm];
+    const form: number = p.currentWeaponForm;
+    const formStats: number[] = WEAPON_FORM_STATS[form];
     const formRange: number = formStats[0];
     const formWidth: number = formStats[1];
-    const baseDamage: number = WEAPON_FORM_DAMAGE[p.currentWeaponForm];
+    const baseDamage: number = WEAPON_FORM_DAMAGE[form];
     const evoLevel: number = p.evolutionLevel;
     const damage: number = baseDamage + evoLevel * EVOLUTION_DAMAGE_BONUS;
+    const shakeParams: number[] = WEAPON_SHAKE[form];
+    const hitstop: number = WEAPON_HITSTOP[form];
 
     const attackX: number = p.x + Math.cos(p.facing) * formRange;
     const attackY: number = p.y + Math.sin(p.facing) * formRange;
+    let didHit: boolean = false;
+    let hitBoss: boolean = false;
 
     for (let i: number = 0; i < this.enemies.length; i++) {
       const s: SlimeState = this.enemies[i];
@@ -1153,11 +1173,11 @@ export class GameEngine {
       const hitRange: number = formWidth + s.size;
       if (distSq < hitRange * hitRange) {
         s.hp -= damage;
-        s.hitFlash = 150;
+        s.hitFlash = 200;
+        didHit = true;
         const knockAngle: number = Math.atan2(dy, dx);
         s.vx = Math.cos(knockAngle) * SLIME_KNOCKBACK;
         s.vy = Math.sin(knockAngle) * SLIME_KNOCKBACK;
-        this.shakeTimer = 100;
         this.audio.playEnemyHit();
         this.floatingTexts.push({
           x: s.x, y: s.y - s.size,
@@ -1166,11 +1186,19 @@ export class GameEngine {
           life: 1200, maxLife: 1200
         });
         if (this.settings.effectsEnabled) {
-          for (let k: number = 0; k < 6; k++) {
-            const angle: number = Math.random() * Math.PI * 2;
-            const speed: number = 1 + Math.random() * 3;
+          const hitAngle: number = Math.atan2(dy, dx);
+          for (let k: number = 0; k < 8; k++) {
+            const spread: number = (k / 8) * Math.PI * 2;
+            const angle: number = hitAngle + spread;
+            const speed: number = 2 + Math.random() * 3;
             this.spawnParticle(s.x, s.y,
-              Math.cos(angle) * speed, Math.sin(angle) * speed, 300, COLOR_DAMAGE_PARTICLE, 3);
+              Math.cos(angle) * speed, Math.sin(angle) * speed, 350, COLOR_DAMAGE_PARTICLE, 3);
+          }
+          for (let k: number = 0; k < 4; k++) {
+            const angle: number = Math.random() * Math.PI * 2;
+            const speed: number = 0.5 + Math.random() * 1.5;
+            this.spawnParticle(s.x, s.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed, 500, '#ffffff', 2);
           }
         }
         if (s.hp <= 0) {
@@ -1189,8 +1217,9 @@ export class GameEngine {
       const distSq: number = dx * dx + dy * dy;
       if (distSq < hitRange * hitRange) {
         boss.hp -= damage;
-        boss.hitFlash = 200;
-        this.shakeTimer = 120;
+        boss.hitFlash = 250;
+        didHit = true;
+        hitBoss = true;
         this.audio.playEnemyHit();
         this.floatingTexts.push({
           x: boss.x, y: boss.y - boss.size,
@@ -1199,14 +1228,31 @@ export class GameEngine {
           life: 1200, maxLife: 1200
         });
         if (this.settings.effectsEnabled) {
-          for (let k: number = 0; k < 8; k++) {
-            const angle: number = Math.random() * Math.PI * 2;
-            const speed: number = 1 + Math.random() * 3;
+          const bossColor: string = this.getBossColor(boss.bossType);
+          for (let k: number = 0; k < 12; k++) {
+            const angle: number = (k / 12) * Math.PI * 2;
+            const speed: number = 2 + Math.random() * 4;
             this.spawnParticle(boss.x, boss.y,
-              Math.cos(angle) * speed, Math.sin(angle) * speed, 400, this.getBossColor(boss.bossType), 4);
+              Math.cos(angle) * speed, Math.sin(angle) * speed, 500, bossColor, 5);
+          }
+          for (let k: number = 0; k < 6; k++) {
+            const angle: number = Math.random() * Math.PI * 2;
+            const speed: number = 1 + Math.random() * 2;
+            this.spawnParticle(boss.x, boss.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed, 600, '#ffffff', 3);
           }
         }
       }
+    }
+
+    if (didHit) {
+      this.shakeTimer = shakeParams[1];
+      this.shakeIntensity = shakeParams[0];
+      this.hitstopTimer = hitstop;
+    }
+    if (hitBoss) {
+      this.screenFlashTimer = 150;
+      this.screenFlashAlpha = 0.3;
     }
 
     if (this.settings.effectsEnabled) {
@@ -2193,7 +2239,8 @@ export class GameEngine {
   private updateShake(dt: number): void {
     if (this.shakeTimer > 0) {
       this.shakeTimer -= dt;
-      const intensity: number = 3 * (this.shakeTimer / 150);
+      const progress: number = Math.max(0, this.shakeTimer) / 200;
+      const intensity: number = this.shakeIntensity * progress;
       this.shakeX = (Math.random() - 0.5) * intensity * 2;
       this.shakeY = (Math.random() - 0.5) * intensity * 2;
     } else {
@@ -2229,6 +2276,13 @@ export class GameEngine {
     this.renderAmbientParticles(c);
     this.renderVignette(c);
     this.renderBossHPBar(c);
+
+    if (this.screenFlashTimer > 0 && this.screenFlashAlpha > 0) {
+      c.globalAlpha = this.screenFlashAlpha;
+      c.fillStyle = '#ffffff';
+      c.fillRect(0, 0, this.screenW, this.screenH);
+      c.globalAlpha = 1.0;
+    }
 
     if (this.frameCount % 30 === 0) {
       this.renderMinimap();
@@ -3049,6 +3103,14 @@ export class GameEngine {
     const formStats: number[] = WEAPON_FORM_STATS[form];
     const range: number = formStats[0];
     const width: number = formStats[1];
+
+    const GHOST_LAYERS: number = 2;
+    for (let g: number = GHOST_LAYERS; g >= 1; g--) {
+      const scale: number = 1.0 - g * 0.15;
+      const alpha: number = 0.18 - g * 0.04;
+      this.drawWeaponEffect(c, form, sx, sy, bobY, p.facing, range * scale, width * scale, alpha);
+    }
+
     const offX: number = Math.cos(p.facing) * range * 0.7;
     const offY: number = Math.sin(p.facing) * range * 0.7;
     const cx: number = sx + offX;
@@ -3130,6 +3192,62 @@ export class GameEngine {
     }
 
     c.globalAlpha = 1.0;
+  }
+
+  private drawWeaponEffect(c: CanvasRenderingContext2D, form: WeaponForm, sx: number, sy: number, bobY: number, facing: number, range: number, width: number, alpha: number): void {
+    c.globalAlpha = alpha;
+    const offX: number = Math.cos(facing) * range * 0.7;
+    const offY: number = Math.sin(facing) * range * 0.7;
+    const cx: number = sx + offX;
+    const cy: number = sy + offY + bobY;
+
+    if (form === WeaponForm.BLADE) {
+      c.strokeStyle = '#60a5fa';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(sx, sy + bobY, range * 0.8, facing - 0.8, facing + 0.8);
+      c.stroke();
+    } else if (form === WeaponForm.WHIP) {
+      const whipLen: number = range * 1.0;
+      const perpX: number = -Math.sin(facing);
+      const perpY: number = Math.cos(facing);
+      c.strokeStyle = '#a78bfa';
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.moveTo(sx + Math.cos(facing) * 8, sy + bobY + Math.sin(facing) * 8);
+      c.quadraticCurveTo(
+        sx + Math.cos(facing) * whipLen * 0.5 + perpX * 12,
+        sy + bobY + Math.sin(facing) * whipLen * 0.5 + perpY * 12,
+        sx + Math.cos(facing) * whipLen,
+        sy + bobY + Math.sin(facing) * whipLen
+      );
+      c.stroke();
+    } else if (form === WeaponForm.HAMMER) {
+      c.fillStyle = '#f97316';
+      c.beginPath();
+      c.arc(cx, cy, width * 0.5, 0, Math.PI * 2);
+      c.fill();
+    } else if (form === WeaponForm.STAFF) {
+      c.fillStyle = '#38bdf8';
+      c.beginPath();
+      c.arc(sx + Math.cos(facing) * range, sy + bobY + Math.sin(facing) * range, 4, 0, Math.PI * 2);
+      c.fill();
+    } else if (form === WeaponForm.DUAL_BLADES) {
+      const perpX: number = -Math.sin(facing);
+      const perpY: number = Math.cos(facing);
+      c.strokeStyle = '#fb923c';
+      c.lineWidth = 1.5;
+      for (let side: number = -1; side <= 1; side += 2) {
+        c.beginPath();
+        c.arc(sx + perpX * 6 * side, sy + bobY + perpY * 6 * side, range * 0.6, facing - 0.6, facing + 0.6);
+        c.stroke();
+      }
+    } else if (form === WeaponForm.GREAT_AXE) {
+      c.fillStyle = '#ef4444';
+      c.beginPath();
+      c.arc(sx, sy + bobY, range * 0.9, 0, Math.PI * 2);
+      c.fill();
+    }
   }
 
   private renderWeaponOnPlayer(c: CanvasRenderingContext2D, sx: number, sy: number, p: PlayerState, bobY: number): void {
