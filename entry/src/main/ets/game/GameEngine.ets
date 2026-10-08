@@ -21,7 +21,7 @@ import {
   BOSS_HP, BOSS_SIZE, BOSS_ATTACK_INTERVAL, BOSS_PHASE2_THRESHOLD,
   BOSS_RESPAWN_TIME, BOSS_ROOM_SIZE,
   PASSAGE_GUARDIAN_AGGRO, OPTIONAL_CHALLENGE_AGGRO,
-  WEAPON_FORM_STATS,
+  WEAPON_FORM_STATS, WEAPON_FORM_DAMAGE, EVOLUTION_DAMAGE_BONUS,
   TRAP_TELEGRAPH_TIME, TRAP_ACTIVE_TIME, TRAP_COOLDOWN_TIME, TRAP_TRIGGER_RADIUS, TRAP_DAMAGE, TRAP_SIZE,
   MECH_INTERACT_RANGE, PUSH_BLOCK_SPEED, TELEPORT_COOLDOWN, PRESSURE_PLATE_RANGE,
   CHEST_SIZE, CHEST_INTERACT_RANGE,
@@ -1137,6 +1137,9 @@ export class GameEngine {
     const formStats: number[] = WEAPON_FORM_STATS[p.currentWeaponForm];
     const formRange: number = formStats[0];
     const formWidth: number = formStats[1];
+    const baseDamage: number = WEAPON_FORM_DAMAGE[p.currentWeaponForm];
+    const evoLevel: number = p.weaponState.evolutionData[p.currentWeaponForm].level;
+    const damage: number = baseDamage + evoLevel * EVOLUTION_DAMAGE_BONUS;
 
     const attackX: number = p.x + Math.cos(p.facing) * formRange;
     const attackY: number = p.y + Math.sin(p.facing) * formRange;
@@ -1149,13 +1152,19 @@ export class GameEngine {
       const distSq: number = dx * dx + dy * dy;
       const hitRange: number = formWidth + s.size;
       if (distSq < hitRange * hitRange) {
-        s.hp--;
+        s.hp -= damage;
         s.hitFlash = 150;
         const knockAngle: number = Math.atan2(dy, dx);
         s.vx = Math.cos(knockAngle) * SLIME_KNOCKBACK;
         s.vy = Math.sin(knockAngle) * SLIME_KNOCKBACK;
         this.shakeTimer = 100;
         this.audio.playEnemyHit();
+        this.floatingTexts.push({
+          x: s.x, y: s.y - s.size,
+          text: damage.toString(),
+          color: evoLevel >= 2 ? '#fbbf24' : '#e2e8f0',
+          life: 1200, maxLife: 1200
+        });
         if (this.settings.effectsEnabled) {
           for (let k: number = 0; k < 6; k++) {
             const angle: number = Math.random() * Math.PI * 2;
@@ -1179,10 +1188,16 @@ export class GameEngine {
       const hitRange: number = formWidth + boss.size * 0.6;
       const distSq: number = dx * dx + dy * dy;
       if (distSq < hitRange * hitRange) {
-        boss.hp--;
+        boss.hp -= damage;
         boss.hitFlash = 200;
         this.shakeTimer = 120;
         this.audio.playEnemyHit();
+        this.floatingTexts.push({
+          x: boss.x, y: boss.y - boss.size,
+          text: damage.toString(),
+          color: evoLevel >= 2 ? '#fbbf24' : '#e2e8f0',
+          life: 1200, maxLife: 1200
+        });
         if (this.settings.effectsEnabled) {
           for (let k: number = 0; k < 8; k++) {
             const angle: number = Math.random() * Math.PI * 2;

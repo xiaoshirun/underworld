@@ -586,6 +586,19 @@ export const WEAPON_FORM_STATS: number[][] = [
   [30, 40, 400, 700],   // GREAT_AXE
 ];
 
+// Weapon base damage: HAMMER > GREAT_AXE > BLADE > WHIP = DUAL_BLADES > STAFF
+export const WEAPON_FORM_DAMAGE: number[] = [
+  3,  // BLADE
+  2,  // WHIP
+  5,  // HAMMER
+  1,  // STAFF
+  2,  // DUAL_BLADES
+  4,  // GREAT_AXE
+];
+
+// Damage bonus per evolution level
+export const EVOLUTION_DAMAGE_BONUS: number = 1;
+
 // ==================== Expansion Color Constants ====================
 
 // Boss colors
