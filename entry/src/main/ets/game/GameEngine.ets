@@ -1138,7 +1138,7 @@ export class GameEngine {
     const formRange: number = formStats[0];
     const formWidth: number = formStats[1];
     const baseDamage: number = WEAPON_FORM_DAMAGE[p.currentWeaponForm];
-    const evoLevel: number = p.weaponState.evolutionData[p.currentWeaponForm].level;
+    const evoLevel: number = p.evolutionLevel;
     const damage: number = baseDamage + evoLevel * EVOLUTION_DAMAGE_BONUS;
 
     const attackX: number = p.x + Math.cos(p.facing) * formRange;
