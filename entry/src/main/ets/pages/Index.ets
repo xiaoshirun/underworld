@@ -81,7 +81,7 @@ struct Index {
   @State showPause: boolean = false;
   @State deathLevel: number = 1;
   @State deathChunks: number = 0;
-  private branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
+  private branchNames: string[] = ['水晶', '火焰', '暗影', '剧毒', '潮汐'];
 
   aboutToAppear(): void {
     try {
@@ -1412,11 +1412,11 @@ struct Index {
   }
 
   private getFormNameForId(formId: number): string {
-    if (formId === TransformForm.SLIME) return 'Slime';
-    if (formId === TransformForm.GHOST) return 'Ghost';
-    if (formId === TransformForm.ARMOR) return 'Armor';
-    if (formId === TransformForm.IRON_MAN) return 'Iron Man';
-    return 'Unknown';
+    if (formId === TransformForm.SLIME) return '史莱姆';
+    if (formId === TransformForm.GHOST) return '幽灵';
+    if (formId === TransformForm.ARMOR) return '铠甲';
+    if (formId === TransformForm.IRON_MAN) return '钢铁侠';
+    return '未知';
   }
 
   private getFormColor(form: TransformForm): string {

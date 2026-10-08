@@ -4488,12 +4488,12 @@ export class GameEngine {
     c.font = '10px sans-serif';
     c.textAlign = 'center';
     let name: string = 'Boss';
-    if (boss.bossType === BossType.CRYSTAL_GUARDIAN) name = 'Crystal Guardian';
-    else if (boss.bossType === BossType.MUSHROOM_KING) name = 'Mushroom King';
-    else if (boss.bossType === BossType.LAVA_BEAST) name = 'Lava Beast';
-    else if (boss.bossType === BossType.ABYSS_SIREN) name = 'Abyss Siren';
-    else if (boss.bossType === BossType.VOID_RIFT) name = 'Void Rift';
-    if (boss.phase === BossPhase.PHASE_2) name += ' [Enraged]';
+    if (boss.bossType === BossType.CRYSTAL_GUARDIAN) name = '水晶守卫';
+    else if (boss.bossType === BossType.MUSHROOM_KING) name = '蘑菇王';
+    else if (boss.bossType === BossType.LAVA_BEAST) name = '熔岩兽';
+    else if (boss.bossType === BossType.ABYSS_SIREN) name = '深渊海妖';
+    else if (boss.bossType === BossType.VOID_RIFT) name = '虚空裂隙';
+    if (boss.phase === BossPhase.PHASE_2) name += ' [狂暴]';
     c.fillText(name, this.screenW / 2, barY - 6);
   }
 
@@ -4788,25 +4788,25 @@ export class GameEngine {
   }
 
   getEvolutionInfo(): string[] {
-    if (this.player === null) return ['No player'];
+    if (this.player === null) return ['无玩家'];
     const p: PlayerState = this.player;
-    const branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
-    const branch: string = branchNames[p.evolutionBranch] || 'Unknown';
+    const branchNames: string[] = ['水晶', '火焰', '暗影', '剧毒', '潮汐'];
+    const branch: string = branchNames[p.evolutionBranch] || '未知';
     const level: number = p.evolutionLevel;
     const info: string[] = [];
-    info.push('Branch: ' + branch);
-    info.push('Level: ' + level + '/3');
+    info.push('分支: ' + branch);
+    info.push('等级: ' + level + '/3');
     if (level < 3) {
       const next: number = level + 1;
       const oreNeeded: number = EVOLUTION_COST_ORE[next];
       const normalNeeded: number = EVOLUTION_COST_NORMAL[next];
       const rareNeeded: number = EVOLUTION_COST_RARE[next];
       const oreHave: number = this.getOreCount(p.inventory, p.evolutionBranch);
-      info.push('Ore: ' + oreHave + '/' + oreNeeded);
-      info.push('Core: ' + p.inventory.coreNormal + '/' + normalNeeded);
-      info.push('Rare: ' + p.inventory.coreRare + '/' + rareNeeded);
+      info.push('矿石: ' + oreHave + '/' + oreNeeded);
+      info.push('核心: ' + p.inventory.coreNormal + '/' + normalNeeded);
+      info.push('稀有: ' + p.inventory.coreRare + '/' + rareNeeded);
     } else {
-      info.push('MAX LEVEL');
+      info.push('满级');
     }
     return info;
   }
