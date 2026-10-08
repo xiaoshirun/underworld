@@ -11,7 +11,7 @@ import {
   MINIMAP_SIZE, FRAME_INTERVAL, MINIMAP_UPDATE_INTERVAL, MAX_PARTICLES, MAX_DYN_TILE_CACHE,
   TileType, EnemyType, BiomeType, PlayerState, SlimeState, XpOrb, Particle,
   ChunkData, InputState, GameSettings, AmbientParticle, DynTileCacheEntry,
-  GenderType, WeaponForm, EvolutionBranch, EvolutionLevel,
+  GenderType, WeaponForm, EvolutionBranch, EvolutionLevel, SaveData,
   BossState, ChestState, ChestType, BossRoom, MaterialDrop, TrapInstance, MechanismInstance,
   Inventory, TrapType, TrapState,
   TransformCoreDrop, TransformUnlockNotify,
@@ -60,6 +60,8 @@ import {
 } from './GameConstants';
 import { WorldGenerator } from './WorldGenerator';
 import { AudioManager } from './AudioManager';
+import { DeviceProfile } from './DeviceProfile';
+import { ResourceManager } from './ResourceManager';
 
 export class GameEngine {
   private ctx: CanvasRenderingContext2D | null = null;
@@ -95,10 +97,13 @@ export class GameEngine {
   private secretRooms: SecretRoom[] = [];
   private teleportCooldown: number = 0;
   private transformCoreDrops: TransformCoreDrop[] = [];
+  onDeath: (() => void) | null = null;
+  private deathNotified: boolean = false;
+  private autoSaveTimer: number = 0;
+  onAutoSave: (() => void) | null = null;
   private transformUnlockNotifyTimer: number = 0;
   private transformUnlockNotifyForm: TransformForm = TransformForm.NONE;
   private transformAnimIsRevert: boolean = false;
-  private chunkCanvasCache: Map<string, ImageBitmap> = new Map();
   private chunkCacheShadow: Map<string, boolean> = new Map();
   private chunkCacheDirty: Set<string> = new Set();
   private chunkRenderQueue: string[] = [];
@@ -112,11 +117,13 @@ export class GameEngine {
   private vignetteGradCache: CanvasGradient | null = null;
   private vignetteW: number = 0;
   private vignetteH: number = 0;
-  private bgParallaxCache: ImageBitmap | null = null;
   private bgParallaxW: number = 0;
   private bgParallaxH: number = 0;
   private bgParallaxCamCX: number = -999;
   private bgParallaxCamCY: number = -999;
+  private profile: DeviceProfile | null = null;
+  private resources: ResourceManager | null = null;
+  private static readonly PARALLAX_KEY: string = '__bg_parallax__';
   private dynTileCache: Map<string, DynTileCacheEntry> = new Map();
   private dynTileOffscreen: OffscreenCanvas | null = null;
   private dynTileOffCtx: OffscreenCanvasRenderingContext2D | null = null;
@@ -134,12 +141,17 @@ export class GameEngine {
     this.screenW = screenW;
     this.screenH = screenH;
 
+    // Detect device capabilities and create resource manager
+    this.profile = DeviceProfile.detect();
+    this.resources = new ResourceManager(this.profile.gpuMemoryBudget);
+    console.info(this.profile.toString());
+
     this.loadChunksAround(0, 0);
 
     const startX: number = CHUNK_SIZE * TILE_SIZE / 2;
     const startY: number = CHUNK_SIZE * TILE_SIZE / 2;
     this.player = {
-      x: startX, y: startY, vx: 0, vy: 0, hp: PLAYER_MAX_HP,
+      x: startX, y: startY, vx: 0, vy: 0, hp: PLAYER_MAX_HP, isDead: false,
       facing: 0, isAttacking: false, attackTimer: 0,
       isDashing: false, dashTimer: 0, dashCooldown: 0, dashDirX: 0, dashDirY: 0,
       isJumping: false, jumpTimer: 0, jumpHeight: 0, invincibleTimer: 0, animFrame: 0,
@@ -199,13 +211,30 @@ export class GameEngine {
   private startLoop(): void {
     this.lastFrameTime = Date.now();
     this.gameLoopId = setInterval(() => {
-      const now: number = Date.now();
-      const dt: number = Math.min(now - this.lastFrameTime, 50);
-      this.lastFrameTime = now;
-      this.update(dt);
-      this.render();
-      this.frameCount++;
+      try {
+        const now: number = Date.now();
+        const dt: number = Math.min(now - this.lastFrameTime, 50);
+        this.lastFrameTime = now;
+        this.update(dt);
+        this.render();
+        this.frameCount++;
+      } catch (e) {
+        console.error('[GameEngine] Game loop error:', e);
+      }
     }, FRAME_INTERVAL);
+  }
+
+  pause(): void {
+    if (this.gameLoopId !== -1) {
+      clearInterval(this.gameLoopId);
+      this.gameLoopId = -1;
+    }
+  }
+
+  resume(): void {
+    if (this.gameLoopId === -1 && this.ctx !== null) {
+      this.startLoop();
+    }
   }
 
   destroy(): void {
@@ -213,6 +242,32 @@ export class GameEngine {
       clearInterval(this.gameLoopId);
       this.gameLoopId = -1;
     }
+    // Release all managed ImageBitmap resources (chunks + parallax)
+    if (this.resources !== null) {
+      this.resources.destroy();
+      this.resources = null;
+    }
+    // Release dynamic tile cache (small, not in ResourceManager)
+    this.dynTileCache.forEach((entry: DynTileCacheEntry) => {
+      try { entry.bmp.close(); } catch (e) { /* ignore */ }
+    });
+    this.dynTileCache.clear();
+    // Release OffscreenCanvas resources
+    this.dynTileOffscreen = null;
+    this.dynTileOffCtx = null;
+    this.chunkRenderOffscreen = null;
+    this.chunkRenderOffCtx = null;
+    // Clear all collections
+    this.chunks.clear();
+    this.chunkCacheShadow.clear();
+    this.chunkCacheDirty.clear();
+    this.chunkRenderQueue = [];
+    this.chunkRenderQueued.clear();
+    this.chunkGenQueue = [];
+    this.chunkGenQueued.clear();
+    this.ctx = null;
+    this.minimapCtx = null;
+    this.player = null;
   }
 
   setInputJoy(active: boolean, dx: number, dy: number): void {
@@ -258,6 +313,145 @@ export class GameEngine {
 
   getLevelUpXp(): number {
     return LEVEL_UP_XP;
+  }
+
+  getSaveData(): SaveData | null {
+    if (this.player === null) return null;
+    const p: PlayerState = this.player;
+    return {
+      playerX: p.x,
+      playerY: p.y,
+      hp: p.hp,
+      xp: p.xp,
+      level: p.level,
+      inventory: {
+        crystalOre: p.inventory.crystalOre,
+        mushroomOre: p.inventory.mushroomOre,
+        flameOre: p.inventory.flameOre,
+        abyssOre: p.inventory.abyssOre,
+        voidOre: p.inventory.voidOre,
+        coreNormal: p.inventory.coreNormal,
+        coreRare: p.inventory.coreRare,
+        formCore: p.inventory.formCore,
+        hpPotions: p.inventory.hpPotions,
+        gold: p.inventory.gold,
+        transformCoreSlime: p.inventory.transformCoreSlime,
+        transformCoreArmor: p.inventory.transformCoreArmor,
+        transformCoreIronMan: p.inventory.transformCoreIronMan,
+        transformCoreGhost: p.inventory.transformCoreGhost
+      },
+      currentWeaponForm: p.currentWeaponForm,
+      unlockedForms: p.unlockedForms.slice(),
+      evolutionBranch: p.evolutionBranch,
+      evolutionLevel: p.evolutionLevel,
+      isTransformed: false,
+      transformForm: TransformForm.NONE,
+      transformEnergy: p.transformEnergy,
+      unlockedTransforms: p.unlockedTransforms.slice(),
+      activeSkills: [],
+      passiveSkills: [],
+      timestamp: Date.now()
+    };
+  }
+
+  restoreFromSave(data: SaveData): void {
+    if (this.player === null) return;
+    const p: PlayerState = this.player;
+    p.x = data.playerX;
+    p.y = data.playerY;
+    p.hp = data.hp;
+    p.xp = data.xp;
+    p.level = data.level;
+    p.inventory = {
+      crystalOre: data.inventory.crystalOre,
+      mushroomOre: data.inventory.mushroomOre,
+      flameOre: data.inventory.flameOre,
+      abyssOre: data.inventory.abyssOre,
+      voidOre: data.inventory.voidOre,
+      coreNormal: data.inventory.coreNormal,
+      coreRare: data.inventory.coreRare,
+      formCore: data.inventory.formCore,
+      hpPotions: data.inventory.hpPotions,
+      gold: data.inventory.gold,
+      transformCoreSlime: data.inventory.transformCoreSlime,
+      transformCoreArmor: data.inventory.transformCoreArmor,
+      transformCoreIronMan: data.inventory.transformCoreIronMan,
+      transformCoreGhost: data.inventory.transformCoreGhost
+    };
+    p.currentWeaponForm = data.currentWeaponForm;
+    p.unlockedForms = data.unlockedForms.slice();
+    p.evolutionBranch = data.evolutionBranch;
+    p.evolutionLevel = data.evolutionLevel;
+    p.isTransformed = false;
+    p.transformForm = TransformForm.NONE;
+    p.transformEnergy = data.transformEnergy;
+    p.unlockedTransforms = data.unlockedTransforms.slice();
+    p.isDead = false;
+    p.hp = Math.max(1, p.hp);
+    p.isAttacking = false;
+    p.attackTimer = 0;
+    p.isDashing = false;
+    p.dashTimer = 0;
+    p.dashCooldown = 0;
+    p.isJumping = false;
+    p.jumpTimer = 0;
+    p.jumpHeight = 0;
+    p.invincibleTimer = 0;
+    p.isEngulfed = false;
+    p.engulfSlimeIndex = -1;
+    p.engulfEscapeCount = 0;
+    p.isDrilling = false;
+    p.drillHitCount = 0;
+    p.isUsingTool = false;
+    p.toolCooldown = 0;
+    p.isDevouring = false;
+    p.devourTimer = 0;
+    p.devourCooldown = 0;
+    this.deathNotified = false;
+  }
+
+  respawnPlayer(): void {
+    if (this.player === null) return;
+    const p: PlayerState = this.player;
+    const startX: number = CHUNK_SIZE * TILE_SIZE / 2;
+    const startY: number = CHUNK_SIZE * TILE_SIZE / 2;
+    p.x = startX;
+    p.y = startY;
+    p.vx = 0;
+    p.vy = 0;
+    p.hp = PLAYER_MAX_HP;
+    p.isDead = false;
+    p.isAttacking = false;
+    p.attackTimer = 0;
+    p.isDashing = false;
+    p.dashTimer = 0;
+    p.dashCooldown = 0;
+    p.dashDirX = 0;
+    p.dashDirY = 0;
+    p.isJumping = false;
+    p.jumpTimer = 0;
+    p.jumpHeight = 0;
+    p.invincibleTimer = 2000;
+    p.isEngulfed = false;
+    p.engulfSlimeIndex = -1;
+    p.engulfEscapeCount = 0;
+    p.isDrilling = false;
+    p.drillHitCount = 0;
+    p.isUsingTool = false;
+    p.toolCooldown = 0;
+    p.isTransformed = false;
+    p.transformForm = TransformForm.NONE;
+    p.transformAnimTimer = 0;
+    p.transformFormAttackCooldown = 0;
+    p.isDevouring = false;
+    p.devourTimer = 0;
+    p.devourCooldown = 0;
+    this.deathNotified = false;
+    this.updateCamera(p);
+  }
+
+  getPlayerChunks(): number {
+    return this.chunks.size;
   }
 
   getSettings(): GameSettings {
@@ -318,10 +512,11 @@ export class GameEngine {
   }
 
   private loadChunksAround(tileX: number, tileY: number): void {
+    const radius: number = this.profile !== null ? this.profile.chunkLoadRadius : CHUNK_LOAD_RADIUS;
     const pcx: number = Math.floor(tileX / CHUNK_SIZE);
     const pcy: number = Math.floor(tileY / CHUNK_SIZE);
-    for (let dy: number = -CHUNK_LOAD_RADIUS; dy <= CHUNK_LOAD_RADIUS; dy++) {
-      for (let dx: number = -CHUNK_LOAD_RADIUS; dx <= CHUNK_LOAD_RADIUS; dx++) {
+    for (let dy: number = -radius; dy <= radius; dy++) {
+      for (let dx: number = -radius; dx <= radius; dx++) {
         const cx: number = pcx + dx;
         const cy: number = pcy + dy;
         const key: string = this.chunkKey(cx, cy);
@@ -433,11 +628,19 @@ export class GameEngine {
     }
 
     this.updatePlayer(p, dt);
+    if (p.isDead) return;
     // === Transform System Update ===
     this.updateTransformSystem(p, dt);
     this.updateEnemies(dt);
     this.updateBosses(dt);
     this.checkBossRoomEntry(p);
+    this.autoSaveTimer += dt;
+    if (this.autoSaveTimer >= 60000) {
+      this.autoSaveTimer = 0;
+      if (this.onAutoSave !== null) {
+        this.onAutoSave();
+      }
+    }
     this.collectMaterialDrops(p);
     this.checkChestInteraction();
     this.updateChestAnims(dt);
@@ -451,6 +654,23 @@ export class GameEngine {
   }
 
   private updatePlayer(p: PlayerState, dt: number): void {
+    // Death check
+    if (p.hp <= 0) {
+      p.hp = 0;
+      if (!p.isDead) {
+        p.isDead = true;
+        this.deathNotified = false;
+      }
+      if (!this.deathNotified && this.onDeath !== null) {
+        this.deathNotified = true;
+        this.onDeath();
+      }
+      return;
+    }
+    if (p.isDead) {
+      return;
+    }
+
     if (p.isEngulfed) {
       this.updateEngulfedPlayer(p, dt);
       return;
@@ -858,6 +1078,14 @@ export class GameEngine {
       this.shakeTimer = 100;
     }
 
+    // Check for escape attack input
+    if (this.input.attackPressed) {
+      this.input.attackPressed = false;
+      p.engulfEscapeCount++;
+      this.audio.playEnemyHit();
+      this.shakeTimer = 80;
+    }
+
     if (p.engulfEscapeCount >= ENGULF_ESCAPE_ATTACKS) {
       p.isEngulfed = false;
       if (p.engulfSlimeIndex >= 0 && p.engulfSlimeIndex < this.enemies.length) {
@@ -1244,7 +1472,10 @@ export class GameEngine {
         if (p.xp >= LEVEL_UP_XP) {
           p.xp -= LEVEL_UP_XP;
           p.level++;
-          if (p.hp < PLAYER_MAX_HP) p.hp++;
+          if (p.hp < PLAYER_MAX_HP) {
+            const heal: number = Math.max(1, Math.floor(PLAYER_MAX_HP * 0.2));
+            p.hp = Math.min(PLAYER_MAX_HP, p.hp + heal);
+          }
           this.audio.playLevelUp();
           if (this.settings.effectsEnabled) {
             for (let k: number = 0; k < 15; k++) {
@@ -1315,9 +1546,14 @@ export class GameEngine {
               if (p.isTransformed && p.transformForm === TransformForm.IRON_MAN) {
                 // Skip trap damage for Iron Man
               } else {
-              p.hp -= trap.damage;
-              p.invincibleTimer = INVINCIBLE_DURATION;
-              this.shakeTimer = 150;
+                let trapDmg: number = trap.damage;
+                if (p.isTransformed) {
+                  const reduction: number = TRANSFORM_DAMAGE_REDUCTION[p.transformForm as number];
+                  trapDmg = Math.max(1, Math.floor(trapDmg * (1 - reduction)));
+                }
+                p.hp -= trapDmg;
+                p.invincibleTimer = INVINCIBLE_DURATION;
+                this.shakeTimer = 150;
               if (this.settings.effectsEnabled) {
                 for (let k: number = 0; k < 6; k++) {
                   const angle: number = Math.random() * Math.PI * 2;
@@ -1565,6 +1801,9 @@ export class GameEngine {
 
       this.audio.playWallBreak();
       this.shakeTimer = 300;
+      if (this.onAutoSave !== null) {
+        this.onAutoSave();
+      }
       break;
     }
   }
@@ -1602,7 +1841,6 @@ export class GameEngine {
           }
         } else {
           // Wander randomly
-          boss.attackTimer -= dt;
           if (boss.attackTimer <= 0) {
             const angle: number = Math.random() * Math.PI * 2;
             boss.vx = Math.cos(angle) * 0.5;
@@ -1860,7 +2098,7 @@ export class GameEngine {
   }
 
   private spawnParticle(x: number, y: number, vx: number, vy: number, life: number, color: string, size: number): void {
-    if (this.particles.length >= MAX_PARTICLES) return;
+    if (this.particles.length >= (this.profile !== null ? this.profile.maxParticles : MAX_PARTICLES)) return;
     this.particles.push({ x: x, y: y, vx: vx, vy: vy, life: life, maxLife: life, color: color, size: size });
   }
 
@@ -1962,10 +2200,11 @@ export class GameEngine {
     c.fillRect(0, 0, w, h);
 
     // Layers 2+3: Parallax cave formations (cached to offscreen canvas)
-    const parallaxChunkSize: number = 800;
+    const parallaxChunkSize: number = this.profile !== null ? this.profile.parallaxChunkSize : 400;
+    if (this.profile === null || this.profile.parallaxEnabled) {
     const camCX: number = Math.floor(this.cameraX / parallaxChunkSize);
     const camCY: number = Math.floor(this.cameraY / parallaxChunkSize);
-    if (this.bgParallaxCache === null || this.bgParallaxW !== w || this.bgParallaxH !== h ||
+    if (!this.resources!.has(GameEngine.PARALLAX_KEY) || this.bgParallaxW !== w || this.bgParallaxH !== h ||
         this.bgParallaxCamCX !== camCX || this.bgParallaxCamCY !== camCY) {
       const pw: number = w + parallaxChunkSize * 2;
       const ph: number = h + parallaxChunkSize * 2;
@@ -2032,10 +2271,7 @@ export class GameEngine {
       }
       pc.globalAlpha = 1.0;
       const bmp: ImageBitmap = offscreen.transferToImageBitmap();
-      if (this.bgParallaxCache !== null) {
-        this.bgParallaxCache.close();
-      }
-      this.bgParallaxCache = bmp;
+      this.resources!.put(GameEngine.PARALLAX_KEY, bmp, pw * ph * 4);
       this.bgParallaxW = w;
       this.bgParallaxH = h;
       this.bgParallaxCamCX = camCX;
@@ -2044,18 +2280,23 @@ export class GameEngine {
 
     const drawOffX: number = -(this.cameraX - camCX * parallaxChunkSize) * 0.1 + parallaxChunkSize - this.cameraX * 0.1 + camCX * parallaxChunkSize * 0.1;
     const drawOffY: number = -(this.cameraY - camCY * parallaxChunkSize) * 0.1 + parallaxChunkSize - this.cameraY * 0.1 + camCY * parallaxChunkSize * 0.1;
-    if (this.bgParallaxCache !== null) {
-      c.drawImage(this.bgParallaxCache, drawOffX, drawOffY);
+    const parallaxBmp: ImageBitmap | undefined = this.resources!.get(GameEngine.PARALLAX_KEY);
+    if (parallaxBmp !== undefined) {
+      c.drawImage(parallaxBmp, drawOffX, drawOffY);
+    }
     }
   }
 
   private renderChunkStaticLayer(cx: number, cy: number, isShadow: boolean): ImageBitmap {
     const chunkPixelSize: number = CHUNK_SIZE * TILE_SIZE;
+    const renderScale: number = this.profile !== null ? this.profile.renderScale : 0.5;
+    const renderSize: number = Math.floor(chunkPixelSize * renderScale);
     if (this.chunkRenderOffscreen === null) {
-      this.chunkRenderOffscreen = new OffscreenCanvas(chunkPixelSize, chunkPixelSize);
+      this.chunkRenderOffscreen = new OffscreenCanvas(renderSize, renderSize);
       this.chunkRenderOffCtx = this.chunkRenderOffscreen.getContext('2d') as OffscreenCanvasRenderingContext2D;
     }
     const oc: OffscreenCanvasRenderingContext2D = this.chunkRenderOffCtx!;
+    oc.setTransform(renderScale, 0, 0, renderScale, 0, 0);
     oc.clearRect(0, 0, chunkPixelSize, chunkPixelSize);
 
     const floorColor: string = isShadow ? COLOR_SHADOW_FLOOR : COLOR_FLOOR;
@@ -2253,11 +2494,9 @@ export class GameEngine {
     const biome: BiomeType = this.worldGen.getBiome(chunkWorldX, chunkWorldY);
     const isShadow: boolean = biome === BiomeType.SHADOW;
     const bitmap: ImageBitmap = this.renderChunkStaticLayer(cx, cy, isShadow);
-    const old: ImageBitmap | undefined = this.chunkCanvasCache.get(key);
-    if (old !== undefined) {
-      old.close();
-    }
-    this.chunkCanvasCache.set(key, bitmap);
+    const renderScale: number = this.profile !== null ? this.profile.renderScale : 0.5;
+    const renderSize: number = Math.floor(CHUNK_SIZE * TILE_SIZE * renderScale);
+    this.resources!.put(key, bitmap, renderSize * renderSize * 4);
     this.chunkCacheShadow.set(key, isShadow);
     this.chunkCacheDirty.delete(key);
   }
@@ -2265,9 +2504,10 @@ export class GameEngine {
   private evictFarChunks(playerTX: number, playerTY: number): void {
     const pcx: number = Math.floor(playerTX / CHUNK_SIZE);
     const pcy: number = Math.floor(playerTY / CHUNK_SIZE);
-    const evictDist: number = CHUNK_LOAD_RADIUS + 3;
+    const evictRadius: number = this.profile !== null ? this.profile.chunkLoadRadius : CHUNK_LOAD_RADIUS;
+    const evictDist: number = evictRadius + 3;
     const keysToRemove: string[] = [];
-    const iter = this.chunkCanvasCache.keys();
+    const iter = this.resources!.keys();
     let result = iter.next();
     while (!result.done) {
       const key: string = result.value;
@@ -2281,11 +2521,7 @@ export class GameEngine {
     }
     for (let i: number = 0; i < keysToRemove.length; i++) {
       const key: string = keysToRemove[i];
-      const bmp: ImageBitmap | undefined = this.chunkCanvasCache.get(key);
-      if (bmp !== undefined) {
-        bmp.close();
-      }
-      this.chunkCanvasCache.delete(key);
+      this.resources!.remove(key);
       this.chunkCacheShadow.delete(key);
       this.chunkCacheDirty.delete(key);
     }
@@ -2314,11 +2550,11 @@ export class GameEngine {
       for (let cx: number = startCX; cx <= endCX; cx++) {
         const key: string = this.chunkKey(cx, cy);
         if (!this.chunks.has(key)) continue;
-        const cached: ImageBitmap | undefined = this.chunkCanvasCache.get(key);
+        const cached: ImageBitmap | undefined = this.resources!.get(key);
         if (cached !== undefined) {
           const drawX: number = cx * chunkPixelSize + offX;
           const drawY: number = cy * chunkPixelSize + offY;
-          c.drawImage(cached, drawX, drawY);
+          c.drawImage(cached, drawX, drawY, chunkPixelSize, chunkPixelSize);
         }
         if (this.chunkCacheDirty.has(key) || cached === undefined) {
           if (!this.chunkRenderQueued.has(key)) {
@@ -2339,7 +2575,7 @@ export class GameEngine {
           const tileCX: number = Math.floor(tx / CHUNK_SIZE);
           const tileCY: number = Math.floor(ty / CHUNK_SIZE);
           const tileKey: string = this.chunkKey(tileCX, tileCY);
-          if (this.chunkCanvasCache.has(tileKey)) continue;
+          if (this.resources!.has(tileKey)) continue;
           c.fillStyle = tile === TileType.WALL ? wallColor : (tile === TileType.FLOOR ? floorColor : '#2a2a3e');
           c.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
           continue;
@@ -2373,7 +2609,8 @@ export class GameEngine {
       const entry: DynTileCacheEntry = { bmp: bmp, gen: this.frameCount };
       this.dynTileCache.set(key, entry);
 
-      if (this.dynTileCache.size > MAX_DYN_TILE_CACHE) {
+      const maxCache: number = this.profile !== null ? this.profile.maxDynTileCache : MAX_DYN_TILE_CACHE;
+    if (this.dynTileCache.size > maxCache) {
         const firstKey: string = this.dynTileCache.keys().next().value as string;
         const oldEntry: DynTileCacheEntry | undefined = this.dynTileCache.get(firstKey);
         if (oldEntry !== undefined) {
@@ -4824,19 +5061,24 @@ export class GameEngine {
         }
       }
     }
+    // Also damage bosses
+    for (let i: number = 0; i < this.bosses.length; i++) {
+      const boss: BossState = this.bosses[i];
+      if (!boss.active || boss.defeated) continue;
+      const dx: number = boss.x - x;
+      const dy: number = boss.y - y;
+      if (dx * dx + dy * dy < radius * radius) {
+        boss.hp -= damage;
+        boss.hitFlash = 200;
+        if (this.settings.effectsEnabled) {
+          this.spawnParticle(boss.x, boss.y, 0, -1, 300, COLOR_DAMAGE_PARTICLE, 3);
+        }
+      }
+    }
   }
 
   private damageEnemiesInRadius(cx: number, cy: number, radius: number, damage: number): void {
     this.damageEnemiesAt(cx, cy, radius, damage);
-    // Also damage bosses
-    if (this.activeBoss !== null && this.activeBoss.active && !this.activeBoss.defeated) {
-      const dx: number = this.activeBoss.x - cx;
-      const dy: number = this.activeBoss.y - cy;
-      if (dx * dx + dy * dy < radius * radius) {
-        this.activeBoss.hp -= damage;
-        this.activeBoss.hitFlash = 200;
-      }
-    }
   }
 
   private checkTransformDashDamage(p: PlayerState): void {

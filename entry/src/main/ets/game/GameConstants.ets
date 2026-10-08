@@ -291,6 +291,7 @@ export interface PlayerState {
   isDevouring: boolean;
   devourTimer: number;
   devourCooldown: number;
+  isDead: boolean;
 }
 
 export interface SlimeState {
@@ -542,6 +543,7 @@ export const ROCK_DAMAGE: number = 2;
 export const POISON_DPS: number = 1;
 export const LAVA_GEYSER_DAMAGE: number = 2;
 export const VOID_PULL_DPS: number = 1;
+export const WATER_VORTEX_DAMAGE: number = 1;
 export const SPIKE_TELEGRAPH_TIME: number = 500;
 export const SPIKE_ACTIVE_TIME: number = 1500;
 export const SPIKE_COOLDOWN_TIME: number = 2000;
@@ -680,3 +682,23 @@ export const COLOR_TRANSFORM_FLASH: string = '#ffffff';
 export const COLOR_PLAYER_FEMALE_BODY: string = '#8b5cf6';
 export const COLOR_PLAYER_FEMALE_BODY_DARK: string = '#7c3aed';
 export const COLOR_PLAYER_FEMALE_HAIR: string = '#4a1a6b';
+
+export interface SaveData {
+  playerX: number;
+  playerY: number;
+  hp: number;
+  xp: number;
+  level: number;
+  inventory: Inventory;
+  currentWeaponForm: WeaponForm;
+  unlockedForms: number[];
+  evolutionBranch: EvolutionBranch;
+  evolutionLevel: EvolutionLevel;
+  isTransformed: boolean;
+  transformForm: TransformForm;
+  transformEnergy: number;
+  unlockedTransforms: number[];
+  activeSkills: number[];
+  passiveSkills: number[];
+  timestamp: number;
+}

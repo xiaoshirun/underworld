@@ -7,6 +7,7 @@ export struct PauseMenuOverlay {
   onResume: () => void = () => {};
   onClosed: () => void = () => {};
   onLoadGame: (data: SaveData) => void = () => {};
+  onQuit: () => void = () => {};
 
   build() {
     Stack() {
@@ -70,7 +71,7 @@ export struct PauseMenuOverlay {
           .backgroundColor('#ef4444')
           .borderRadius(8)
           .onClick(() => {
-            this.onClosed();
+            this.onQuit();
           })
       }
       .width(240)

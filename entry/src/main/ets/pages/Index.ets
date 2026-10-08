@@ -1,5 +1,7 @@
+import { common } from '@kit.AbilityKit';
 import { display, router } from '@kit.ArkUI';
 import { GameEngine } from '../game/GameEngine';
+import { SaveManager } from '../game/SaveManager';
 import {
   PLAYER_MAX_HP, JOYSTICK_RADIUS, MINIMAP_SIZE,
   COLOR_HP_FULL, COLOR_HP_EMPTY,
@@ -9,8 +11,11 @@ import {
   EvolutionBranch, FORM_UNLOCK_COST, Inventory,
   TransformForm, TRANSFORM_MAX_ENERGY,
   COLOR_TRANSFORM_BTN_LOCKED, COLOR_TRANSFORM_BTN_READY, COLOR_TRANSFORM_ENERGY_BG,
-  COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_IRON_GOLD
+  COLOR_TRANSFORM_SLIME, COLOR_TRANSFORM_GHOST, COLOR_TRANSFORM_ARMOR, COLOR_TRANSFORM_IRON_GOLD,
+  SaveData
 } from '../game/GameConstants';
+import { GameOverOverlay } from './overlays/GameOverOverlay';
+import { PauseMenuOverlay } from './overlays/PauseMenuOverlay';
 
 @Entry
 @Component
@@ -20,6 +25,7 @@ struct Index {
   private minimapCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private gameCanvasReady: boolean = false;
   private minimapCanvasReady: boolean = false;
+  private statusMonitorId: number = -1;
   @State screenW: number = 360;
   @State screenH: number = 780;
   @State playerHp: number = PLAYER_MAX_HP;
@@ -28,6 +34,11 @@ struct Index {
   private joyActive: boolean = false;
   private joyCenterX: number = 0;
   private joyCenterY: number = 0;
+  @State joyBaseX: number = 0;
+  @State joyBaseY: number = 0;
+  @State joyVisible: boolean = false;
+  @State joyKnobX: number = 0;
+  @State joyKnobY: number = 0;
   @State showSettings: boolean = false;
   @State soundEnabled: boolean = true;
   @State effectsEnabled: boolean = true;
@@ -66,6 +77,10 @@ struct Index {
   @State transformUnlockActive: boolean = false;
   @State isLoading: boolean = true;
   @State loadingText: string = '初始化世界...';
+  @State showGameOver: boolean = false;
+  @State showPause: boolean = false;
+  @State deathLevel: number = 1;
+  @State deathChunks: number = 0;
   private branchNames: string[] = ['Crystal', 'Flame', 'Shadow', 'Toxin', 'Tide'];
 
   aboutToAppear(): void {
@@ -97,7 +112,39 @@ struct Index {
     }
   }
 
+  onPageHide(): void {
+    this.gameEngine.pause();
+    if (this.statusMonitorId !== -1) {
+      clearInterval(this.statusMonitorId);
+      this.statusMonitorId = -1;
+    }
+  }
+
+  onPageShow(): void {
+    if (!this.isLoading && !this.showPause && !this.showGameOver) {
+      this.gameEngine.resume();
+      if (this.statusMonitorId === -1) {
+        this.startStatusMonitor();
+      }
+    }
+  }
+
+  onBackPressed(): boolean {
+    if (this.showGameOver || this.showPause) {
+      return true;
+    }
+    if (!this.isLoading) {
+      this.showPause = true;
+      this.gameEngine.pause();
+    }
+    return true;
+  }
+
   aboutToDisappear(): void {
+    if (this.statusMonitorId !== -1) {
+      clearInterval(this.statusMonitorId);
+      this.statusMonitorId = -1;
+    }
     this.gameEngine.destroy();
   }
 
@@ -139,6 +186,25 @@ struct Index {
       this.TransformEnergyBarView()
       this.FormSelectPanel()
       this.TransformUnlockNotification()
+
+      if (this.showGameOver) {
+        GameOverOverlay({
+          deathLevel: this.deathLevel,
+          deathChunks: this.deathChunks,
+          onRestart: () => { this.handleRestart(); },
+          onLoadGame: (data: SaveData) => { this.handleLoadGame(data); },
+          onQuit: () => { this.handleQuit(); }
+        })
+      }
+
+      if (this.showPause) {
+        PauseMenuOverlay({
+          onResume: () => { this.handlePauseResume(); },
+          onClosed: () => { this.showPause = false; },
+          onLoadGame: (data: SaveData) => { this.handleLoadGame(data); },
+          onQuit: () => { this.handleQuit(); }
+        })
+      }
 
       if (this.isLoading) {
         this.LoadingOverlay()
@@ -341,50 +407,121 @@ struct Index {
         this.showEvolution = true;
       }
     })
+
+    Stack() {
+      Circle()
+        .width(32)
+        .height(32)
+        .fill('#1e293b')
+        .opacity(0.8)
+
+      Text('❚❚')
+        .fontSize(12)
+        .fontColor('#94a3b8')
+    }
+    .width(32)
+    .height(32)
+    .position({ x: this.screenW - 122, y: 12 })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.showPause = true;
+        this.gameEngine.pause();
+      }
+    })
   }
 
   @Builder
   JoystickView() {
     Stack() {
-      Circle()
-        .width(JOYSTICK_RADIUS * 2)
-        .height(JOYSTICK_RADIUS * 2)
-        .fill(COLOR_JOY_BASE)
-        .opacity(0.35)
+      // Full-left-half touch area for floating joystick
+      Column()
+        .width(this.screenW * 0.5)
+        .height(this.screenH)
+        .backgroundColor('transparent')
+        .onTouch((event: TouchEvent) => {
+          this.handleJoystickTouch(event);
+        })
 
-      Circle()
-        .width(JOYSTICK_RADIUS * 2 - 8)
-        .height(JOYSTICK_RADIUS * 2 - 8)
-        .fill('transparent')
-        .border({ width: 1, color: '#47556940' })
+      // Joystick base ring (only visible when active)
+      if (this.joyVisible) {
+        Circle()
+          .width(JOYSTICK_RADIUS * 2)
+          .height(JOYSTICK_RADIUS * 2)
+          .fill(COLOR_JOY_BASE)
+          .opacity(0.3)
+          .position({ x: this.joyBaseX - JOYSTICK_RADIUS, y: this.joyBaseY - JOYSTICK_RADIUS })
+          .hitTestBehavior(HitTestMode.None)
+
+        Circle()
+          .width(JOYSTICK_RADIUS * 2 - 8)
+          .height(JOYSTICK_RADIUS * 2 - 8)
+          .fill('transparent')
+          .border({ width: 1, color: '#47556960' })
+          .position({ x: this.joyBaseX - JOYSTICK_RADIUS + 4, y: this.joyBaseY - JOYSTICK_RADIUS + 4 })
+          .hitTestBehavior(HitTestMode.None)
+
+        // Knob (follows finger, clamped to radius)
+        Circle()
+          .width(JOYSTICK_RADIUS * 0.9)
+          .height(JOYSTICK_RADIUS * 0.9)
+          .fill(COLOR_JOY_BASE)
+          .opacity(0.7)
+          .border({ width: 1.5, color: '#64748b80' })
+          .position({
+            x: this.joyKnobX - JOYSTICK_RADIUS * 0.45,
+            y: this.joyKnobY - JOYSTICK_RADIUS * 0.45
+          })
+          .hitTestBehavior(HitTestMode.None)
+      }
     }
-    .width(JOYSTICK_RADIUS * 2)
-    .height(JOYSTICK_RADIUS * 2)
-    .position({ x: 20, y: this.screenH - JOYSTICK_RADIUS * 2 - 40 })
-    .onTouch((event: TouchEvent) => {
-      this.handleJoystickTouch(event);
-    })
+    .width(this.screenW * 0.5)
+    .height(this.screenH)
+    .alignContent(Alignment.TopStart)
+    .hitTestBehavior(HitTestMode.Default)
   }
 
   @Builder
   ActionButtonsView() {
     Column() {
+      // Row 1: Jump (left) + Tool (right)
       Row() {
         Stack() {
           Circle()
-            .width(38)
-            .height(38)
+            .width(50)
+            .height(50)
+            .fill(COLOR_BTN_JUMP)
+            .opacity(0.85)
+            .border({ width: 1, color: '#22c55e50' })
+
+          Text('跳')
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#ffffff')
+        }
+        .width(50)
+        .height(50)
+        .onTouch((event: TouchEvent) => {
+          if (event.type === TouchType.Down) {
+            this.gameEngine.setInputJump(true);
+          }
+        })
+
+        Stack() {
+          Circle()
+            .width(44)
+            .height(44)
             .fill(this.toolReady ? COLOR_TOOL_BTN : '#4a3520')
             .opacity(this.toolReady ? 0.85 : 0.5)
             .border({ width: 1, color: '#f59e0b50' })
 
           Text('钻')
-            .fontSize(12)
+            .fontSize(13)
             .fontWeight(FontWeight.Bold)
             .fontColor('#ffffff')
         }
-        .width(38)
-        .height(38)
+        .width(44)
+        .height(44)
+        .margin({ left: 10 })
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down && this.toolReady) {
             this.gameEngine.setInputTool(true);
@@ -394,45 +531,25 @@ struct Index {
             }, 200);
           }
         })
+      }
 
+      // Row 2: Dash (left) + Attack (right) — attack is largest, at bottom-right corner
+      Row() {
         Stack() {
           Circle()
-            .width(38)
-            .height(38)
-            .fill(COLOR_BTN_JUMP)
-            .opacity(0.85)
-            .border({ width: 1, color: '#22c55e50' })
-
-          Text('跳')
-            .fontSize(12)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#ffffff')
-        }
-        .width(38)
-        .height(38)
-        .margin({ left: 8 })
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            this.gameEngine.setInputJump(true);
-          }
-        })
-
-        Stack() {
-          Circle()
-            .width(38)
-            .height(38)
+            .width(50)
+            .height(50)
             .fill(this.dashReady ? COLOR_BTN_DASH : '#1e3a5f')
             .opacity(this.dashReady ? 0.85 : 0.5)
             .border({ width: 1, color: '#3b82f650' })
 
           Text('闪')
-            .fontSize(12)
+            .fontSize(14)
             .fontWeight(FontWeight.Bold)
             .fontColor('#ffffff')
         }
-        .width(38)
-        .height(38)
-        .margin({ left: 8 })
+        .width(50)
+        .height(50)
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down && this.dashReady) {
             this.gameEngine.setInputDash(true);
@@ -442,30 +559,29 @@ struct Index {
             }, DASH_COOLDOWN);
           }
         })
-      }
 
-      Row() {
         Stack() {
           Circle()
-            .width(48)
-            .height(48)
+            .width(56)
+            .height(56)
             .fill(COLOR_BTN_ATTACK)
             .opacity(0.85)
             .border({ width: 1.5, color: '#ef444460' })
 
           Circle()
-            .width(42)
-            .height(42)
+            .width(48)
+            .height(48)
             .fill('transparent')
             .border({ width: 1, color: '#ffffff20' })
 
           Text('攻击')
-            .fontSize(14)
+            .fontSize(15)
             .fontWeight(FontWeight.Bold)
             .fontColor('#ffffff')
         }
-        .width(48)
-        .height(48)
+        .width(56)
+        .height(56)
+        .margin({ left: 10 })
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down) {
             this.gameEngine.setInputAttack(true);
@@ -473,8 +589,9 @@ struct Index {
         })
       }
       .margin({ top: 8 })
+      .alignItems(VerticalAlign.Bottom)
     }
-    .position({ x: this.screenW - 140, y: this.screenH - 160 })
+    .position({ x: this.screenW - 136, y: this.screenH - 175 })
   }
 
   @Builder
@@ -1003,6 +1120,16 @@ struct Index {
         soundEnabled: this.soundEnabled,
         effectsEnabled: this.effectsEnabled
       });
+      this.gameEngine.onDeath = () => {
+        this.deathLevel = this.gameEngine.getPlayerLevel();
+        this.deathChunks = this.gameEngine.getPlayerChunks();
+        this.doAutoSave();
+        this.gameEngine.pause();
+        this.showGameOver = true;
+      };
+      this.gameEngine.onAutoSave = () => {
+        this.doAutoSave();
+      };
       this.loadingText = '准备就绪';
       setTimeout(() => {
         this.isLoading = false;
@@ -1014,28 +1141,38 @@ struct Index {
   private handleJoystickTouch(event: TouchEvent): void {
     if (event.type === TouchType.Down) {
       const touch = event.touches[0];
-      this.joyCenterX = touch.x;
-      this.joyCenterY = touch.y;
+      // Clamp base position so joystick stays fully visible within left half
+      const halfW: number = this.screenW * 0.5;
+      this.joyBaseX = Math.max(JOYSTICK_RADIUS, Math.min(halfW - JOYSTICK_RADIUS, touch.x));
+      this.joyBaseY = Math.max(JOYSTICK_RADIUS, Math.min(this.screenH - JOYSTICK_RADIUS, touch.y));
+      this.joyKnobX = this.joyBaseX;
+      this.joyKnobY = this.joyBaseY;
+      this.joyCenterX = this.joyBaseX;
+      this.joyCenterY = this.joyBaseY;
+      this.joyVisible = true;
       this.joyActive = true;
       this.gameEngine.setInputJoy(true, 0, 0);
     } else if (event.type === TouchType.Move && this.joyActive) {
       const touch = event.touches[0];
-      let dx: number = touch.x - this.joyCenterX;
-      let dy: number = touch.y - this.joyCenterY;
+      let dx: number = touch.x - this.joyBaseX;
+      let dy: number = touch.y - this.joyBaseY;
       const dist: number = Math.sqrt(dx * dx + dy * dy);
       if (dist > JOYSTICK_RADIUS) {
         dx = (dx / dist) * JOYSTICK_RADIUS;
         dy = (dy / dist) * JOYSTICK_RADIUS;
       }
+      this.joyKnobX = this.joyBaseX + dx;
+      this.joyKnobY = this.joyBaseY + dy;
       this.gameEngine.setInputJoy(true, dx / JOYSTICK_RADIUS, dy / JOYSTICK_RADIUS);
     } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
       this.joyActive = false;
+      this.joyVisible = false;
       this.gameEngine.setInputJoy(false, 0, 0);
     }
   }
 
   private startStatusMonitor(): void {
-    setInterval(() => {
+    this.statusMonitorId = setInterval(() => {
       const hp: number = this.gameEngine.getPlayerHp();
       if (hp !== this.playerHp) {
         this.playerHp = hp;
@@ -1085,19 +1222,52 @@ struct Index {
     }, 250);
   }
 
+  private doAutoSave(): void {
+    const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+    const data: SaveData | null = this.gameEngine.getSaveData();
+    if (data !== null) {
+      SaveManager.save(ctx, data);
+    }
+  }
+
+  private handleRestart(): void {
+    this.gameEngine.respawnPlayer();
+    this.showGameOver = false;
+    this.gameEngine.resume();
+  }
+
+  private handleLoadGame(data: SaveData): void {
+    this.gameEngine.restoreFromSave(data);
+    this.showGameOver = false;
+    this.showPause = false;
+    this.gameEngine.resume();
+  }
+
+  private handlePauseResume(): void {
+    this.doAutoSave();
+    this.gameEngine.resume();
+  }
+
+  private handleQuit(): void {
+    this.showGameOver = false;
+    this.showPause = false;
+    this.gameEngine.destroy();
+    router.back();
+  }
+
   @Builder
   TransformButtonView() {
     Stack() {
       // Button background
       Circle()
-        .width(40)
-        .height(40)
+        .width(44)
+        .height(44)
         .fill(this.isTransformed ? this.getFormColor(this.transformForm) :
           (this.unlockedTransforms.length > 0 && this.transformCooldown <= 0 ? COLOR_TRANSFORM_BTN_READY : COLOR_TRANSFORM_BTN_LOCKED))
 
       // Icon
       Text(this.getTransformIcon())
-        .fontSize(18)
+        .fontSize(20)
         .fontColor('#ffffff')
 
       // Cooldown overlay
@@ -1108,7 +1278,7 @@ struct Index {
           .position({ x: 14, y: 26 })
       }
     }
-    .position({ x: 30, y: this.screenH - 180 })
+    .position({ x: 25, y: this.screenH - 215 })
     .onClick(() => {
       if (this.isTransformed) {
         this.gameEngine.deactivateTransform();
@@ -1139,7 +1309,7 @@ struct Index {
           .fontColor('#ffffffa0')
           .margin({ top: 2 })
       }
-      .position({ x: 80, y: this.screenH - 175 })
+      .position({ x: 80, y: this.screenH - 210 })
     }
   }
 

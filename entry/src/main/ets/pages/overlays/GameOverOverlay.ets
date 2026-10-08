@@ -50,9 +50,7 @@ export struct GameOverOverlay {
           .backgroundColor('#22c55e')
           .borderRadius(8)
           .margin({ bottom: 12 })
-          .onClick(async () => {
-            const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
-            await SaveManager.deleteSave(ctx);
+          .onClick(() => {
             this.onRestart();
           })
 
