@@ -7,12 +7,13 @@ import {
   SLIME_DAMAGE, SLIME_KNOCKBACK,
   ENGULF_DAMAGE_INTERVAL, ENGULF_ESCAPE_ATTACKS, DRILL_BREAK_HITS,
   XP_ORB_SIZE, XP_COLLECT_RANGE, XP_MAGNET_RANGE, LEVEL_UP_XP,
+  MATERIAL_MAGNET_RANGE, MATERIAL_COLLECT_RANGE, MATERIAL_FLY_SPEED,
   CHUNK_LOAD_RADIUS,
   MINIMAP_SIZE, FRAME_INTERVAL, MINIMAP_UPDATE_INTERVAL, MAX_PARTICLES, MAX_DYN_TILE_CACHE,
   TileType, EnemyType, BiomeType, PlayerState, SlimeState, XpOrb, Particle,
   ChunkData, InputState, GameSettings, AmbientParticle, DynTileCacheEntry,
   GenderType, WeaponForm, EvolutionBranch, EvolutionLevel, SaveData,
-  BossState, ChestState, ChestType, BossRoom, MaterialDrop, TrapInstance, MechanismInstance,
+  BossState, ChestState, ChestType, BossRoom, MaterialDrop, FloatingText, TrapInstance, MechanismInstance,
   Inventory, TrapType, TrapState,
   TransformCoreDrop, TransformUnlockNotify,
   MechanismType, SecretRoom,
@@ -90,6 +91,7 @@ export class GameEngine {
   private activeBoss: BossState | null = null;
   private bossRoomLocked: boolean = false;
   private materialDrops: MaterialDrop[] = [];
+  private floatingTexts: FloatingText[] = [];
   private bossRooms: BossRoom[] = [];
   private chests: ChestState[] = [];
   private traps: TrapInstance[] = [];
@@ -652,6 +654,7 @@ export class GameEngine {
     this.updateXpOrbs(dt);
     this.updateParticles(dt);
     this.updateAmbientParticles(dt);
+    this.updateFloatingTexts(dt);
     this.updateCamera(p);
     this.updateShake(dt);
   }
@@ -2001,7 +2004,7 @@ export class GameEngine {
         x: dropX, y: dropY,
         type: matType, count: 1,
         bobPhase: Math.random() * Math.PI * 2,
-        active: true
+        active: true, flyProgress: 0
       });
     }
 
@@ -2011,7 +2014,7 @@ export class GameEngine {
       y: boss.y + (Math.random() - 0.5) * 40,
       type: MaterialType.CORE_RARE, count: 1,
       bobPhase: Math.random() * Math.PI * 2,
-      active: true
+      active: true, flyProgress: 0
     });
 
     // Drop transform core (first defeat only — check if player already has it)
@@ -2025,7 +2028,7 @@ export class GameEngine {
           y: boss.y + (Math.random() - 0.5) * 30,
           type: MaterialType.FORM_CORE, count: 1,
           bobPhase: Math.random() * Math.PI * 2,
-          active: true
+          active: true, flyProgress: 0
         });
         // Mark which transform core via extraData — use a separate tracking mechanism
         // Store transform form in a parallel array indexed by drop
@@ -2043,7 +2046,8 @@ export class GameEngine {
   }
 
   private collectMaterialDrops(p: PlayerState): void {
-    const collectRange: number = 30;
+    const magnetRangeSq: number = MATERIAL_MAGNET_RANGE * MATERIAL_MAGNET_RANGE;
+    const collectRangeSq: number = MATERIAL_COLLECT_RANGE * MATERIAL_COLLECT_RANGE;
     for (let i: number = this.materialDrops.length - 1; i >= 0; i--) {
       const drop: MaterialDrop = this.materialDrops[i];
       if (!drop.active) continue;
@@ -2052,9 +2056,8 @@ export class GameEngine {
       const dy: number = p.y - drop.y;
       const distSq: number = dx * dx + dy * dy;
 
-      if (distSq < collectRange * collectRange) {
+      if (distSq < collectRangeSq) {
         drop.active = false;
-        // Add to inventory
         if (drop.type === MaterialType.CRYSTAL_ORE) p.inventory.crystalOre += drop.count;
         else if (drop.type === MaterialType.MUSHROOM_ORE) p.inventory.mushroomOre += drop.count;
         else if (drop.type === MaterialType.FLAME_ORE) p.inventory.flameOre += drop.count;
@@ -2064,7 +2067,6 @@ export class GameEngine {
         else if (drop.type === MaterialType.CORE_RARE) p.inventory.coreRare += drop.count;
         else if (drop.type === MaterialType.FORM_CORE) p.inventory.formCore += drop.count;
 
-        // Check if this is a transform core drop
         for (let t: number = 0; t < this.transformCoreDrops.length; t++) {
           if (this.transformCoreDrops[t].dropIndex === i) {
             const form: TransformForm = this.transformCoreDrops[t].form;
@@ -2079,6 +2081,12 @@ export class GameEngine {
         }
 
         this.audio.playXpCollect();
+        this.floatingTexts.push({
+          x: drop.x, y: drop.y - 10,
+          text: '+1 ' + this.getMaterialName(drop.type),
+          color: this.getMaterialColor(drop.type),
+          life: 1200, maxLife: 1200
+        } as FloatingText);
         if (this.settings.effectsEnabled) {
           for (let k: number = 0; k < 6; k++) {
             const angle: number = Math.random() * Math.PI * 2;
@@ -2087,16 +2095,56 @@ export class GameEngine {
               Math.cos(angle) * speed, Math.sin(angle) * speed, 400, '#ffd700', 3);
           }
         }
+      } else if (distSq < magnetRangeSq && distSq > 1) {
+        const dist: number = Math.sqrt(distSq);
+        const pullSpeed: number = 2.5 * (1.0 - dist / MATERIAL_MAGNET_RANGE);
+        drop.x += (dx / dist) * pullSpeed;
+        drop.y += (dy / dist) * pullSpeed;
+        drop.flyProgress = Math.min(drop.flyProgress + 0.02, 1.0);
       }
     }
 
-    // Clean up inactive drops
     if (this.materialDrops.length > 50) {
       const active: MaterialDrop[] = [];
       for (let i: number = 0; i < this.materialDrops.length; i++) {
         if (this.materialDrops[i].active) active.push(this.materialDrops[i]);
       }
       this.materialDrops = active;
+    }
+  }
+
+  private getMaterialName(type: MaterialType): string {
+    if (type === MaterialType.CRYSTAL_ORE) return '水晶矿';
+    if (type === MaterialType.MUSHROOM_ORE) return '蘑菇矿';
+    if (type === MaterialType.FLAME_ORE) return '火焰矿';
+    if (type === MaterialType.ABYSS_ORE) return '深渊矿';
+    if (type === MaterialType.VOID_ORE) return '虚空矿';
+    if (type === MaterialType.CORE_NORMAL) return '普通核心';
+    if (type === MaterialType.CORE_RARE) return '稀有核心';
+    if (type === MaterialType.FORM_CORE) return '变身核心';
+    return '材料';
+  }
+
+  private getMaterialColor(type: MaterialType): string {
+    if (type === MaterialType.CRYSTAL_ORE) return COLOR_CRYSTAL;
+    if (type === MaterialType.MUSHROOM_ORE) return COLOR_MUSHROOM_CAP;
+    if (type === MaterialType.FLAME_ORE) return COLOR_LAVA_LIGHT;
+    if (type === MaterialType.ABYSS_ORE) return COLOR_BOSS_ABYSS;
+    if (type === MaterialType.VOID_ORE) return COLOR_BOSS_VOID;
+    if (type === MaterialType.CORE_NORMAL) return '#c0c0c0';
+    if (type === MaterialType.CORE_RARE) return '#ffd700';
+    if (type === MaterialType.FORM_CORE) return '#e879f9';
+    return '#ffffff';
+  }
+
+  private updateFloatingTexts(dt: number): void {
+    for (let i: number = this.floatingTexts.length - 1; i >= 0; i--) {
+      const ft: FloatingText = this.floatingTexts[i];
+      ft.life -= dt;
+      ft.y -= 0.5;
+      if (ft.life <= 0) {
+        this.floatingTexts.splice(i, 1);
+      }
     }
   }
 
@@ -2160,6 +2208,7 @@ export class GameEngine {
     this.renderEnemies(c, offX, offY);
     this.renderBosses(c, offX, offY);
     this.renderMaterialDrops(c, offX, offY);
+    this.renderFloatingTexts(c, offX, offY);
     this.renderPlayer(c, offX, offY, p);
     this.renderParticles(c, offX, offY);
     this.renderAmbientParticles(c);
@@ -4417,33 +4466,119 @@ export class GameEngine {
 
       const bob: number = Math.sin(this.frameCount * 0.06 + drop.bobPhase) * 3;
       const drawY: number = screenY + bob;
+      const color: string = this.getMaterialColor(drop.type);
 
-      let color: string = '#ffffff';
-      if (drop.type === MaterialType.CRYSTAL_ORE) color = COLOR_CRYSTAL;
-      else if (drop.type === MaterialType.MUSHROOM_ORE) color = COLOR_MUSHROOM_CAP;
-      else if (drop.type === MaterialType.FLAME_ORE) color = COLOR_LAVA_LIGHT;
-      else if (drop.type === MaterialType.ABYSS_ORE) color = COLOR_BOSS_ABYSS;
-      else if (drop.type === MaterialType.VOID_ORE) color = COLOR_BOSS_VOID;
-      else if (drop.type === MaterialType.CORE_NORMAL) color = '#c0c0c0';
-      else if (drop.type === MaterialType.CORE_RARE) color = '#ffd700';
-      else if (drop.type === MaterialType.FORM_CORE) color = '#e879f9';
-
-      // Glow
-      c.globalAlpha = 0.3;
+      c.globalAlpha = 0.25;
       c.fillStyle = color;
       c.beginPath();
-      c.arc(screenX, drawY, 8, 0, Math.PI * 2);
+      c.arc(screenX, drawY, 10, 0, Math.PI * 2);
       c.fill();
 
-      // Item
       c.globalAlpha = 1.0;
       c.fillStyle = color;
-      c.fillRect(screenX - 4, drawY - 4, 8, 8);
-      c.strokeStyle = '#ffffff';
-      c.lineWidth = 1;
-      c.strokeRect(screenX - 4, drawY - 4, 8, 8);
+      if (drop.type === MaterialType.CORE_RARE) {
+        c.beginPath();
+        c.moveTo(screenX, drawY - 6);
+        c.lineTo(screenX + 5, drawY - 2);
+        c.lineTo(screenX + 3, drawY + 5);
+        c.lineTo(screenX - 3, drawY + 5);
+        c.lineTo(screenX - 5, drawY - 2);
+        c.closePath();
+        c.fill();
+        c.strokeStyle = '#fff8dc';
+        c.lineWidth = 1;
+        c.stroke();
+      } else if (drop.type === MaterialType.FORM_CORE) {
+        c.beginPath();
+        c.arc(screenX, drawY, 5, 0, Math.PI * 2);
+        c.fill();
+        c.strokeStyle = '#ffffff';
+        c.lineWidth = 1.5;
+        c.stroke();
+        c.fillStyle = '#ffffff';
+        c.globalAlpha = 0.6 + 0.3 * Math.sin(this.frameCount * 0.1 + drop.bobPhase);
+        c.beginPath();
+        c.arc(screenX, drawY, 3, 0, Math.PI * 2);
+        c.fill();
+      } else if (drop.type === MaterialType.CORE_NORMAL) {
+        c.beginPath();
+        c.moveTo(screenX, drawY - 5);
+        c.lineTo(screenX + 5, drawY);
+        c.lineTo(screenX, drawY + 5);
+        c.lineTo(screenX - 5, drawY);
+        c.closePath();
+        c.fill();
+        c.strokeStyle = '#e2e8f0';
+        c.lineWidth = 1;
+        c.stroke();
+      } else if (drop.type === MaterialType.CRYSTAL_ORE) {
+        c.beginPath();
+        c.moveTo(screenX, drawY - 6);
+        c.lineTo(screenX + 4, drawY);
+        c.lineTo(screenX, drawY + 6);
+        c.lineTo(screenX - 4, drawY);
+        c.closePath();
+        c.fill();
+        c.strokeStyle = '#e0ffff';
+        c.lineWidth = 1;
+        c.stroke();
+      } else if (drop.type === MaterialType.FLAME_ORE) {
+        c.beginPath();
+        c.moveTo(screenX, drawY - 6);
+        c.quadraticCurveTo(screenX + 5, drawY - 2, screenX + 3, drawY + 4);
+        c.lineTo(screenX, drawY + 2);
+        c.lineTo(screenX - 3, drawY + 4);
+        c.quadraticCurveTo(screenX - 5, drawY - 2, screenX, drawY - 6);
+        c.fill();
+      } else if (drop.type === MaterialType.MUSHROOM_ORE) {
+        c.beginPath();
+        c.arc(screenX, drawY - 2, 5, Math.PI, 0);
+        c.fill();
+        c.fillRect(screenX - 2, drawY - 2, 4, 5);
+      } else if (drop.type === MaterialType.ABYSS_ORE) {
+        c.beginPath();
+        c.moveTo(screenX, drawY - 5);
+        c.lineTo(screenX + 4, drawY - 1);
+        c.lineTo(screenX + 2, drawY + 5);
+        c.lineTo(screenX - 2, drawY + 5);
+        c.lineTo(screenX - 4, drawY - 1);
+        c.closePath();
+        c.fill();
+        c.strokeStyle = '#6366f1';
+        c.lineWidth = 1;
+        c.stroke();
+      } else if (drop.type === MaterialType.VOID_ORE) {
+        c.beginPath();
+        c.arc(screenX, drawY, 5, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#1a0a2e';
+        c.beginPath();
+        c.arc(screenX, drawY, 2.5, 0, Math.PI * 2);
+        c.fill();
+      } else {
+        c.fillRect(screenX - 4, drawY - 4, 8, 8);
+        c.strokeStyle = '#ffffff';
+        c.lineWidth = 1;
+        c.strokeRect(screenX - 4, drawY - 4, 8, 8);
+      }
     }
     c.globalAlpha = 1.0;
+  }
+
+  private renderFloatingTexts(c: CanvasRenderingContext2D, offX: number, offY: number): void {
+    for (let i: number = 0; i < this.floatingTexts.length; i++) {
+      const ft: FloatingText = this.floatingTexts[i];
+      const alpha: number = Math.max(ft.life / ft.maxLife, 0);
+      const screenX: number = ft.x + offX;
+      const screenY: number = ft.y + offY;
+      c.globalAlpha = alpha;
+      c.fillStyle = ft.color;
+      c.font = '10px sans-serif';
+      c.textAlign = 'center';
+      c.fillText(ft.text, screenX, screenY);
+    }
+    c.globalAlpha = 1.0;
+    c.textAlign = 'left';
   }
 
   private renderBossHPBar(c: CanvasRenderingContext2D): void {

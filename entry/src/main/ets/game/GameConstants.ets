@@ -35,6 +35,9 @@ export const DRILL_BREAK_HITS: number = 3;
 export const XP_ORB_SIZE: number = 6;
 export const XP_COLLECT_RANGE: number = 40;
 export const XP_MAGNET_RANGE: number = 80;
+export const MATERIAL_MAGNET_RANGE: number = 60;
+export const MATERIAL_COLLECT_RANGE: number = 25;
+export const MATERIAL_FLY_SPEED: number = 0.15;
 export const LEVEL_UP_XP: number = 10;
 export const CHUNK_LOAD_RADIUS: number = 2;
 export const JOYSTICK_RADIUS: number = 55;
@@ -480,6 +483,16 @@ export interface MaterialDrop {
   count: number;
   bobPhase: number;
   active: boolean;
+  flyProgress: number;
+}
+
+export interface FloatingText {
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  life: number;
+  maxLife: number;
 }
 
 export interface TrapInstance {

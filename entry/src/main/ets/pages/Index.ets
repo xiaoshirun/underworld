@@ -63,6 +63,11 @@ struct Index {
   @State evoMaxLevel: boolean = false;
   @State lockedForms: number[] = [1, 2, 3, 4, 5];
   @State invOre: number = 0;
+  @State invCrystal: number = 0;
+  @State invMushroom: number = 0;
+  @State invFlame: number = 0;
+  @State invAbyss: number = 0;
+  @State invVoid: number = 0;
   @State invNormal: number = 0;
   @State invRare: number = 0;
   @State invFormCore: number = 0;
@@ -262,55 +267,114 @@ struct Index {
 
   @Builder
   InventoryBarView() {
-    Row() {
+    Column() {
       Row() {
-        Text('◆')
-          .fontSize(10)
-          .fontColor('#00ced1')
-        Text(this.invOre.toString())
-          .fontSize(10)
-          .fontColor('#e2e8f0')
-          .margin({ left: 2 })
+        Row() {
+          Text('◆')
+            .fontSize(9)
+            .fontColor('#4ade80')
+          Text(this.invOre.toString())
+            .fontSize(9)
+            .fontColor('#e2e8f0')
+            .margin({ left: 1 })
+        }
+        .margin({ right: 5 })
+
+        Row() {
+          Text('◆')
+            .fontSize(9)
+            .fontColor('#00ced1')
+          Text(this.invCrystal.toString())
+            .fontSize(9)
+            .fontColor('#e2e8f0')
+            .margin({ left: 1 })
+        }
+        .margin({ right: 5 })
+
+        Row() {
+          Text('◆')
+            .fontSize(9)
+            .fontColor('#cd3278')
+          Text(this.invMushroom.toString())
+            .fontSize(9)
+            .fontColor('#e2e8f0')
+            .margin({ left: 1 })
+        }
+        .margin({ right: 5 })
+
+        Row() {
+          Text('◆')
+            .fontSize(9)
+            .fontColor('#cd3700')
+          Text(this.invFlame.toString())
+            .fontSize(9)
+            .fontColor('#e2e8f0')
+            .margin({ left: 1 })
+        }
+        .margin({ right: 5 })
+
+        Row() {
+          Text('◆')
+            .fontSize(9)
+            .fontColor('#4169e1')
+          Text(this.invAbyss.toString())
+            .fontSize(9)
+            .fontColor('#e2e8f0')
+            .margin({ left: 1 })
+        }
+        .margin({ right: 5 })
+
+        Row() {
+          Text('◆')
+            .fontSize(9)
+            .fontColor('#6b21a8')
+          Text(this.invVoid.toString())
+            .fontSize(9)
+            .fontColor('#e2e8f0')
+            .margin({ left: 1 })
+        }
       }
-      .margin({ right: 8 })
+      .margin({ bottom: 2 })
 
       Row() {
-        Text('●')
-          .fontSize(10)
-          .fontColor('#a78bfa')
-        Text(this.invNormal.toString())
-          .fontSize(10)
-          .fontColor('#e2e8f0')
-          .margin({ left: 2 })
-      }
-      .margin({ right: 8 })
+        Row() {
+          Text('●')
+            .fontSize(9)
+            .fontColor('#c0c0c0')
+          Text(this.invNormal.toString())
+            .fontSize(9)
+            .fontColor('#e2e8f0')
+            .margin({ left: 1 })
+        }
+        .margin({ right: 8 })
 
-      Row() {
-        Text('★')
-          .fontSize(10)
-          .fontColor('#fbbf24')
-        Text(this.invRare.toString())
-          .fontSize(10)
-          .fontColor('#e2e8f0')
-          .margin({ left: 2 })
-      }
-      .margin({ right: 8 })
+        Row() {
+          Text('★')
+            .fontSize(9)
+            .fontColor('#fbbf24')
+          Text(this.invRare.toString())
+            .fontSize(9)
+            .fontColor('#e2e8f0')
+            .margin({ left: 1 })
+        }
+        .margin({ right: 8 })
 
-      Row() {
-        Text('◈')
-          .fontSize(10)
-          .fontColor('#f472b6')
-        Text(this.invFormCore.toString())
-          .fontSize(10)
-          .fontColor('#e2e8f0')
-          .margin({ left: 2 })
+        Row() {
+          Text('◈')
+            .fontSize(9)
+            .fontColor('#f472b6')
+          Text(this.invFormCore.toString())
+            .fontSize(9)
+            .fontColor('#e2e8f0')
+            .margin({ left: 1 })
+        }
       }
     }
-    .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+    .padding({ left: 8, right: 8, top: 3, bottom: 3 })
     .backgroundColor('#1e293be0')
     .borderRadius(6)
     .border({ width: 1, color: '#334155' })
-    .position({ x: 10, y: this.screenH - 96 })
+    .position({ x: 10, y: this.screenH - 110 })
   }
 
   @Builder
@@ -1191,6 +1255,21 @@ struct Index {
       const branchOre: number = this.gameEngine.getEvoOreHave();
       if (branchOre !== this.invOre) {
         this.invOre = branchOre;
+      }
+      if (inv.crystalOre !== this.invCrystal) {
+        this.invCrystal = inv.crystalOre;
+      }
+      if (inv.mushroomOre !== this.invMushroom) {
+        this.invMushroom = inv.mushroomOre;
+      }
+      if (inv.flameOre !== this.invFlame) {
+        this.invFlame = inv.flameOre;
+      }
+      if (inv.abyssOre !== this.invAbyss) {
+        this.invAbyss = inv.abyssOre;
+      }
+      if (inv.voidOre !== this.invVoid) {
+        this.invVoid = inv.voidOre;
       }
       if (inv.coreNormal !== this.invNormal) {
         this.invNormal = inv.coreNormal;
