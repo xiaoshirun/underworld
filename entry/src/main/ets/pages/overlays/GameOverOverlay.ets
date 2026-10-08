@@ -17,7 +17,7 @@ export struct GameOverOverlay {
       }
       .width('100%')
       .height('100%')
-      .backgroundColor('rgba(80,0,0,0.75)')
+      .backgroundColor('#500000ee')
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
           // Consume touch
@@ -85,9 +85,9 @@ export struct GameOverOverlay {
       }
       .width(260)
       .padding(24)
-      .backgroundColor('#1a1a2e')
+      .backgroundColor('#0a0a15')
       .borderRadius(12)
-      .border({ width: 3, color: '#ef4444' })
+      .border({ width: 3, color: '#dc2626' })
     }
     .width('100%')
     .height('100%')

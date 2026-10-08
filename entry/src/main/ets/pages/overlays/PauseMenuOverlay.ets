@@ -16,7 +16,7 @@ export struct PauseMenuOverlay {
       }
       .width('100%')
       .height('100%')
-      .backgroundColor('rgba(0,0,0,0.7)')
+      .backgroundColor('#000000e8')
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
           // Consume touch
@@ -76,9 +76,9 @@ export struct PauseMenuOverlay {
       }
       .width(240)
       .padding(24)
-      .backgroundColor('#1a1a2e')
+      .backgroundColor('#0a0a15')
       .borderRadius(12)
-      .border({ width: 3, color: '#f59e0b' })
+      .border({ width: 3, color: '#7c3aed' })
     }
     .width('100%')
     .height('100%')

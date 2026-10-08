@@ -120,7 +120,7 @@ export struct SettingsOverlay {
           .padding({ top: 10, bottom: 10 })
         }
         .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-        .backgroundColor('#0f0f23e0')
+        .backgroundColor('#0f0f23')
         .borderRadius(4)
         .border({ width: 2, color: '#334155' })
 
@@ -141,7 +141,7 @@ export struct SettingsOverlay {
           .padding({ top: 8, bottom: 8 })
         }
         .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-        .backgroundColor('#0f0f23e0')
+        .backgroundColor('#0f0f23')
         .borderRadius(4)
         .border({ width: 2, color: '#334155' })
         .margin({ top: 8 })
@@ -162,12 +162,12 @@ export struct SettingsOverlay {
       }
       .width('80%')
       .padding(16)
-      .backgroundColor('#0a0a15f8')
+      .backgroundColor('#0a0a15')
       .borderRadius(6)
-      .border({ width: 3, color: '#475569' })
+      .border({ width: 3, color: '#7c3aed' })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#000000c0')
+    .backgroundColor('#000000e8')
   }
 }

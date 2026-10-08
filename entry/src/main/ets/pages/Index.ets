@@ -750,7 +750,7 @@ struct Index {
           .padding({ top: 10, bottom: 10 })
         }
         .padding({ left: 14, right: 14, top: 4, bottom: 4 })
-        .backgroundColor('#1e293b40')
+        .backgroundColor('#1e293be0')
         .borderRadius(10)
 
         Column() {
@@ -770,7 +770,7 @@ struct Index {
           .padding({ top: 10, bottom: 10 })
         }
         .padding({ left: 14, right: 14, top: 4, bottom: 4 })
-        .backgroundColor('#1e293b40')
+        .backgroundColor('#1e293be0')
         .borderRadius(10)
         .margin({ top: 10 })
 
@@ -790,14 +790,14 @@ struct Index {
       }
       .width('82%')
       .padding(20)
-      .backgroundColor('#0f172af5')
+      .backgroundColor('#0a0a15')
       .borderRadius(18)
-      .border({ width: 1, color: '#1e293b' })
+      .border({ width: 1, color: '#7c3aed' })
       .shadow({ radius: 24, color: '#000000a0', offsetX: 0, offsetY: 8 })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#000000b0')
+    .backgroundColor('#000000e8')
   }
 
   @Builder
@@ -885,7 +885,7 @@ struct Index {
         }
         .width('100%')
         .padding({ left: 14, right: 14, top: 8, bottom: 8 })
-        .backgroundColor('#1e293b40')
+        .backgroundColor('#1e293be0')
         .borderRadius(8)
 
         // Material costs
@@ -983,7 +983,7 @@ struct Index {
             .padding({ top: 6, bottom: 6 })
           }
           .padding({ left: 14, right: 14, top: 4, bottom: 4 })
-          .backgroundColor('#1e293b40')
+          .backgroundColor('#1e293be0')
           .borderRadius(8)
           .margin({ top: 10 })
 
@@ -1014,7 +1014,7 @@ struct Index {
           .width('100%')
           .justifyContent(FlexAlign.Center)
           .padding({ top: 12, bottom: 12 })
-          .backgroundColor('#1e293b40')
+          .backgroundColor('#1e293be0')
           .borderRadius(8)
           .margin({ top: 10 })
         }
@@ -1061,7 +1061,7 @@ struct Index {
           })
         }
         .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-        .backgroundColor('#1e293b40')
+        .backgroundColor('#1e293be0')
         .borderRadius(8)
         .margin({ top: 10 })
 
@@ -1069,14 +1069,14 @@ struct Index {
       }
       .width('88%')
       .padding(18)
-      .backgroundColor('#0f172af5')
+      .backgroundColor('#0a0a15')
       .borderRadius(18)
-      .border({ width: 1, color: '#1e293b' })
+      .border({ width: 1, color: '#7c3aed' })
       .shadow({ radius: 24, color: '#000000a0', offsetX: 0, offsetY: 8 })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#000000b0')
+    .backgroundColor('#000000e8')
   }
 
   private getBranchColor(branch: number): string {
