@@ -2507,17 +2507,15 @@ export class GameEngine {
     const evictRadius: number = this.profile !== null ? this.profile.chunkLoadRadius : CHUNK_LOAD_RADIUS;
     const evictDist: number = evictRadius + 3;
     const keysToRemove: string[] = [];
-    const iter = this.resources!.keys();
-    let result = iter.next();
-    while (!result.done) {
-      const key: string = result.value;
+    const allKeys: string[] = this.resources!.keys();
+    for (let k: number = 0; k < allKeys.length; k++) {
+      const key: string = allKeys[k];
       const idx: number = key.indexOf(',');
       const cx: number = parseInt(key.substring(0, idx));
       const cy: number = parseInt(key.substring(idx + 1));
       if (Math.abs(cx - pcx) > evictDist || Math.abs(cy - pcy) > evictDist) {
         keysToRemove.push(key);
       }
-      result = iter.next();
     }
     for (let i: number = 0; i < keysToRemove.length; i++) {
       const key: string = keysToRemove[i];

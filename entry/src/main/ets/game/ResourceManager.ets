@@ -49,6 +49,15 @@ export class ResourceManager {
     return this.entries.has(key);
   }
 
+  /** Return all keys as an array */
+  keys(): string[] {
+    const result: string[] = [];
+    this.entries.forEach((_entry: ResourceEntry, key: string) => {
+      result.push(key);
+    });
+    return result;
+  }
+
   /** Remove and close a specific bitmap */
   remove(key: string): void {
     this.removeInternal(key);
