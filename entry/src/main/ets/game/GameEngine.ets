@@ -8,7 +8,7 @@ import {
   ENGULF_DAMAGE_INTERVAL, ENGULF_ESCAPE_ATTACKS, DRILL_BREAK_HITS,
   XP_ORB_SIZE, XP_COLLECT_RANGE, XP_MAGNET_RANGE, LEVEL_UP_XP,
   CHUNK_LOAD_RADIUS,
-  MINIMAP_SIZE, MINIMAP_UPDATE_INTERVAL, MAX_PARTICLES, MAX_DYN_TILE_CACHE,
+  MINIMAP_SIZE, FRAME_INTERVAL, MINIMAP_UPDATE_INTERVAL, MAX_PARTICLES, MAX_DYN_TILE_CACHE,
   TileType, EnemyType, BiomeType, PlayerState, SlimeState, XpOrb, Particle,
   ChunkData, InputState, GameSettings, AmbientParticle, DynTileCacheEntry,
   GenderType, WeaponForm, EvolutionBranch, EvolutionLevel, SaveData,
@@ -210,25 +210,26 @@ export class GameEngine {
 
   private startLoop(): void {
     this.lastFrameTime = Date.now();
-    const loop = (time: number): void => {
+    const loop = (): void => {
       if (this.ctx === null) return;
       try {
-        const dt: number = Math.min(time - this.lastFrameTime, 50);
-        this.lastFrameTime = time;
+        const now: number = Date.now();
+        const dt: number = Math.min(now - this.lastFrameTime, 50);
+        this.lastFrameTime = now;
         this.update(dt);
         this.render();
         this.frameCount++;
       } catch (e) {
         console.error('[GameEngine] Game loop error:', String(e));
       }
-      this.gameLoopId = this.ctx.requestAnimationFrame(loop);
+      this.gameLoopId = setTimeout(loop, FRAME_INTERVAL);
     };
-    this.gameLoopId = this.ctx.requestAnimationFrame(loop);
+    this.gameLoopId = setTimeout(loop, FRAME_INTERVAL);
   }
 
   pause(): void {
-    if (this.gameLoopId !== -1 && this.ctx !== null) {
-      this.ctx.cancelAnimationFrame(this.gameLoopId);
+    if (this.gameLoopId !== -1) {
+      clearTimeout(this.gameLoopId);
       this.gameLoopId = -1;
     }
   }
@@ -240,8 +241,8 @@ export class GameEngine {
   }
 
   destroy(): void {
-    if (this.gameLoopId !== -1 && this.ctx !== null) {
-      this.ctx.cancelAnimationFrame(this.gameLoopId);
+    if (this.gameLoopId !== -1) {
+      clearTimeout(this.gameLoopId);
       this.gameLoopId = -1;
     }
     // Release all managed ImageBitmap resources (chunks + parallax)
