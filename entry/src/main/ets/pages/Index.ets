@@ -201,7 +201,9 @@ struct Index {
         PauseMenuOverlay({
           onResume: () => { this.handlePauseResume(); },
           onClosed: () => { this.showPause = false; },
+          onSaveGame: (): SaveData | null => { return this.handleManualSave(); },
           onLoadGame: (data: SaveData) => { this.handleLoadGame(data); },
+          onDeleteSave: () => {},
           onQuit: () => { this.handleQuit(); }
         })
       }
@@ -1253,6 +1255,15 @@ struct Index {
     this.showPause = false;
     this.gameEngine.destroy();
     router.back();
+  }
+
+  private handleManualSave(): SaveData | null {
+    const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+    const data: SaveData | null = this.gameEngine.getSaveData();
+    if (data !== null) {
+      SaveManager.save(ctx, data);
+    }
+    return data;
   }
 
   @Builder
