@@ -2842,6 +2842,12 @@ export class GameEngine {
     // === Terraria-style character rendering ===
     // Scale: character is ~28px tall, ~14px wide
 
+    // Character outline for visibility against dark backgrounds
+    c.fillStyle = '#000000';
+    c.globalAlpha = 0.6;
+    c.fillRect(screenX - 7, screenY - 13 + bobY, 14, 27);
+    c.globalAlpha = 1.0;
+
     // Shadow under feet
     if (!p.isJumping) {
       c.globalAlpha = 0.2;
@@ -3233,7 +3239,7 @@ export class GameEngine {
         continue;
       }
 
-      const sc: number = s.size / 48;
+      const sc: number = s.size / 20;
       const bp: number = s.bouncePhase;
       const flash: boolean = s.hitFlash > 0;
       const cx: number = screenX;
@@ -3727,13 +3733,16 @@ export class GameEngine {
       }
 
       if (s.hp < s.maxHp) {
-        const barW: number = s.size;
-        const barH: number = 3;
-        const barY: number = screenY - s.size / 2 - 6;
+        const barW: number = s.size * 1.2;
+        const barH: number = 4;
+        const barY: number = screenY - s.size / 2 - 8;
+        const barX: number = screenX - barW / 2;
+        c.fillStyle = '#1a1a2e';
+        c.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
         c.fillStyle = '#374151';
-        c.fillRect(screenX - barW / 2, barY, barW, barH);
+        c.fillRect(barX, barY, barW, barH);
         c.fillStyle = '#ef4444';
-        c.fillRect(screenX - barW / 2, barY, barW * (s.hp / s.maxHp), barH);
+        c.fillRect(barX, barY, barW * (s.hp / s.maxHp), barH);
       }
     }
   }

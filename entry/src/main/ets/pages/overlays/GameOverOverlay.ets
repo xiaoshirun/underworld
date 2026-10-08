@@ -9,18 +9,26 @@ export struct GameOverOverlay {
   onRestart: () => void = () => {};
   onLoadGame: (data: SaveData) => void = () => {};
   onQuit: () => void = () => {};
+  @State hasSave: boolean = false;
+
+  aboutToAppear(): void {
+    this.checkSave();
+  }
+
+  private async checkSave(): Promise<void> {
+    const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+    this.hasSave = await SaveManager.hasSave(ctx);
+  }
 
   build() {
     Stack() {
       Column() {
-        // Red dimmed background
       }
       .width('100%')
       .height('100%')
       .backgroundColor('#500000ee')
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
-          // Consume touch
         }
       })
 
@@ -36,7 +44,7 @@ export struct GameOverOverlay {
           .fontColor('#94a3b8')
           .margin({ bottom: 4 })
 
-        Text('探索: ' + this.deathChunks + ' chunks')
+        Text('探索: ' + this.deathChunks + ' 区域')
           .fontSize(14)
           .fontColor('#94a3b8')
           .margin({ bottom: 20 })
@@ -54,22 +62,24 @@ export struct GameOverOverlay {
             this.onRestart();
           })
 
-        Button('读取存档')
-          .width(180)
-          .height(44)
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#ffffff')
-          .backgroundColor('#3b82f6')
-          .borderRadius(8)
-          .margin({ bottom: 12 })
-          .onClick(async () => {
-            const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
-            const data: SaveData | null = await SaveManager.load(ctx);
-            if (data) {
-              this.onLoadGame(data);
-            }
-          })
+        if (this.hasSave) {
+          Button('读取存档')
+            .width(180)
+            .height(44)
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#ffffff')
+            .backgroundColor('#3b82f6')
+            .borderRadius(8)
+            .margin({ bottom: 12 })
+            .onClick(async () => {
+              const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+              const data: SaveData | null = await SaveManager.load(ctx);
+              if (data) {
+                this.onLoadGame(data);
+              }
+            })
+        }
 
         Button('返回主页')
           .width(180)

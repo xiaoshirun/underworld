@@ -11,7 +11,7 @@ export const ATTACK_RANGE: number = 28;
 export const ATTACK_WIDTH: number = 22;
 export const PLAYER_MAX_HP: number = 10;
 export const INVINCIBLE_DURATION: number = 800;
-export const SLIME_SIZE: number = 12;
+export const SLIME_SIZE: number = 20;
 export const SLIME_SPEED: number = 1.2;
 export const PURPLE_SLIME_SPEED: number = 2.0;
 export const PURPLE_SLIME_DETECT: number = 180;
@@ -21,6 +21,9 @@ export const BLUE_SLIME_SPEED: number = 2.5;
 export const SLIME_HP: number = 3;
 export const SLIME_DAMAGE: number = 1;
 export const SLIME_KNOCKBACK: number = 8;
+export const MONSTER_HP_SCALE_PER_LEVEL: number = 0.15;
+export const MONSTER_SIZE_PER_4_LEVELS: number = 4;
+export const HUMANOID_BEAST_HP: number = 8;
 export const ENGULF_DAMAGE_INTERVAL: number = 500;
 export const ENGULF_ESCAPE_ATTACKS: number = 3;
 export const DEVOUR_RANGE: number = 35;
@@ -133,7 +136,8 @@ export enum EnemyType {
   RED_SLIME = 2,
   BLUE_SLIME = 3,
   YELLOW_SLIME = 4,
-  GHOST_SLIME = 5
+  GHOST_SLIME = 5,
+  HUMANOID_BEAST = 6
 }
 
 export enum BiomeType {

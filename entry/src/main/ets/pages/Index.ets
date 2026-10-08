@@ -1328,7 +1328,7 @@ struct Index {
   FormSelectPanel() {
     if (this.showFormSelect) {
       Column() {
-        Text('Select Form')
+        Text('选择形态')
           .fontSize(14)
           .fontColor('#ffffff')
           .margin({ bottom: 12 })
@@ -1357,7 +1357,7 @@ struct Index {
           })
         }
 
-        Text('Cancel')
+        Text('取消')
           .fontSize(12)
           .fontColor('#ffffff80')
           .margin({ top: 8 })
@@ -1375,7 +1375,7 @@ struct Index {
   TransformUnlockNotification() {
     if (this.transformUnlockActive) {
       Column() {
-        Text('NEW FORM UNLOCKED!')
+        Text('新形态解锁！')
           .fontSize(14)
           .fontColor('#fbbf24')
           .fontWeight(FontWeight.Bold)
